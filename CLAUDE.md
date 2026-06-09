@@ -1,0 +1,120 @@
+# CLAUDE.md
+
+Operating guide for this repository. Read this before doing any work, in every session. These rules override convenience and default behavior. When a rule here conflicts with something you'd otherwise do, this file wins.
+
+---
+
+## 1. What this project is
+
+A **Chrome extension** that acts as an in-stream "scratch pad" for composing posts and replies on X.com, in the user's own voice. The user brings their own Anthropic API key. The extension reads the tweet being replied to, samples the user's saved writing for voice, and drafts a reply or post that the user copies into X and finishes by hand.
+
+**Ethos: this is an honest LLM wrapper, and the UI should make that obvious.** No hidden prompts, no black boxes, no magic. Prompts are visible and editable; the user can always inspect the exact text sent to the model. We are deliberately the opposite of a marketplace tool that hides a thin prompt behind a slick UI. Favor transparency and user control over the appearance of sophistication.
+
+The repo is **public and MIT-licensed**. Write every line as if a stranger will read it, fork it, and trust it with their API key.
+
+---
+
+## 2. Stack
+
+- **WXT** (wxt.dev) for the extension framework — handles MV3 manifest, the side panel, content scripts, background service worker, and HMR.
+- **React + TypeScript** for UI.
+- **Vitest** for tests.
+- **ESLint + Prettier** (typescript-eslint recommended set) for lint/format.
+
+> Before scaffolding or using any WXT-specific API, **consult the current WXT docs** (wxt.dev). Do not rely on memorized API shapes — WXT's entrypoint and config conventions change. Likewise, **verify current Anthropic model IDs** from docs.claude.com rather than hardcoding a string from memory.
+
+---
+
+## 3. Architecture principles
+
+The single biggest failure mode to avoid is **one giant file**. The second is **speculative abstraction**. Both are forbidden.
+
+- **Prefer the simplest thing that works.** Abstract on the third repetition, not the first. No layers, interfaces, or indirection added "for the future" unless this file explicitly calls for a seam (see §8).
+- **Separate the brain from the shell.** All consequential logic — exclusion checks, prompt assembly, example sampling, character counting, author validation, classification, screening — lives as **pure, framework-free functions** with no React, no DOM, no `chrome.*`, no `fetch`. The shell (React UI, storage, the network call) composes those functions. Pure logic must be importable and testable in isolation.
+- **One module, one responsibility.** If a file exceeds ~200 lines or does two clearly separable jobs, split it. UI components stay small and composed.
+- **Frontend, background/network, and storage are distinct layers** with explicit boundaries. They communicate through typed contracts, not by reaching into each other's internals.
+
+### Intended shape (adapt to WXT's required entrypoint layout, keep the spirit)
+
+```
+entrypoints/        WXT entrypoints: background, content script(s), sidepanel, options
+src/
+  lib/              pure, framework-free, fully tested logic
+    exclusion/        structural detectors, mechanical auto-fix, do-not-say matcher
+    prompt/           template assembly + slot validation
+    sampling/         selectExamples and helpers
+    counting/         twitter-text wrapper
+    screening/        quality predicates (used lightly in v1, reused in Phase 2 import)
+    voice/            author validation, post-vs-reply classification
+  api/              Anthropic client. IMPORTED ONLY BY THE BACKGROUND ENTRYPOINT.
+  storage/          config (chrome.storage) + corpus (IndexedDB, versioned)
+  messaging/        typed message contracts between panel <-> background <-> content
+  ui/               React components
+  types/            shared TS types (LibraryItem, Draft, Settings, ...)
+```
+
+---
+
+## 4. Code style
+
+- **Strict TypeScript.** `strict: true`. No `any` at module boundaries; if a third-party type forces it, isolate and comment it. Prefer precise types and discriminated unions over loose objects.
+- **Comment the *why*, not the *what*.** Code should read clearly enough that line-by-line narration is noise. Reserve comments for intent, non-obvious tradeoffs, and the reason a thing exists. Put a short JSDoc on every exported function describing purpose, inputs, and outputs.
+- **Names say what things are.** No `data`, `tmp`, `handle2`. Functions are verbs, values are nouns.
+- **Errors are handled, never swallowed.** Surface failures to the user with a clear message; never leave an empty `catch`.
+- **Conventional Commits** for messages (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
+
+---
+
+## 5. Testing
+
+"Comprehensive" here means **every load-bearing piece of deterministic logic has a test** — not a line-coverage percentage. Do not write filler tests that assert nothing to hit a number; that is its own kind of snake oil.
+
+**Must be tested** (these are the brain): exclusion detectors (staccato, em dash, smart quotes), the do-not-say whole-word matcher, the character-counting wrapper, prompt assembly + slot validation, `selectExamples` sampling, screening predicates, author validation, and post-vs-reply classification.
+
+**Need not be tested:** React glue, styling, and thin wrappers around well-tested libraries.
+
+Tests live next to the code they cover (`*.test.ts`). Run Vitest, ESLint, and Prettier clean before considering any chunk done.
+
+---
+
+## 6. Security invariants — HARD RULES
+
+These are not advisory. Never violate them, under any circumstance, even temporarily during development.
+
+- **The API key lives only in the background service worker's reach.** It is read from storage by background code and used only there. It is **never injected into the X.com page, never sent to a content script, never placed in the DOM, never put in a React component's state in the panel beyond the settings field where the user enters it.** The `src/api/` Anthropic client is imported **only** by the background entrypoint — never by content or panel code.
+- **Never log the key.** Not to console, not to any file, not in error messages. Not even truncated.
+- **No telemetry. No phoning home. No analytics. No remote endpoints of any kind** except the direct call to `api.anthropic.com`. The extension talks to exactly one external host, and only to do the user's own generation.
+- **Storage is `chrome.storage.local`, never `chrome.storage.sync`.** `.sync` would push secrets and personal data to Google's servers and other devices. Forbidden.
+- **The extension never writes to X's DOM and never auto-posts.** Output goes to the clipboard only. The only contact with X's page is *read-only* (reading the tweet being replied to, and capturing the user's own tweets), and it must degrade gracefully when X's markup changes.
+- **Tight permissions.** Host access limited to X.com (and twitter.com). No `<all_urls>`. Only the permissions actually needed (`storage`, `sidePanel`, clipboard write, `unlimitedStorage`).
+
+We do **not** fake at-rest encryption. On a public repo any baked-in key is reversible, so pretending to encrypt would be dishonest. The honest posture (stated plainly in the README and near the key field): the key is stored unencrypted in local extension storage, protected by the OS account and the extension sandbox; the blast radius of a leak is bounded to API spend and is fully revocable; **users should set a spend cap on their key.**
+
+---
+
+## 7. Data & privacy invariants
+
+- All user data — the API key, settings, and the writing corpus — stays on the user's machine.
+- The corpus (potentially thousands of items) lives in **IndexedDB**, versioned from day one so schema migrations stay clean. Small config and the key live in `chrome.storage.local`.
+- Be transparent that tweet content and drafts **are** sent to Anthropic as prompt content — that is inherent to using the API. The privacy claim is "no middleman server," not "nothing leaves your device." Say so in the README.
+- Provide an **export-library-as-JSON** path so the user always has a portable backup independent of the browser.
+
+---
+
+## 8. Deferred-feature seams — DO NOT collapse these
+
+v1 omits three features, but the code must be shaped now so they bolt on without a refactor. Preserve these even though v1 doesn't exercise them:
+
+- **A draft is an array of posts** (`Draft = { posts: PostDraft[] }`), always length 1 in v1. This reserves the shape for thread mode later. Never assume a draft is a single string.
+- **`LibraryItem` carries a nullable `embedding` field**, unpopulated in v1. This reserves room for semantic retrieval later. The IndexedDB schema must include it.
+- **Example selection sits behind one function: `selectExamples(mode, context, library) => examples[]`.** v1's implementation shuffles manual picks; retrieval becomes an alternate strategy behind the same signature later. Never inline sampling logic into the prompt builder.
+- **The IndexedDB layer is versioned** with a migration path, so adding fields later is clean.
+
+---
+
+## 9. Working agreement
+
+- Read this file at the start of every session.
+- When current API details matter (WXT, Anthropic models), look them up rather than guessing.
+- At the end of a work chunk, leave the tree in a runnable state: lint clean, tests passing, and a short note of what was built and how to verify it.
+- Keep this file authoritative. If a decision here turns out wrong, update this file rather than silently diverging.
