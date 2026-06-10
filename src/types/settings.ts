@@ -21,7 +21,10 @@ export interface Settings {
    *  `session` is cleared then. */
   keyStorageMode: 'local' | 'session';
 
-  /** Anthropic model id used for generation. Becomes a dropdown later. */
+  /** Anthropic model id used for generation. Shown read-only in the
+   *  Account section; a picker is planned. When the picker lands, gate
+   *  the `temperature` parameter by model family — newer Opus models
+   *  (4.7+) reject sampling parameters with a 400. */
   model: string;
 
   /** Default position of the ≤280 character toggle in the panel. */
@@ -81,6 +84,9 @@ export interface PromptTemplate {
   slots: string[];
 }
 
+// Pinned dated snapshot (reproducible behavior) rather than the
+// `claude-haiku-4-5` alias. Verified current against docs.claude.com
+// 2026-06; re-verify there when changing, per CLAUDE.md §2.
 export const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 
 export const DEFAULT_SETTINGS: Settings = {

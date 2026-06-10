@@ -28,6 +28,7 @@ export function AccountSection({ onSaved }: Props) {
   const [handle, setHandle] = useState<string>('');
   const [keyInput, setKeyInput] = useState<string>('');
   const [keyIsSet, setKeyIsSet] = useState<boolean>(false);
+  const [model, setModel] = useState<string>('');
   const [keyMode, setKeyMode] = useState<KeyStorageMode>('local');
   const [loaded, setLoaded] = useState<boolean>(false);
   const [savedFlag, setSavedFlag] = useState<boolean>(false);
@@ -45,6 +46,7 @@ export function AccountSection({ onSaved }: Props) {
       setHandle(settings.handle);
       setKeyMode(settings.keyStorageMode);
       setKeyIsSet(isSet);
+      setModel(settings.model);
       setLoaded(true);
     })();
     return () => {
@@ -255,6 +257,11 @@ export function AccountSection({ onSaved }: Props) {
             {error}
           </div>
         )}
+        {/* Transparency: the model in use shouldn't require reading
+            source. Read-only until a picker lands. */}
+        <p className="help" style={{ marginTop: 10 }}>
+          Drafts are generated with <code>{model}</code>.
+        </p>
       </div>
     </div>
   );
