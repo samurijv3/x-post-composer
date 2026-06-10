@@ -1,0 +1,163 @@
+# components.md — module registry
+
+Consult this before touching or adding code: what exists, its contract, where it's tested. One row per exported unit; signatures abbreviated (see the source JSDoc for full shapes). "—" in Tested = deliberately untested glue (see `testing.md`).
+
+## src/lib — the pure brain (no React / chrome / fetch / DOM)
+
+### lib/counting (`twitter.ts`)
+
+| Export                 | Contract                                                                                                                     | Tested in         |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `weightedLength(text)` | X's official weighted count via `twitter-text` (URLs = 23, some chars = 2). Handles the lib's CJS/ESM dual shape internally. | `twitter.test.ts` |
+| `isOver280(text)`      | `weightedLength > X_HARD_LIMIT` — the deterministic cap gate                                                                 | `twitter.test.ts` |
+| `X_HARD_LIMIT`         | `280`                                                                                                                        | `twitter.test.ts` |
+
+### lib/exclusion
+
+| Export                                       | Contract                                                                                                                                    | Tested in            |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `detectEmDash(text)` → `Span[]`              | Flags U+2014 only (en-dash deliberately allowed)                                                                                            | `structural.test.ts` |
+| `detectSmartQuotes(text)` → `Span[]`         | Flags U+2018/2019/201C/201D                                                                                                                 | `structural.test.ts` |
+| `detectStaccato(text)` → `Span[]`            | ≥3 consecutive sentences of ≤4 words → one span per run. Pragmatic sentence segmenter ( `.!?` + whitespace); "Dr." false-positives accepted | `structural.test.ts` |
+| `detectDoNotSay(text, entries)` → `Span[]`   | Whole-word, case-insensitive, multi-word-sequence banlist matcher; tokens = `\p{L}\p{N}'_`; empty entries skipped; `entry` recorded per hit | `doNotSay.test.ts`   |
+| `autoFix(text, {fixEmDash, fixSmartQuotes})` | Mechanical rewrite: em dash (+surrounding ws) → `", "`, curly → straight. Returns `{text, appliedFixes: Span[]}` with original-text offsets | `autoFix.test.ts`    |
+| `checkExclusions(text, settings)`            | Runs enabled detectors + banlist; returns `{violations: Span[]}` sorted by start                                                            | `check.test.ts`      |
+| `hasRepairableViolations(result)`            | `violations.length > 0`                                                                                                                     | `check.test.ts`      |
+| `Span` / `RuleId` (types.ts)                 | `{start, end, rule, matchedText, entry?}` — JS code-unit offsets into the checked text                                                      | (via consumers)      |
+
+### lib/prompt
+
+| Export                                                             | Contract                                                                                                                                                                                           | Tested in                                          |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `renderTemplate(template, values)`                                 | `{{slot}}` substitution; whitespace-tolerant; unknown slots → `''`                                                                                                                                 | `template.test.ts`                                 |
+| `validateTemplate(template)`                                       | Drift report: `{declaredButUnused, usedButUndeclared}` — warnings, never crashes                                                                                                                   | `template.test.ts`                                 |
+| `extractSlotNames(body)`                                           | De-duped slot names in body order. **The only slot parser** — UI must use this, not a local regex                                                                                                  | `template.test.ts`                                 |
+| `splitPrompt(rendered)` / `SYSTEM_USER_MARKER`                     | Splits at first `===USER===` → `{system, user}`; no marker → all user. **The only splitter** (inspector reuses it)                                                                                 | `template.test.ts`                                 |
+| `DEFAULT_PROMPT_TEMPLATES` (defaults.ts)                           | **Single source of truth** for the six default templates (reply/post carry the marker; repair/chipRefine/moreLessRefine/tighten don't). `DEFAULT_SETTINGS` imports it — never create a second copy | `defaults.test.ts` (incl. identity + drift checks) |
+| `formatExamples(items)`                                            | Numbered example block; empty → cold-start line                                                                                                                                                    | `defaults.test.ts`                                 |
+| `buildExclusionInstructions(settings)`                             | Prompt-side "patterns to avoid" lines from active rules + banlist                                                                                                                                  | `defaults.test.ts`                                 |
+| `buildCharConstraintInstruction({charCap, softCapChars})`          | Hard-280 or soft-cap instruction text (prompt-side only)                                                                                                                                           | `defaults.test.ts`                                 |
+| `buildParentSection(grandparentText)`                              | `WHICH WAS A REPLY TO` block, or `''` to collapse                                                                                                                                                  | `defaults.test.ts`                                 |
+| `assembleInitialPrompt(request, settings, examples)` (assemble.ts) | Fills the mode's template; placeholder lines for empty styleGuide/bullets; reply mode adds targetText/parentSection                                                                                | `assemble.test.ts`                                 |
+| `summarizeViolations(violations)`                                  | Repair-prompt bullet block: one line per fired structural rule + deduped banlist entries                                                                                                           | `assemble.test.ts`                                 |
+| `escalateChipInstruction(instruction, intensity)`                  | Press 1 = bare; 2/3 = escalating preamble; 4+ = numbered "MAXIMUM intensity"                                                                                                                       | `assemble.test.ts`                                 |
+
+### lib/sampling (`selectExamples.ts`)
+
+| Export                                            | Contract                                                                                                                                                                                                 | Tested in                |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `selectExamples(mode, context, library, options)` | **The CLAUDE.md §8 retrieval seam.** v1: filter by `type === mode`, Fisher–Yates shuffle (injectable `rng`), cap at `poolSize`. `context` accepted-and-ignored for future retrieval. Never mutates input | `selectExamples.test.ts` |
+
+### lib/screening (`predicates.ts`) — DORMANT until Phase-2 import (nothing imports it; keep tested)
+
+| Export                       | Contract                                                           | Tested in            |
+| ---------------------------- | ------------------------------------------------------------------ | -------------------- |
+| `isEmojiOnly(text)`          | True iff trimmed text is pictographic/flags/modifiers + whitespace | `predicates.test.ts` |
+| `isSingleWord(text)`         | Exactly one whitespace-delimited token                             | `predicates.test.ts` |
+| `isBelowMinChars(text, min)` | Trimmed code-unit length < min                                     | `predicates.test.ts` |
+
+### lib/voice
+
+| Export                                          | Contract                                                                                                                        | Tested in                |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `validateAuthor(tweetHandle, configuredHandle)` | **The hard capture filter.** Case-insensitive, `@`/whitespace-tolerant, exact match; empty on either side rejects               | `validateAuthor.test.ts` |
+| `classifyType(context)` → `'post'\|'reply'`     | Signal precedence: `hasReplyContextNode` → `inReplyToStatusId` → `isPrecededByParentArticle` → post. User can override per item | `classifyType.test.ts`   |
+
+### lib/format (`relativeTime.ts`)
+
+| Export                               | Contract                                                                                                               | Tested in              |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `formatRelativeTweetTime(iso, now?)` | x.com-style: now/`{n}m`/`{n}h`/`Mon d`/`Mon d, yyyy` using **local** date parts; null on unparseable. `now` injectable | `relativeTime.test.ts` |
+
+## src/api (`anthropic.ts`) — imported ONLY by `entrypoints/background/generation.ts`
+
+| Export                                      | Contract                                                                                                                                                                                                                                                                                                                                                                                                                              | Tested in           |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `callAnthropic(req)` → `MessagesCallResult` | Hand-rolled fetch to `/v1/messages` (no SDK — readability is the point). Key in `x-api-key` header only; `anthropic-version: 2023-06-01`; browser-access header; 60 s abort. Non-empty `system` → cache_control array (real savings only above per-model minimum). Discriminated result, never throws; `kind ∈ auth\|rate-limit\|network\|server\|bad-request\|other`; first text block extracted, empty text is the caller's problem | `anthropic.test.ts` |
+| `verifyKey(apiKey, model)`                  | 8-token probe; HTTP success = key works                                                                                                                                                                                                                                                                                                                                                                                               | `anthropic.test.ts` |
+
+## src/storage
+
+| Module                | Exports                                                                                                                                                                                                    | Notes                                                                                                                                  | Tested in                                               |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `config.ts`           | `getSettings`, `setSettings`, `subscribeSettings`                                                                                                                                                          | Per-field merge over `DEFAULT_SETTINGS`; blanked template bodies restored (migration); read-merge-write, one writing surface per field | `config.test.ts`                                        |
+| `key.ts`              | `getApiKey` (background-only caller!), `hasApiKey`, `setApiKey`, `migrateApiKey`, `clearApiKey`                                                                                                            | Key isolated off `Settings` on purpose; UI is write-only — see `architecture.md` security boundary                                     | — (boundary pinned by SECURITY-AUDIT + anthropic tests) |
+| `corpus.ts`           | `openCorpus`, `addItem` (rejects dup id), `updateItem`, `deleteItem`, `clearAllItems` (one tx), `getAllItems`, `countItems`, `DB_NAME`, `DB_VERSION`, `EXPORT_SCHEMA_VERSION`, `_resetCorpusCache` (tests) | Versioned IDB; migration pattern in `architecture.md`                                                                                  | `corpus.test.ts` (incl. v1→v2 migration)                |
+| `captureMode.ts`      | `getCaptureMode`, `setCaptureMode`, `subscribeCaptureMode`, `ActiveCaptureMode`                                                                                                                            | One value = mutual exclusion of the two modes by representation                                                                        | —                                                       |
+| `replyContextLock.ts` | `getReplyContextLock`, `setReplyContextLock`, `subscribeReplyContextLock`                                                                                                                                  | Preserved across SPA navigation by design (highlight hides; context stays usable)                                                      | —                                                       |
+| `lastPrompt.ts`       | `getLastPrompt`, `setLastPrompt`, `subscribeLastPrompt`, `LastPromptRecord`                                                                                                                                | Written only by the pipeline; feeds the inspector                                                                                      | —                                                       |
+| `theme.ts`            | `getThemePreference`, `setThemePreference`, `subscribeTheme`, `bindDocumentTheme`                                                                                                                          | Binary light/dark on `<html data-theme>`                                                                                               | —                                                       |
+| `autoReplyFlag.ts`    | `setAutoReplyFlag(at)`, `consumeAutoReplyFlag()` (read-and-clear)                                                                                                                                          | One-shot shortcut handoff; stamp shared with the broadcast for dedupe                                                                  | —                                                       |
+
+All `subscribe*` helpers fire immediately with the current value, then on changes; they return an unsubscribe.
+
+## src/messaging
+
+| Export                                                                                       | Contract                                                                                                                                                                                                            | Tested in |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `contracts.ts` — the five unions + `isMessageOfType`, `isBackgroundNotice`                   | Single source of truth for every message shape (table in `architecture.md`). Add a message = add it here first                                                                                                      | —         |
+| `envelope.ts` — `sendToBackground`, `sendOneWay`, `broadcastNotice`, `onMessage`, `onNotice` | Request/reply + broadcast wrappers; `onMessage` converts throws to `bg:error`; `sendOneWay` is sync-throw-proof for orphaned content scripts; the one documented protocol-boundary cast lives in `sendToBackground` | —         |
+
+## src/types
+
+`LibraryItem` (nullable `embedding` — §8 seam; `engagement` reserved), `Draft`/`PostDraft` (**always an array** — §8 seam), `Settings`/`ChipPreset`/`PromptTemplate(Key)`, `DEFAULT_SETTINGS`/`DEFAULT_MODEL` (pinned, verified 2026-06), `RawCapture`/`CaptureFailureReason`, `ReplyContext`/`GenerationRequest`/`RefineRequest`/`RefineKind`/`GenerationResult`. Types only — plus the two default constants; no logic.
+
+## entrypoints/background (shell — orchestration only)
+
+| File            | Responsibility                                                                                                                                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.ts`      | `defineBackground`: sidePanel behavior, command handler (open-first gesture rule), panel-port tracking (`openPanelPorts` + heartbeat listener), session-storage change pushes, the `onMessage` routing table. No business logic |
+| `generation.ts` | `runGeneration` / `runRefine` / `runVerifyKey` / private `runPipeline`. The only key/API code. Pipeline: ≤3 calls, `setLastPrompt`, returns `GenerationResult`                                                                  |
+| `capture.ts`    | `handleCapturedTweet` (filter → classify → add → notices), `handleManualAdd`, `failureReasonToSaveResultKind` (only `no-tweet-under-cursor` stays silent), `replyContextFailureKind`                                            |
+| `tabs.ts`       | `X_HOSTS`, `pushToTabs` (fire-and-forget all x tabs), `requestReplyContextFromActiveTab` (composer round-trip + reply guards)                                                                                                   |
+
+## entrypoints/twitter.content
+
+| File         | Responsibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Tested in         |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `index.ts`   | Wiring: alive-probe, state mirror (mode/lock/panelOpen + 30 s lease), hover/click routing (interactive children pass through to X), rAF reposition loop with 200 ms throttled lock re-scan, message guards                                                                                                                                                                                                                                                                                | —                 |
+| `extract.ts` | Every read of X's markup: `extractTweet`, `extractReplyContextFromArticle`, `extractReplyContextFromComposer` (shortcut path), `findGrandparentArticle` (status/with_replies pages only — refuses to guess on feeds), `findArticleByStatusId`, `detectReplyByDomStructure`, `readVisibleText` (emoji `<img alt>`), `readAuthorHandle`, `readDisplayName`, `readStatusId`, `readTimestamp`, `readAvatarUrl` (**pbs.twimg.com gate**), `detectReplyContext`, `isTweetTruncated`, `hasMedia` | `extract.test.ts` |
+| `overlay.ts` | `createOverlaySystem` → preview/lock/label/dismiss elements + injected style tag; rect-cache repositioning; §6 carve-out rules enforced here                                                                                                                                                                                                                                                                                                                                              | —                 |
+
+## entrypoints mains
+
+`sidepanel/main.tsx` — React root + the `margin-panel` port with 20 s heartbeat and reconnect (MV3 keepalive; see `architecture.md`). `options/main.tsx` — React root only.
+
+## src/ui (shell — render only; all text React-escaped, no HTML sinks)
+
+| Component                                   | Responsibility / contract                                                                                                                                                                                                                     |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `App.tsx`                                   | `surface: 'panel' \| 'options'` switch. PanelShell: screen state, floating save-result / reply-context-error banners (mutually exclusive), toast plumbing, flash-row routing. PanelHead + ThemeToggle                                         |
+| `ComposeScreen.tsx`                         | Owns all composition state + background round-trips: generate/refine (latest-call-wins via `requestSeq`), chip counts, undo (one level), copy, discard, shortcut auto-capture (flag+notice dedupe). Builds the prop groups for the two states |
+| `compose/PreDraftState.tsx`                 | Input form before a draft exists. Props: `reply`/`brief` groups + busy/libraryCount/error/handlers                                                                                                                                            |
+| `compose/DraftState.tsx`                    | Brief bar (expandable), draft card (count, over-cap warn, copy/regen/undo), chips + steer controls, inspector. Props: `reply`/`brief`/`draft: DraftView`/`refine: RefineControls` groups                                                      |
+| `compose/ReplyContextCard.tsx`              | Captured tweet rendered X-native (avatar/name/time/grandparent/media note) + clear                                                                                                                                                            |
+| `compose/ReplyContextBanner.tsx`            | Reply-context mode toggle (full + `compact`)                                                                                                                                                                                                  |
+| `compose/ErrorCard.tsx`                     | `ErrorKind` → tone/title/copy/action map (settings vs retry)                                                                                                                                                                                  |
+| `compose/CapToggle.tsx`, `compose/types.ts` | ≤280 switch; shared `ReplyContextControls`/`BriefControls` prop groups                                                                                                                                                                        |
+| `VoiceScreen.tsx`                           | Library list state: refresh on `bg:library-changed`, filter pills, expand/collapse, remove-with-undo-toast, inline patch, manual add                                                                                                          |
+| `voice/CaptureBanner.tsx`                   | "Save tweets from X" mode toggle (reads/writes captureMode)                                                                                                                                                                                   |
+| `voice/LibRow.tsx`                          | One saved example: clamp + show more, inline edit (text/type), delete                                                                                                                                                                         |
+| `voice/AddForm.tsx`                         | Manual paste + "this is my own writing" gate (replaces validateAuthor for this path)                                                                                                                                                          |
+| `OptionsPage.tsx`                           | Section nav (account/rules/prompts/data), saved-flash, theme button                                                                                                                                                                           |
+| `sections/AccountSection.tsx`               | Handle (blur-save) + **write-only key field** (Save keeps-on-blank / Clear removes both areas / Verify checks the SAVED key, disabled while dirty) + read-only model line                                                                     |
+| `sections/OutputRulesSection.tsx`           | Structural toggles, banlist (blur-save), pool-size + temperature sliders (with regen≤gen hint)                                                                                                                                                |
+| `sections/PromptsSection.tsx`               | Template groups + chip editor shell                                                                                                                                                                                                           |
+| `sections/prompts/TemplateRow.tsx`          | Collapsible editor; slot badges via `extractSlotNames`/`validateTemplate`; `===USER===` marker warning; reset-to-default                                                                                                                      |
+| `sections/prompts/ChipEditor.tsx`           | Chip rows; text edits commit on blur, structural changes immediately                                                                                                                                                                          |
+| `sections/DataSection.tsx`                  | Export JSON (`EXPORT_SCHEMA_VERSION`), clear-all (single transaction, two-step confirm)                                                                                                                                                       |
+| `LastPromptInspector.tsx`                   | System/User/Response blocks via lib `splitPrompt`; copy buttons; repair labels                                                                                                                                                                |
+| `SaveResultBanner.tsx`                      | Seven-kind capture-result banner (`SAVE_META` + copy per kind)                                                                                                                                                                                |
+| `ReplyContextErrorBanner.tsx`               | Reply-context failure wording in the same banner chrome                                                                                                                                                                                       |
+| `Toast.tsx`                                 | Bottom pill, optional action; caller owns dismissal timing                                                                                                                                                                                    |
+| `Avatar.tsx`                                | `<img>` with **pbs.twimg.com render gate**, `no-referrer`, initials fallback                                                                                                                                                                  |
+| `highlights.tsx`                            | `renderWithHighlights(text, spans)` → text + `<mark class="hl hl-<rule>">` React nodes; overlap-safe; the only violation-rendering path                                                                                                       |
+| `BrandMark.tsx`, `icons.tsx`                | CSS brand mark; 24×24 stroke icon set                                                                                                                                                                                                         |
+
+## Adding a module — checklist
+
+1. Pure logic → `src/lib/<area>/`, exported via the area's `index.ts`, with a `*.test.ts` beside it.
+2. New message → `contracts.ts` union first, then route in `background/index.ts`, then guards if content-bound.
+3. New stored value → its own `src/storage/<thing>.ts` following the get/set/subscribe pattern, `:vN`-suffixed key, re-export from `storage/index.ts`.
+4. New UI piece → smallest sensible component in the owning folder (`compose/`, `voice/`, `sections/`); screens own state, children render.
+5. Add a row HERE, in the same commit.
