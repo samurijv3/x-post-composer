@@ -20,6 +20,9 @@
 
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
+// Generous for a ≤1024-token draft; without it a hung connection left
+// the panel in "Drafting…" until the service worker was killed.
+const REQUEST_TIMEOUT_MS = 60_000;
 
 export interface MessagesCallRequest {
   apiKey: string;
@@ -106,6 +109,7 @@ export async function callAnthropic(req: MessagesCallRequest): Promise<MessagesC
         'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (error) {
     return {
