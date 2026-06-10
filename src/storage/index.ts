@@ -12,6 +12,7 @@ export {
   addItem,
   updateItem,
   deleteItem,
+  clearAllItems,
   getAllItems,
   countItems,
   DB_NAME,

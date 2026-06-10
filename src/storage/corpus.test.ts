@@ -4,6 +4,7 @@ import type { LibraryItem } from '../types';
 import {
   _resetCorpusCache,
   addItem,
+  clearAllItems,
   countItems,
   DB_NAME,
   deleteItem,
@@ -64,6 +65,14 @@ describe('corpus store', () => {
     expect(await countItems()).toBe(1);
     const remaining = await getAllItems();
     expect(remaining[0]?.id).toBe('b');
+  });
+
+  it('clears every item in one shot', async () => {
+    await addItem(makeItem({ id: 'a' }));
+    await addItem(makeItem({ id: 'b' }));
+    await addItem(makeItem({ id: 'c' }));
+    await clearAllItems();
+    expect(await countItems()).toBe(0);
   });
 
   it('persists embedding as null in v1 records', async () => {

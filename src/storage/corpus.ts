@@ -110,6 +110,13 @@ export async function deleteItem(id: string): Promise<void> {
   await promisifyRequest(txStore(db, 'readwrite').delete(id));
 }
 
+/** Remove every item in one transaction — all-or-nothing, unlike a
+ *  per-item delete loop that can fail half-way through a large corpus. */
+export async function clearAllItems(): Promise<void> {
+  const db = await openCorpus();
+  await promisifyRequest(txStore(db, 'readwrite').clear());
+}
+
 /** Read every item. Order is unspecified. */
 export async function getAllItems(): Promise<LibraryItem[]> {
   const db = await openCorpus();

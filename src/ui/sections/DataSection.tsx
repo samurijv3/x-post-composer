@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { deleteItem, getAllItems } from '../../storage';
+import { clearAllItems, getAllItems } from '../../storage';
 import { IcCheck, IcExport, IcTrash } from '../icons';
 import { isMessageOfType, onNotice } from '../../messaging';
 
@@ -72,8 +72,9 @@ export function DataSection({ onSaved }: Props) {
     setClearing(true);
     setError(null);
     try {
-      const items = await getAllItems();
-      await Promise.all(items.map((i) => deleteItem(i.id)));
+      // One transaction, all-or-nothing — a per-item delete loop over a
+      // large corpus could fail midway and leave a half-cleared library.
+      await clearAllItems();
       setConfirming(false);
       onSaved();
       await refresh();
