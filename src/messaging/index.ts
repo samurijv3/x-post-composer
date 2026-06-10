@@ -8,10 +8,4 @@ export {
   type BackgroundNotice,
   type BackgroundToContent,
 } from './contracts';
-export {
-  sendToBackground,
-  sendOneWay,
-  broadcastNotice,
-  onMessage,
-  onNotice,
-} from './envelope';
+export { sendToBackground, sendOneWay, broadcastNotice, onMessage, onNotice } from './envelope';

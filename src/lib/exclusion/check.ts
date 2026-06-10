@@ -7,11 +7,7 @@
  * single repair re-prompt, and by the UI to highlight residue.
  */
 import type { Settings } from '../../types';
-import {
-  detectEmDash,
-  detectSmartQuotes,
-  detectStaccato,
-} from './structural';
+import { detectEmDash, detectSmartQuotes, detectStaccato } from './structural';
 import { detectDoNotSay } from './doNotSay';
 import type { Span } from './types';
 

@@ -58,7 +58,7 @@ src/
 ## 4. Code style
 
 - **Strict TypeScript.** `strict: true`. No `any` at module boundaries; if a third-party type forces it, isolate and comment it. Prefer precise types and discriminated unions over loose objects.
-- **Comment the *why*, not the *what*.** Code should read clearly enough that line-by-line narration is noise. Reserve comments for intent, non-obvious tradeoffs, and the reason a thing exists. Put a short JSDoc on every exported function describing purpose, inputs, and outputs.
+- **Comment the _why_, not the _what_.** Code should read clearly enough that line-by-line narration is noise. Reserve comments for intent, non-obvious tradeoffs, and the reason a thing exists. Put a short JSDoc on every exported function describing purpose, inputs, and outputs.
 - **Names say what things are.** No `data`, `tmp`, `handle2`. Functions are verbs, values are nouns.
 - **Errors are handled, never swallowed.** Surface failures to the user with a clear message; never leave an empty `catch`.
 - **Conventional Commits** for messages (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
@@ -87,15 +87,15 @@ These are not advisory. Never violate them, under any circumstance, even tempora
   - The Anthropic Messages API at `api.anthropic.com` (the user's own generation).
   - Inbound image fetches from `pbs.twimg.com` (X's public avatar CDN), used **only** as `<img src="…">` for avatars rendered in the reply-context card and library rows. This is a one-way, body-less GET that the browser makes when the panel paints. **No user data, no API key, no tweet content, and no identifying headers beyond the default `Accept`/`User-Agent` ever leave the extension on this path.** Avatar URLs are public; the user is already loading the same images on x.com. This carve-out is image-only — `pbs.twimg.com` is not used for analytics, tracking pixels, fingerprinting, or any non-avatar resource. The README must state this plainly.
 - **Storage is `chrome.storage.local`, never `chrome.storage.sync`.** `.sync` would push secrets and personal data to Google's servers and other devices. Forbidden.
-- **The extension never modifies X's existing DOM and never auto-posts.** Output goes to the clipboard only. The only contact with X's existing tree is *read-only* (reading the tweet being replied to, and capturing the user's own tweets), and it must degrade gracefully when X's markup changes.
+- **The extension never modifies X's existing DOM and never auto-posts.** Output goes to the clipboard only. The only contact with X's existing tree is _read-only_ (reading the tweet being replied to, and capturing the user's own tweets), and it must degrade gracefully when X's markup changes.
 - **Narrow carve-out: extension-owned overlays.** The extension MAY append a small number of its own elements to the document for purely informational UI (e.g. a highlight overlay marking which tweet is currently selected as reply context, and a hover-preview indicator while a capture mode is active). These overlays must:
   - **Be visually attributable to the extension**, never spoof X's UI or content.
   - **Carry a dedicated `data-margin-overlay` attribute** so a contributor or auditor can identify everything we render with one `grep`.
   - **Use `pointer-events: none` on all visuals.** The user must still be able to interact with the underlying X content through the overlay.
-  - **Permit at most one interactive child: a dismiss control** that may *only* clear extension-side state (the captured reply-context lock). It may not trigger any action on X (no posting, no navigation, no DOM mutation of X's tree).
+  - **Permit at most one interactive child: a dismiss control** that may _only_ clear extension-side state (the captured reply-context lock). It may not trigger any action on X (no posting, no navigation, no DOM mutation of X's tree).
   - **Never persist data into X's DOM** in a way X could read back. Attributes we set on our own elements only; we do not annotate X's elements.
   - **Disappear on**: capture-mode-off, reply-context cleared, dismiss clicked, SPA navigation, tab teardown.
-  Anything beyond this carve-out — hover tooltips with rich content, drag handles, action buttons embedded near X's UI, persistent badges on X's elements, layout-altering wrappers — remains forbidden under the read-only invariant.
+    Anything beyond this carve-out — hover tooltips with rich content, drag handles, action buttons embedded near X's UI, persistent badges on X's elements, layout-altering wrappers — remains forbidden under the read-only invariant.
 - **Tight permissions.** Host access limited to X.com (and twitter.com). No `<all_urls>`. Only the permissions actually needed (`storage`, `sidePanel`, clipboard write, `unlimitedStorage`).
 
 We do **not** fake at-rest encryption. On a public repo any baked-in key is reversible, so pretending to encrypt would be dishonest. The honest posture (stated plainly in the README and near the key field): the key is stored unencrypted in local extension storage, protected by the OS account and the extension sandbox; the blast radius of a leak is bounded to API spend and is fully revocable; **users should set a spend cap on their key.**

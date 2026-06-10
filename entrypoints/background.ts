@@ -45,12 +45,7 @@ import type {
 } from '../src/types';
 import { classifyType, validateAuthor } from '../src/lib/voice';
 import { selectExamples } from '../src/lib/sampling';
-import {
-  autoFix,
-  checkExclusions,
-  hasRepairableViolations,
-  type Span,
-} from '../src/lib/exclusion';
+import { autoFix, checkExclusions, hasRepairableViolations, type Span } from '../src/lib/exclusion';
 import {
   buildCharConstraintInstruction,
   buildExclusionInstructions,
@@ -84,11 +79,9 @@ const AUTO_REPLY_FLAG = 'autoReplyCapture:v1';
 const openPanelPorts = new Set<chrome.runtime.Port>();
 
 export default defineBackground(() => {
-  chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch((error: unknown) => {
-      console.error('Failed to set side panel behavior', error);
-    });
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error: unknown) => {
+    console.error('Failed to set side panel behavior', error);
+  });
 
   // Keyboard shortcut: open the panel + auto-capture the reply context.
   // A storage flag covers the "panel not open yet" case; a broadcast
@@ -474,8 +467,7 @@ function assembleInitialPrompt(
         : settings.styleGuide.trim(),
     exclusions: buildExclusionInstructions(settings),
     examples: formatExamples(examples),
-    bullets:
-      request.bullets.trim() === '' ? '(no bullets given)' : request.bullets.trim(),
+    bullets: request.bullets.trim() === '' ? '(no bullets given)' : request.bullets.trim(),
     charConstraint: buildCharConstraintInstruction({
       charCap: request.charCap,
       softCapChars: settings.softCapChars,
@@ -674,10 +666,7 @@ async function handleCapturedTweet(capture: RawCapture): Promise<void> {
   await broadcastNotice({ type: 'bg:library-changed' });
 }
 
-async function handleManualAdd(
-  text: string,
-  itemType: 'post' | 'reply',
-): Promise<BackgroundReply> {
+async function handleManualAdd(text: string, itemType: 'post' | 'reply'): Promise<BackgroundReply> {
   const trimmed = text.trim();
   if (trimmed === '') {
     return { type: 'bg:add-manual-result', ok: false, message: 'Text is empty.' };
@@ -727,7 +716,13 @@ async function tryAddItem(item: LibraryItem): Promise<'added' | 'duplicate'> {
   }
 }
 
-type SaveResultKind = 'success' | 'text-media' | 'duplicate' | 'not-mine' | 'truncated' | 'media-only';
+type SaveResultKind =
+  | 'success'
+  | 'text-media'
+  | 'duplicate'
+  | 'not-mine'
+  | 'truncated'
+  | 'media-only';
 
 /**
  * Map a content-script failure reason onto a save-result banner kind.
@@ -745,9 +740,7 @@ function failureReasonToSaveResultKind(reason: string): SaveResultKind | null {
  * Reply-context-mode failures share kinds with save-result so the panel
  * can render reply-context-flavoured wording in the same banner chrome.
  */
-function replyContextFailureKind(
-  reason: string,
-): 'truncated' | 'media-only' | 'unknown' {
+function replyContextFailureKind(reason: string): 'truncated' | 'media-only' | 'unknown' {
   if (reason === 'truncated') return 'truncated';
   if (reason === 'media-only') return 'media-only';
   return 'unknown';

@@ -51,10 +51,7 @@ export function splitPrompt(rendered: string): SplitPrompt {
  * Substitute `{{slot}}` markers in the template body with the values
  * provided. Unknown slots in the body render as empty string.
  */
-export function renderTemplate(
-  template: PromptTemplate,
-  values: Record<string, string>,
-): string {
+export function renderTemplate(template: PromptTemplate, values: Record<string, string>): string {
   return template.body.replace(SLOT_RE, (_match, name: string) => values[name] ?? '');
 }
 

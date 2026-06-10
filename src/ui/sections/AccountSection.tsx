@@ -141,10 +141,7 @@ export function AccountSection({ onSaved }: Props) {
           </label>
           <label className="fld">
             <span className="fld-label">Where to keep it</span>
-            <select
-              value={keyMode}
-              onChange={(e) => setKeyMode(e.target.value as KeyStorageMode)}
-            >
+            <select value={keyMode} onChange={(e) => setKeyMode(e.target.value as KeyStorageMode)}>
               <option value="local">Persistent — survives restarts</option>
               <option value="session">Session only — cleared on quit</option>
             </select>
@@ -196,7 +193,11 @@ export function AccountSection({ onSaved }: Props) {
             </span>
           )}
         </div>
-        {error && <div className="status err" style={{ marginTop: 8 }}>{error}</div>}
+        {error && (
+          <div className="status err" style={{ marginTop: 8 }}>
+            {error}
+          </div>
+        )}
       </div>
     </div>
   );

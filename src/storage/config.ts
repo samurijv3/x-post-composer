@@ -8,7 +8,12 @@
  *
  * The API key is NOT stored through this module; see `./key.ts`.
  */
-import { DEFAULT_SETTINGS, type PromptTemplate, type PromptTemplateKey, type Settings } from '../types';
+import {
+  DEFAULT_SETTINGS,
+  type PromptTemplate,
+  type PromptTemplateKey,
+  type Settings,
+} from '../types';
 
 const SETTINGS_KEY = 'settings:v1';
 

@@ -163,7 +163,11 @@ export function DataSection({ onSaved }: Props) {
             </button>
           </div>
         )}
-        {error && <div className="status err" style={{ marginTop: 8 }}>{error}</div>}
+        {error && (
+          <div className="status err" style={{ marginTop: 8 }}>
+            {error}
+          </div>
+        )}
       </div>
     </div>
   );

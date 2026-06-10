@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { extractSlotNames, renderTemplate, splitPrompt, SYSTEM_USER_MARKER, validateTemplate } from './template';
+import {
+  extractSlotNames,
+  renderTemplate,
+  splitPrompt,
+  SYSTEM_USER_MARKER,
+  validateTemplate,
+} from './template';
 import type { PromptTemplate } from '../../types';
 
 function tpl(body: string, slots: string[] = []): PromptTemplate {
@@ -12,9 +18,9 @@ describe('renderTemplate', () => {
   });
 
   it('substitutes multiple slots in order', () => {
-    expect(
-      renderTemplate(tpl('{{a}} and {{b}}'), { a: 'eggs', b: 'bacon' }),
-    ).toBe('eggs and bacon');
+    expect(renderTemplate(tpl('{{a}} and {{b}}'), { a: 'eggs', b: 'bacon' })).toBe(
+      'eggs and bacon',
+    );
   });
 
   it('tolerates whitespace inside the braces', () => {

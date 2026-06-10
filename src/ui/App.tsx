@@ -13,10 +13,7 @@ import { ComposeScreen } from './ComposeScreen';
 import { VoiceScreen } from './VoiceScreen';
 import { OptionsPage } from './OptionsPage';
 import { SaveResultBanner, SAVE_META, type SaveResult } from './SaveResultBanner';
-import {
-  ReplyContextErrorBanner,
-  type ReplyContextError,
-} from './ReplyContextErrorBanner';
+import { ReplyContextErrorBanner, type ReplyContextError } from './ReplyContextErrorBanner';
 import { getSettings } from '../storage';
 import { isMessageOfType, onNotice } from '../messaging';
 import './styles.css';
@@ -49,8 +46,7 @@ function PanelShell() {
   // Reply-context-mode failures use the same floating-banner slot.
   // Mutually exclusive with saveResult — whichever notice arrives last
   // wins so the user never sees two stacked banners.
-  const [replyContextError, setReplyContextError] =
-    useState<ReplyContextError | null>(null);
+  const [replyContextError, setReplyContextError] = useState<ReplyContextError | null>(null);
   const [handle, setHandle] = useState<string>('');
   // VoiceScreen reads this to flash a specific row (for the "duplicate ·
   // Show me" affordance). Cleared after consumption.
@@ -60,10 +56,7 @@ function PanelShell() {
   const fireToast = useCallback((message: string, action?: ToastData['action']) => {
     setToast({ message, action, stamp: Date.now() });
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(
-      () => setToast(null),
-      action ? 5200 : 1800,
-    );
+    toastTimer.current = window.setTimeout(() => setToast(null), action ? 5200 : 1800);
   }, []);
 
   // Settings handle for the "not-mine" message.
@@ -162,9 +155,7 @@ function PanelShell() {
           </div>
         )}
         {screen === 'compose' && <ComposeScreen onToast={fireToast} onOpenOptions={openOptions} />}
-        {screen === 'voice' && (
-          <VoiceScreen onToast={fireToast} flashRowId={flashRowId} />
-        )}
+        {screen === 'voice' && <VoiceScreen onToast={fireToast} flashRowId={flashRowId} />}
       </div>
       <Toast toast={toast} />
     </div>
@@ -228,13 +219,7 @@ function ThemeToggle() {
   }
   const title = pref === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
   return (
-    <button
-      className="icon-btn"
-      type="button"
-      title={title}
-      aria-label={title}
-      onClick={toggle}
-    >
+    <button className="icon-btn" type="button" title={title} aria-label={title} onClick={toggle}>
       {pref === 'dark' ? <IcSun /> : <IcMoon />}
     </button>
   );

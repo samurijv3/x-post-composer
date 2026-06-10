@@ -55,9 +55,7 @@ export function LastPromptInspector() {
         <span style={{ flex: 1, textAlign: 'left' }}>
           {open ? 'Hide last prompt' : 'Inspect last prompt'}
         </span>
-        <span className="help">
-          {open ? 'collapse' : 'see what was sent and what came back'}
-        </span>
+        <span className="help">{open ? 'collapse' : 'see what was sent and what came back'}</span>
       </button>
       {open &&
         (record === null ? (
@@ -82,9 +80,7 @@ export function LastPromptInspector() {
                   <span className={`badge ${record.mode === 'reply' ? 'reply' : 'post'}`}>
                     {record.mode}
                   </span>
-                  {record.wasRepaired && (
-                    <span className="badge warn">repaired</span>
-                  )}
+                  {record.wasRepaired && <span className="badge warn">repaired</span>}
                   <span className="help">sent {when}</span>
                 </div>
                 {record.wasRepaired && record.repairContext && (
@@ -93,10 +89,7 @@ export function LastPromptInspector() {
                   </p>
                 )}
                 {blocks.map((b) => (
-                  <div
-                    key={b.label}
-                    className={`insp-block ${b.response ? 'is-response' : ''}`}
-                  >
+                  <div key={b.label} className={`insp-block ${b.response ? 'is-response' : ''}`}>
                     <div className="insp-head">
                       <span className="insp-label">{b.label}</span>
                       <span className="insp-count">
@@ -119,9 +112,7 @@ export function LastPromptInspector() {
                         )}
                       </button>
                     </div>
-                    <pre className="insp-pre">
-                      {b.text === '' ? '(empty)' : b.text}
-                    </pre>
+                    <pre className="insp-pre">{b.text === '' ? '(empty)' : b.text}</pre>
                   </div>
                 ))}
               </div>

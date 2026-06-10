@@ -65,7 +65,13 @@ export interface ChipPreset {
   instruction: string;
 }
 
-export type PromptTemplateKey = 'reply' | 'post' | 'repair' | 'chipRefine' | 'moreLessRefine' | 'tighten';
+export type PromptTemplateKey =
+  | 'reply'
+  | 'post'
+  | 'repair'
+  | 'chipRefine'
+  | 'moreLessRefine'
+  | 'tighten';
 
 export interface PromptTemplate {
   /** Human-readable name shown in the Prompts tab. */

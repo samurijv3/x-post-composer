@@ -36,29 +36,25 @@ const SECTIONS: SectionMeta[] = [
     id: 'account',
     name: 'Account',
     Icon: IcKey,
-    blurb:
-      'Your handle and API key. Stored locally in this browser — never synced.',
+    blurb: 'Your handle and API key. Stored locally in this browser — never synced.',
   },
   {
     id: 'rules',
     name: 'Output rules',
     Icon: IcSliders,
-    blurb:
-      'Shape what the model may say and how adventurous it gets. Saves as you go.',
+    blurb: 'Shape what the model may say and how adventurous it gets. Saves as you go.',
   },
   {
     id: 'prompts',
     name: 'Prompts',
     Icon: IcPrompt,
-    blurb:
-      'Every template and chip behind a draft — fully editable, nothing hidden.',
+    blurb: 'Every template and chip behind a draft — fully editable, nothing hidden.',
   },
   {
     id: 'data',
     name: 'Data',
     Icon: IcData,
-    blurb:
-      'Everything Margin has saved lives on your machine. Take it or wipe it.',
+    blurb: 'Everything Margin has saved lives on your machine. Take it or wipe it.',
   },
 ];
 

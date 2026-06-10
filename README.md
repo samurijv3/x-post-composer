@@ -1,6 +1,6 @@
 # Margin
 
-*In the margin of X.*
+_In the margin of X._
 
 A Chrome extension scratch pad for composing X.com posts and replies in your own voice. You bring your own Anthropic API key. The extension reads the tweet being replied to, samples your saved writing for voice, and drafts something that sounds like you — which you copy into X and finish by hand.
 
@@ -152,7 +152,7 @@ src/
 
 121 tests across 12 files cover every load-bearing pure module: exclusion detectors (em-dash, smart quotes, staccato boundary 2-vs-3 + word-count edges), do-not-say whole-word matcher (incl. "art" ≠ "start", "fine art" ≠ "modern art", multi-word, case-insensitive), mechanical auto-fix, twitter-text weighted counting (plain / URL / weight-2 emoji), prompt assembly + slot drift detection, `selectExamples` (filter / cap / shuffle-varies), screening predicates, `validateAuthor`, `classifyType`, and the IndexedDB corpus CRUD (under fake-indexeddb).
 
-Per CLAUDE.md §5 there is no coverage-percentage gate. Behavior that matters is tested; UI glue and chrome.* wrappers aren't filler-tested.
+Per CLAUDE.md §5 there is no coverage-percentage gate. Behavior that matters is tested; UI glue and chrome.\* wrappers aren't filler-tested.
 
 ```bash
 npm run test       # vitest run
@@ -190,6 +190,7 @@ Hard rules a PR must respect:
 - Prompts and instructions are **visible and editable** — no hidden prompt fragments.
 
 Style:
+
 - Strict TS, no `any` at module boundaries.
 - Comment the **why**, not the **what**.
 - Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).

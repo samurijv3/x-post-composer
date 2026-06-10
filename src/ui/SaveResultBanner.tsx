@@ -83,7 +83,9 @@ export function SaveResultBanner({ result, handle, onDismiss, onShowDup }: Props
   } else if (result.kind === 'media-only') {
     title = 'Not saved — nothing to read';
     msg = (
-      <>This post is media only. Margin learns from text, so there’s nothing to add to your voice.</>
+      <>
+        This post is media only. Margin learns from text, so there’s nothing to add to your voice.
+      </>
     );
   } else {
     title = 'Not saved — this tweet is cut off';

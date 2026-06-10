@@ -135,8 +135,8 @@ export function OutputRulesSection({ onSaved }: Props) {
               onChange={(e) => void update({ poolSize: Number(e.target.value) })}
             />
             <p className="opt-card-desc" style={{ marginTop: 10, marginBottom: 0 }}>
-              How many of your saved examples the prompt may sample. Higher = more variety,
-              longer prompt. You currently have <strong>{libraryCount}</strong>{' '}
+              How many of your saved examples the prompt may sample. Higher = more variety, longer
+              prompt. You currently have <strong>{libraryCount}</strong>{' '}
               {libraryCount === 1 ? 'example' : 'examples'} saved
               {libraryCount > 0 && libraryCount < settings.poolSize ? (
                 <> — pool size effectively caps at that number.</>

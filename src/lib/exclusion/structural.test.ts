@@ -84,9 +84,7 @@ describe('detectStaccato', () => {
 
   it('finds multiple separate staccato runs in the same text', () => {
     const text =
-      'A. B. C. ' +
-      'Now a sentence with more than four words to break the run. ' +
-      'X. Y. Z.';
+      'A. B. C. ' + 'Now a sentence with more than four words to break the run. ' + 'X. Y. Z.';
     const spans = detectStaccato(text);
     expect(spans).toHaveLength(2);
   });
@@ -100,8 +98,7 @@ describe('detectStaccato', () => {
   it('treats exactly 4 words as short, 5 as long', () => {
     const fourWord = 'I went to the. I went to the. I went to the.';
     expect(detectStaccato(fourWord)).toHaveLength(1);
-    const fiveWord =
-      'I went to the store. I went to the store. I went to the store.';
+    const fiveWord = 'I went to the store. I went to the store. I went to the store.';
     expect(detectStaccato(fiveWord)).toEqual([]);
   });
 

@@ -101,9 +101,7 @@ export default defineContentScript({
       // is mode-gated per the user's spec: "turn off capture mode →
       // highlight disappears."
       const lockArticle =
-        captureMode === 'reply-context' &&
-        replyContextLock &&
-        replyContextLock.targetStatusId
+        captureMode === 'reply-context' && replyContextLock && replyContextLock.targetStatusId
           ? findArticleByStatusId(replyContextLock.targetStatusId)
           : null;
       overlay.setLock(lockArticle);
@@ -111,9 +109,7 @@ export default defineContentScript({
       // Preview is suppressed when hovering the locked article so we
       // don't paint two overlays on the same tweet.
       const showPreview =
-        captureMode !== 'none' &&
-        hoveredArticle !== null &&
-        hoveredArticle !== lockArticle;
+        captureMode !== 'none' && hoveredArticle !== null && hoveredArticle !== lockArticle;
       overlay.setPreview(showPreview ? hoveredArticle : null);
     }
 
@@ -458,9 +454,7 @@ function extractTweet(
  * Grandparent = the article in the previous cellInnerDiv, if any (same
  * heuristic the reply-detection structural signal uses).
  */
-function extractReplyContextFromArticle(
-  article: Element,
-): ReplyContext | { error: string } {
+function extractReplyContextFromArticle(article: Element): ReplyContext | { error: string } {
   const textRoot = article.querySelector('[data-testid="tweetText"]');
   if (!textRoot) {
     return { error: 'Could not read that tweet — X may have changed its markup.' };
@@ -647,10 +641,7 @@ function isTweetTruncated(article: Element): boolean {
 // Composer-based reply-context capture (legacy keyboard-shortcut path)
 // =====================================================================
 
-function extractReplyContextFromComposer():
-  | ReplyContext
-  | { error: string }
-  | null {
+function extractReplyContextFromComposer(): ReplyContext | { error: string } | null {
   const composer = document.querySelector('[data-testid^="tweetTextarea_"]');
   if (!composer) return null;
 

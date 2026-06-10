@@ -49,7 +49,7 @@ function contentFor(kind: ReplyContextErrorKind): {
   if (kind === 'truncated') {
     return {
       tone: 'warn',
-      title: "Can’t pull in — this tweet is cut off",
+      title: 'Can’t pull in — this tweet is cut off',
       msg: (
         <>
           We only attach the full text. Click <strong>“Show more”</strong> on the post to expand it,
@@ -61,7 +61,7 @@ function contentFor(kind: ReplyContextErrorKind): {
   if (kind === 'media-only') {
     return {
       tone: 'danger',
-      title: "Can’t pull in — nothing to read",
+      title: 'Can’t pull in — nothing to read',
       msg: (
         <>
           This post is media only. Margin attaches text, so there’s nothing to pull into reply
@@ -72,7 +72,7 @@ function contentFor(kind: ReplyContextErrorKind): {
   }
   return {
     tone: 'danger',
-    title: "Can’t pull in — couldn’t read that tweet",
+    title: 'Can’t pull in — couldn’t read that tweet',
     msg: <>X may have changed its markup. Try again, or refresh the page.</>,
   };
 }

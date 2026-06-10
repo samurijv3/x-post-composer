@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getSettings, setSettings } from '../../storage';
-import { DEFAULT_SETTINGS, type ChipPreset, type PromptTemplate, type PromptTemplateKey, type Settings } from '../../types';
+import {
+  DEFAULT_SETTINGS,
+  type ChipPreset,
+  type PromptTemplate,
+  type PromptTemplateKey,
+  type Settings,
+} from '../../types';
 import { validateTemplate } from '../../lib/prompt';
 import { weightedLength } from '../../lib/counting';
 import { IcChevR, IcCheck, IcPlus, IcTrash, IcWarn } from '../icons';
@@ -63,8 +69,8 @@ export function PromptsSection({ onSaved }: Props) {
         <div className="opt-card-title">Prompt templates</div>
         <p className="opt-card-desc">
           The exact text sent to the model. Slots like <code>{'{{bullets}}'}</code> are filled at
-          generation time. Generation templates use a <code>===USER===</code> marker — text above
-          is sent as the system message, text below as the user message. One open at a time.
+          generation time. Generation templates use a <code>===USER===</code> marker — text above is
+          sent as the system message, text below as the user message. One open at a time.
         </p>
         <div className="tmpl-groups">
           {TEMPLATE_GROUPS.map((g) => (
@@ -195,19 +201,14 @@ function TemplateRow({
           {markerMissing && (
             <p className="help" style={{ color: 'var(--warn)' }}>
               <strong>Heads up:</strong> the <code>===USER===</code> marker is missing. The whole
-              template will be sent as a single user message — no system framing, no prompt
-              caching. Add <code>===USER===</code> on its own line to separate the stable
-              instructions (above) from the per-call inputs (below).
+              template will be sent as a single user message — no system framing, no prompt caching.
+              Add <code>===USER===</code> on its own line to separate the stable instructions
+              (above) from the per-call inputs (below).
             </p>
           )}
           <div className="field-row">
             <span className="tmpl-meta">{weightedLength(body)} chars</span>
-            <button
-              type="button"
-              className="btn sm ghost"
-              disabled={!edited}
-              onClick={onReset}
-            >
+            <button type="button" className="btn sm ghost" disabled={!edited} onClick={onReset}>
               Reset to default
             </button>
           </div>
@@ -312,4 +313,3 @@ function ChipEditor({ chips, defaultChips, onSave }: ChipEditorProps) {
     </div>
   );
 }
-

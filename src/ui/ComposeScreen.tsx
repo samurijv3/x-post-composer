@@ -142,8 +142,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     const unsub = subscribeReplyContextLock(setReplyContext);
     return () => unsub();
   }, []);
-  const [captureMode, setCaptureModeState] =
-    useState<'none' | 'library' | 'reply-context'>('none');
+  const [captureMode, setCaptureModeState] = useState<'none' | 'library' | 'reply-context'>('none');
   useEffect(() => {
     void getCaptureMode().then(setCaptureModeState);
     const unsub = subscribeCaptureMode(setCaptureModeState);
@@ -340,8 +339,10 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   const count = weightedLength(draft);
   const over = charCap && count > X_HARD_LIMIT;
   const briefText =
-    bullets.trim().split('\n').find((l) => l.trim() !== '') ??
-    (hasContext ? 'Untitled reply' : 'Untitled post');
+    bullets
+      .trim()
+      .split('\n')
+      .find((l) => l.trim() !== '') ?? (hasContext ? 'Untitled reply' : 'Untitled post');
   const canApplySteer = !busy && (moreText.trim() !== '' || lessText.trim() !== '');
 
   return (
@@ -463,10 +464,7 @@ function PreDraftState(props: PreDraftProps) {
       {hasContext ? (
         <ReplyContextCard context={replyContext} onClear={onClearReplyContext} />
       ) : (
-        <ReplyContextBanner
-          on={captureModeIsReplyContext}
-          onToggle={onToggleReplyContextMode}
-        />
+        <ReplyContextBanner on={captureModeIsReplyContext} onToggle={onToggleReplyContextMode} />
       )}
 
       <label className="fld compose-input">
@@ -514,8 +512,11 @@ function PreDraftState(props: PreDraftProps) {
         </p>
       ) : (
         <p className="help" style={{ textAlign: 'center', margin: '2px 0' }}>
-          Drawing on <em>{libraryCount} saved {libraryCount === 1 ? 'example' : 'examples'}</em> of
-          your writing. More in Voice means a closer match.
+          Drawing on{' '}
+          <em>
+            {libraryCount} saved {libraryCount === 1 ? 'example' : 'examples'}
+          </em>{' '}
+          of your writing. More in Voice means a closer match.
         </p>
       )}
     </>
@@ -648,7 +649,9 @@ function DraftState(props: DraftStateProps) {
         </div>
       )}
 
-      {props.error && <ErrorCard kind={props.error} onRetry={props.onRetry} onSettings={props.onOpenOptions} />}
+      {props.error && (
+        <ErrorCard kind={props.error} onRetry={props.onRetry} onSettings={props.onOpenOptions} />
+      )}
 
       {/* DRAFT CARD — focal point */}
       <div className="draft">
@@ -701,8 +704,8 @@ function DraftState(props: DraftStateProps) {
                 <div className="callout warn">
                   <IcWarn />
                   <span>
-                    Over by {props.count - X_HARD_LIMIT}. A tighten pass already ran — trim by
-                    hand or regenerate.
+                    Over by {props.count - X_HARD_LIMIT}. A tighten pass already ran — trim by hand
+                    or regenerate.
                   </span>
                 </div>
               </div>
@@ -750,10 +753,7 @@ function DraftState(props: DraftStateProps) {
       </div>
 
       {/* REFINE — chips + steer */}
-      <div
-        className={`refine ${props.busy ? 'is-busy' : ''}`}
-        aria-disabled={props.busy}
-      >
+      <div className={`refine ${props.busy ? 'is-busy' : ''}`} aria-disabled={props.busy}>
         {props.chips.length > 0 && (
           <div className="refine-block">
             <span className="eyebrow">Quick refine</span>
@@ -833,14 +833,16 @@ function DraftState(props: DraftStateProps) {
 // Sub-components
 // ---------------------------------------------------------------------
 
-function CapToggle({ charCap, setCharCap }: { charCap: boolean; setCharCap: (v: boolean) => void }) {
+function CapToggle({
+  charCap,
+  setCharCap,
+}: {
+  charCap: boolean;
+  setCharCap: (v: boolean) => void;
+}) {
   return (
     <label className="switch">
-      <input
-        type="checkbox"
-        checked={charCap}
-        onChange={(e) => setCharCap(e.target.checked)}
-      />
+      <input type="checkbox" checked={charCap} onChange={(e) => setCharCap(e.target.checked)} />
       <span className="track" />
       <span>Keep under 280</span>
     </label>
@@ -877,7 +879,10 @@ function ReplyContextBanner({ on, compact = false, onToggle }: ReplyContextBanne
             </p>
           )}
         </div>
-        <label className="switch" title={on ? 'Turn off reply-context mode' : 'Turn on reply-context mode'}>
+        <label
+          className="switch"
+          title={on ? 'Turn off reply-context mode' : 'Turn on reply-context mode'}
+        >
           <input type="checkbox" checked={on} onChange={onToggle} />
           <span className="track track-ok" />
         </label>

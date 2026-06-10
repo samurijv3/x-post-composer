@@ -83,9 +83,7 @@ export function formatExamples(items: LibraryItem[]): string {
   if (items.length === 0) {
     return '(none captured yet — lean on the voice guide alone)';
   }
-  return items
-    .map((item, idx) => `${String(idx + 1)}) ${item.text.trim()}`)
-    .join('\n\n');
+  return items.map((item, idx) => `${String(idx + 1)}) ${item.text.trim()}`).join('\n\n');
 }
 
 /** Build the {{exclusions}} slot value from the active structural
@@ -97,7 +95,7 @@ export function buildExclusionInstructions(settings: Settings): string {
     lines.push('- Do not use em dashes (—). Use commas instead.');
   }
   if (settings.structuralRules.noSmartQuotes) {
-    lines.push("- Do not use curly/smart quotes. Use straight ' and \" only.");
+    lines.push('- Do not use curly/smart quotes. Use straight \' and " only.');
   }
   if (settings.structuralRules.noStaccato) {
     lines.push(

@@ -9,12 +9,7 @@ import {
   subscribeCaptureMode,
   updateItem,
 } from '../storage';
-import {
-  isMessageOfType,
-  onNotice,
-  sendToBackground,
-  type BackgroundReply,
-} from '../messaging';
+import { isMessageOfType, onNotice, sendToBackground, type BackgroundReply } from '../messaging';
 import type { LibraryItem } from '../types';
 import { IcEdit, IcPlus, IcTrash, IcVoice, IcX } from './icons';
 import type { ToastData } from './Toast';
@@ -315,12 +310,7 @@ function LibRow({ item, open, highlight, onToggle, onRemove, onSave }: LibRowPro
     <li className={`lib-row ${hl} ${editing ? 'editing' : ''}`}>
       {editing ? (
         <div className="lib-edit">
-          <textarea
-            rows={4}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            autoFocus
-          />
+          <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} autoFocus />
           <div className="field-row">
             <div className="seg" style={{ flex: '0 0 auto' }}>
               <button
@@ -359,9 +349,7 @@ function LibRow({ item, open, highlight, onToggle, onRemove, onSave }: LibRowPro
           <Avatar src={item.authorAvatarUrl} name={displayName} size={36} />
           <div className="tweet-native-body">
             <div className="tweet-native-head">
-              {item.authorDisplayName && (
-                <span className="tn-name">{item.authorDisplayName}</span>
-              )}
+              {item.authorDisplayName && <span className="tn-name">{item.authorDisplayName}</span>}
               <span className="tn-handle">@{item.authorHandle}</span>
               {relTime && (
                 <>

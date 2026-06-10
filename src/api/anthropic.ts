@@ -91,9 +91,7 @@ export async function callAnthropic(req: MessagesCallRequest): Promise<MessagesC
       messages: [{ role: 'user', content: req.prompt }],
     };
     if (req.system && req.system.trim() !== '') {
-      body.system = [
-        { type: 'text', text: req.system, cache_control: { type: 'ephemeral' } },
-      ];
+      body.system = [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }];
     }
     response = await fetch(ANTHROPIC_API, {
       method: 'POST',
