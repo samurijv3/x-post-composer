@@ -7,7 +7,7 @@ import {
   type PromptTemplateKey,
   type Settings,
 } from '../../types';
-import { validateTemplate } from '../../lib/prompt';
+import { extractSlotNames, SYSTEM_USER_MARKER, validateTemplate } from '../../lib/prompt';
 import { weightedLength } from '../../lib/counting';
 import { IcChevR, IcCheck, IcPlus, IcTrash, IcWarn } from '../icons';
 
@@ -131,16 +131,19 @@ function TemplateRow({
   }, [template.body]);
   const edited = body !== template.body || template.body !== defaultTemplate.body;
   const live: PromptTemplate = { ...template, body };
+  // The same parser the engine uses — a local regex here once disagreed
+  // with it on whitespace ({{ name }}) and showed false "missing slot"
+  // badges for templates that rendered fine.
   const v = validateTemplate(live);
-  const present = new Set((body.match(/\{\{(\w+)\}\}/g) || []).map((s) => s.replace(/[{}]/g, '')));
-  const missing = template.slots.filter((s) => !present.has(s));
+  const present = new Set(extractSlotNames(body));
+  const missing = v.declaredButUnused;
   // Generation templates use the `===USER===` marker to split the
-  // prompt into a cacheable system message + a per-call user message.
+  // prompt into a system message + a per-call user message.
   // If a user removes it, the prompt still works (sent as a single
-  // user message) but loses caching + slightly weaker model framing —
-  // flag it so they're not surprised.
+  // user message) but loses the system framing — flag it so they're
+  // not surprised.
   const isGenerationTemplate = templateKey === 'reply' || templateKey === 'post';
-  const markerMissing = isGenerationTemplate && !body.includes('===USER===');
+  const markerMissing = isGenerationTemplate && !body.includes(SYSTEM_USER_MARKER);
 
   function save(): void {
     if (body === template.body) return;
