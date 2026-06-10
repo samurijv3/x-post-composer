@@ -54,8 +54,16 @@ Checked off as fixes land on `chore/codebase-hardening`. Deviations from the ori
 
 - [x] MV3-01 · [x] ARCH-01 · [x] ARCH-02 · [x] ARCH-03
 - [ ] SEC-01 · [x] MV3-02 · [x] MV3-03 · [x] API-01 · [x] TEST-01 · [ ] DOC-01 · [x] QUAL-01 · [ ] GIT-01 · [x] PERF-01
-- [ ] ARCH-04 · [ ] QUAL-02 · [ ] PERF-02 · [ ] UX-01 · [ ] DOC-02
-- [ ] SEC-02 · [ ] SEC-03 · [ ] API-02 · [ ] MODEL-01 · [ ] ARCH-05 · [ ] UX-02 · [ ] UX-03 · [ ] TEST-02 · [ ] REPO-01 · [ ] DATA-01 · [ ] DEV-01 · [ ] DEP-01
+- [x] ARCH-04 · [x] QUAL-02 · [x] PERF-02 · [x] UX-01 · [x] DOC-02
+- [x] SEC-02 · [x] SEC-03 · [x] API-02 · [x] MODEL-01 · [x] ARCH-05 · [x] UX-02 · [x] UX-03 · [x] TEST-02 · [x] REPO-01 · [x] DATA-01 · [x] DEV-01 · [x] DEP-01
+
+**Per-finding deviations from the proposal:**
+
+- **ARCH-04:** `clearApiKey` was kept rather than deleted — the SEC-02 rework gave it its real caller (the Clear-key control). The `byType` IndexedDB index stays (schema seam); only the unused accessor was removed. The bg:auto-reply flag/notice pair turned out to be live infrastructure for NEW-01, not dead code.
+- **ARCH-05:** resolved by documenting the single-writer-per-field assumption on `setSettings` (the audit's recommendation), not by engineering per-field keys.
+- **DEP-01:** `npm audit fix` resolved nothing — the advertised fixes require semver-major bumps inside `wxt → web-ext-run`'s pinned ranges (i.e. forcing a wxt downgrade or `overrides`, which the audit already judged not worth it for dev-only reach). Status: production deps remain at **0 vulnerabilities**; the 8 dev-only findings are tracked against upstream `wxt`/`web-ext-run` releases. Policy (also stated in the README): prod audit must be clean; dev-only findings are tracked, not forced.
+- **UX-01:** merged into the SEC-02 rework (the write-only field made "verify the saved key" the natural and visible semantic).
+- **PERF-01:** the rAF loop itself was retained (idle iterations perform no DOM queries); only the O(page) re-scan was throttled — full suspend/resume lifecycle would have been gold-plating.
 
 ### New findings during Phase 2
 
