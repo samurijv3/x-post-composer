@@ -12,10 +12,11 @@
  *   - 'session' → `chrome.storage.session`, cleared when the browser exits.
  *
  * Security invariants (CLAUDE.md §6):
- *   - The key is only ever read in the background service worker context.
- *     The settings UI writes via these helpers but never holds the value
- *     in React state beyond the input field for as long as the user is
- *     editing it.
+ *   - The key VALUE is only ever read in the background service worker
+ *     context (`getApiKey` callers: background only). The settings UI
+ *     is write-only: it submits a new key via `setApiKey`, checks
+ *     presence via `hasApiKey`, and never reads the stored value back
+ *     into page state or the DOM.
  *   - The key is NEVER logged.
  */
 const KEY_FIELD = 'apiKey:v1';
@@ -34,6 +35,15 @@ export async function getApiKey(mode: KeyStorageMode): Promise<string> {
   const raw = await areaFor(mode).get(KEY_FIELD);
   const value = raw[KEY_FIELD];
   return typeof value === 'string' ? value : '';
+}
+
+/**
+ * Presence check for the settings UI — true when a key is stored in the
+ * given area. Deliberately returns a boolean so the options page never
+ * holds the key value itself.
+ */
+export async function hasApiKey(mode: KeyStorageMode): Promise<boolean> {
+  return (await getApiKey(mode)) !== '';
 }
 
 /**
@@ -61,7 +71,11 @@ export async function migrateApiKey(from: KeyStorageMode, to: KeyStorageMode): P
   await areaFor(from).remove(KEY_FIELD);
 }
 
-/** Convenience: remove the key from both areas, e.g. on uninstall flows. */
+/**
+ * Remove the key from BOTH areas — the Account section's "Clear key"
+ * control. Clearing both (not just the active area) guarantees no copy
+ * lingers after a storage-mode switch.
+ */
 export async function clearApiKey(): Promise<void> {
   await chrome.storage.local.remove(KEY_FIELD);
   await chrome.storage.session.remove(KEY_FIELD);

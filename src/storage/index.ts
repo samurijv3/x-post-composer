@@ -1,5 +1,12 @@
 export { getSettings, setSettings, subscribeSettings } from './config';
-export { getApiKey, setApiKey, migrateApiKey, clearApiKey, type KeyStorageMode } from './key';
+export {
+  getApiKey,
+  hasApiKey,
+  setApiKey,
+  migrateApiKey,
+  clearApiKey,
+  type KeyStorageMode,
+} from './key';
 export {
   openCorpus,
   addItem,

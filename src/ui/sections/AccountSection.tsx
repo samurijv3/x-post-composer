@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import {
-  getApiKey,
+  clearApiKey,
   getSettings,
+  hasApiKey,
   migrateApiKey,
   setApiKey,
   setSettings,
@@ -18,10 +19,15 @@ interface Props {
  * Account section: handle + API key + key storage mode + verify.
  * This section uses an EXPLICIT Save button (it holds a secret) —
  * the other sections in the options page apply immediately.
+ *
+ * The key field is WRITE-ONLY (CLAUDE.md §6): the stored value is never
+ * read back into page state or the DOM. The UI knows only whether a key
+ * is set; replacing means pasting a new one, removing means Clear.
  */
 export function AccountSection({ onSaved }: Props) {
   const [handle, setHandle] = useState<string>('');
-  const [apiKey, setApiKeyLocal] = useState<string>('');
+  const [keyInput, setKeyInput] = useState<string>('');
+  const [keyIsSet, setKeyIsSet] = useState<boolean>(false);
   const [keyMode, setKeyMode] = useState<KeyStorageMode>('local');
   const [loaded, setLoaded] = useState<boolean>(false);
   const [savedFlag, setSavedFlag] = useState<boolean>(false);
@@ -34,11 +40,11 @@ export function AccountSection({ onSaved }: Props) {
     let cancelled = false;
     void (async () => {
       const settings = await getSettings();
-      const storedKey = await getApiKey(settings.keyStorageMode);
+      const isSet = await hasApiKey(settings.keyStorageMode);
       if (cancelled) return;
       setHandle(settings.handle);
       setKeyMode(settings.keyStorageMode);
-      setApiKeyLocal(storedKey);
+      setKeyIsSet(isSet);
       setLoaded(true);
     })();
     return () => {
@@ -59,21 +65,50 @@ export function AccountSection({ onSaved }: Props) {
     }
   }
 
+  /**
+   * Persist the storage-mode choice and, when a new key was pasted,
+   * the key itself. A blank input keeps the existing key (it is never
+   * shown, so blank means "unchanged", not "remove" — removal is the
+   * explicit Clear button).
+   */
   async function saveKey(): Promise<void> {
     setSaving(true);
     setError(null);
     try {
       const settings = await getSettings();
       if (settings.keyStorageMode !== keyMode) {
+        // Carries an existing key to the new area when the input is blank.
         await migrateApiKey(settings.keyStorageMode, keyMode);
+        await setSettings({ keyStorageMode: keyMode });
       }
-      await setSettings({ keyStorageMode: keyMode });
-      await setApiKey(keyMode, apiKey);
+      const next = keyInput.trim();
+      if (next !== '') {
+        await setApiKey(keyMode, next);
+        setKeyInput('');
+        setKeyIsSet(true);
+      }
+      setVerifyResult(null);
       setSavedFlag(true);
       window.setTimeout(() => setSavedFlag(false), 1600);
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeKey(): Promise<void> {
+    setSaving(true);
+    setError(null);
+    try {
+      await clearApiKey();
+      setKeyIsSet(false);
+      setKeyInput('');
+      setVerifyResult(null);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Clear failed.');
     } finally {
       setSaving(false);
     }
@@ -98,6 +133,11 @@ export function AccountSection({ onSaved }: Props) {
   }
 
   if (!loaded) return <div className="opt-card">Loading…</div>;
+
+  // Verify checks the SAVED key; while the input holds an unsaved key
+  // the result would be misleading, so it is disabled until saved.
+  const keyDirty = keyInput.trim() !== '';
+  const canVerify = keyIsSet && !keyDirty && !verifying;
 
   return (
     <div className="opt-stack">
@@ -126,17 +166,19 @@ export function AccountSection({ onSaved }: Props) {
       <div className="opt-card">
         <div className="opt-card-title">Anthropic API key</div>
         <p className="opt-card-desc">
-          Read only by the background worker — never injected into the X page, never logged.
+          Write-only here: the saved key is read by the background worker alone — never shown back,
+          never injected into the X page, never logged.
         </p>
         <div className="opt-grid-2">
           <label className="fld">
             <span className="fld-label">API key</span>
             <input
               type="password"
-              value={apiKey}
+              value={keyInput}
+              placeholder={keyIsSet ? 'Key is set — paste a new one to replace' : 'sk-ant-…'}
               autoComplete="off"
               spellCheck={false}
-              onChange={(e) => setApiKeyLocal(e.target.value)}
+              onChange={(e) => setKeyInput(e.target.value)}
             />
           </label>
           <label className="fld">
@@ -176,11 +218,26 @@ export function AccountSection({ onSaved }: Props) {
             type="button"
             className="btn"
             onClick={() => void verify()}
-            disabled={verifying || apiKey === ''}
-            title="Calls Anthropic with max_tokens: 1 to confirm the saved key works"
+            disabled={!canVerify}
+            title={
+              keyDirty
+                ? 'Save the pasted key first — Verify checks the SAVED key.'
+                : 'Checks the saved key with a tiny Anthropic request (max_tokens: 8).'
+            }
           >
             <IcKey /> {verifying ? 'Verifying…' : 'Verify'}
           </button>
+          {keyIsSet && (
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => void removeKey()}
+              disabled={saving}
+              title="Remove the saved key from this browser (both storage areas)"
+            >
+              Clear key
+            </button>
+          )}
           {verifyResult && (
             <span className={`status ${verifyResult.ok ? 'ok' : 'err'}`}>
               {verifyResult.ok ? (
