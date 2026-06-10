@@ -181,8 +181,11 @@ async function handleAutoReplyCommand(senderTab: chrome.tabs.Tab | undefined): P
   }
   if (!tab?.id) return;
 
-  await chrome.storage.session.set({ [AUTO_REPLY_FLAG]: Date.now() });
-
+  // Open FIRST. sidePanel.open() may only run inside the user-gesture
+  // window (Chrome 116+), and every await before it spends that budget.
+  // The flag/broadcast consumers don't depend on ordering: a panel
+  // opened by this call takes far longer to mount than the storage
+  // write below takes to land.
   try {
     await chrome.sidePanel.open({ tabId: tab.id });
   } catch (error) {
@@ -191,7 +194,8 @@ async function handleAutoReplyCommand(senderTab: chrome.tabs.Tab | undefined): P
     console.error('Side panel open from shortcut failed', error);
   }
 
-  // The broadcast covers the case where the panel is already open and
+  await chrome.storage.session.set({ [AUTO_REPLY_FLAG]: Date.now() });
+  // The broadcast covers the case where the panel was already open and
   // would otherwise miss the flag (it's checked on mount only).
   await broadcastNotice({ type: 'bg:auto-reply-capture', at: Date.now() });
 }
