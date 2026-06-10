@@ -7,7 +7,23 @@ export default tseslint.config(
     ignores: ['node_modules', '.output', '.wxt', 'dist', 'stats*', 'coverage', 'docs/design'],
   },
   js.configs.recommended,
-  ...tseslint.configs.recommended,
+  // Type-checked tier: mechanizes the promise discipline this codebase
+  // maintains by hand (no-floating-promises etc.) — worth it in a repo
+  // where an unhandled rejection in the worker is a silent failure.
+  ...tseslint.configs.recommendedTypeChecked,
+  {
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    // Config files at the root aren't part of the TS project.
+    files: ['*.js', '*.mjs', '*.cjs'],
+    ...tseslint.configs.disableTypeChecked,
+  },
   {
     languageOptions: {
       globals: {

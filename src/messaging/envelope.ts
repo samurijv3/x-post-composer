@@ -17,7 +17,7 @@ import type {
   ContentToBackground,
   PanelToBackground,
 } from './contracts';
-import { isBackgroundNotice } from './contracts';
+import { isBackgroundNotice, isMessageOfType } from './contracts';
 
 /**
  * Panel → background request. Resolves with the typed reply.
@@ -27,14 +27,18 @@ import { isBackgroundNotice } from './contracts';
 export async function sendToBackground<TReply extends BackgroundReply>(
   message: PanelToBackground,
 ): Promise<TReply> {
-  const reply = (await chrome.runtime.sendMessage(message)) as TReply | undefined;
+  // chrome.runtime.sendMessage is untyped on the wire; treat the reply
+  // as unknown and let the bg:error guard handle the one shape we act
+  // on here. The trailing assertion is the protocol boundary: the
+  // caller names the reply type its request contractually produces.
+  const reply: unknown = await chrome.runtime.sendMessage(message);
   if (!reply) {
     throw new Error('Background worker returned no response');
   }
-  if (reply.type === 'bg:error') {
+  if (isMessageOfType(reply, 'bg:error')) {
     throw new Error(reply.message);
   }
-  return reply;
+  return reply as TReply;
 }
 
 /**

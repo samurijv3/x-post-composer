@@ -109,9 +109,9 @@ describe('corpus store', () => {
           db.close();
           resolve();
         };
-        tx.onerror = () => reject(tx.error);
+        tx.onerror = () => reject(tx.error ?? new Error('seed transaction failed'));
       };
-      req.onerror = () => reject(req.error);
+      req.onerror = () => reject(req.error ?? new Error('seed open failed'));
     });
     _resetCorpusCache();
 

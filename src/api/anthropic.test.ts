@@ -156,11 +156,8 @@ describe('callAnthropic — HTTP error mapping', () => {
       json: () => Promise.reject(new Error('not json')),
     } as unknown as Response);
     const result = await callAnthropic(request());
-    expect(result).toMatchObject({
-      ok: false,
-      kind: 'server',
-      message: expect.stringContaining('HTTP 503'),
-    });
+    expect(result).toMatchObject({ ok: false, kind: 'server' });
+    if (!result.ok) expect(result.message).toContain('HTTP 503');
   });
 
   it('maps a thrown fetch (offline) to a network error', async () => {

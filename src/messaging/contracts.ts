@@ -155,10 +155,7 @@ export function isMessageOfType<T extends AnyMessage['type']>(
   type: T,
 ): message is Extract<AnyMessage, { type: T }> {
   return (
-    typeof message === 'object' &&
-    message !== null &&
-    'type' in message &&
-    (message as { type: unknown }).type === type
+    typeof message === 'object' && message !== null && 'type' in message && message.type === type
   );
 }
 
