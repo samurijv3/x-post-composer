@@ -53,7 +53,10 @@ Effort scale: **XS** ≤ 30 min · **S** ≤ 2 h · **M** ≤ 1 day · **L** > 1
 Checked off as fixes land on `chore/codebase-hardening`. Deviations from the original proposal are noted inline on the finding.
 
 - [x] MV3-01 · [x] ARCH-01 · [x] ARCH-02 · [x] ARCH-03
-- [ ] SEC-01 · [x] MV3-02 · [x] MV3-03 · [x] API-01 · [x] TEST-01 · [ ] DOC-01 · [x] QUAL-01 · [ ] GIT-01 · [x] PERF-01
+- [x] SEC-01 · [x] MV3-02 · [x] MV3-03 · [x] API-01 · [x] TEST-01 · [x] DOC-01 · [x] QUAL-01 · [x] GIT-01\* · [x] PERF-01
+
+\* GIT-01: the going-forward convention (Conventional Commits, atomic changes, feature branches, green gates per commit) was practiced across this branch's ~35 commits; codifying it as a standing document is Phase 3's job. History before this branch is left as-is — rewriting published history would be worse than the disease.
+
 - [x] ARCH-04 · [x] QUAL-02 · [x] PERF-02 · [x] UX-01 · [x] DOC-02
 - [x] SEC-02 · [x] SEC-03 · [x] API-02 · [x] MODEL-01 · [x] ARCH-05 · [x] UX-02 · [x] UX-03 · [x] TEST-02 · [x] REPO-01 · [x] DATA-01 · [x] DEV-01 · [x] DEP-01
 
