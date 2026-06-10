@@ -31,6 +31,12 @@ export async function getSettings(): Promise<Settings> {
 
 /**
  * Persist a partial update. Unspecified fields keep their current value.
+ *
+ * Read-merge-write with no lock: two surfaces (panel + options page)
+ * writing near-simultaneously would last-write-win on the whole record.
+ * Acceptable because every settings field has exactly one writing
+ * surface today — keep it that way, or move to per-field keys before
+ * adding a second writer for any field.
  */
 export async function setSettings(patch: Partial<Settings>): Promise<void> {
   const current = await getSettings();
@@ -74,13 +80,13 @@ function mergeWithDefaults(stored: Partial<Settings> | undefined): Settings {
 /**
  * Per-template merge with an empty-body migration.
  *
- * Chunk 1 seeded `promptTemplates` with placeholder entries whose
- * `body` was `''`. Any user who first installed before Chunk 3 has
- * those empties in `chrome.storage.local`, and a naive object spread
- * would keep them — leading to an empty `messages.0.content` and a
- * 400 from Anthropic. Treat an empty body as "never customised" and
- * fall back to the current default for that template. A genuinely
- * customised body (anything non-empty) is preserved verbatim.
+ * Early pre-release builds seeded `promptTemplates` with placeholder
+ * entries whose `body` was `''`; those empties may still sit in
+ * `chrome.storage.local`, and a naive object spread would keep them —
+ * leading to an empty `messages.0.content` and a 400 from Anthropic.
+ * Treat an empty body as "never customised" and fall back to the
+ * current default for that template. A genuinely customised body
+ * (anything non-empty) is preserved verbatim.
  */
 function mergePromptTemplates(
   stored: Partial<Record<PromptTemplateKey, PromptTemplate>> | undefined,
@@ -94,8 +100,9 @@ function mergePromptTemplates(
     const dflt = DEFAULT_SETTINGS.promptTemplates[key];
     const body = storedTemplate.body?.trim() ?? '';
     if (body === '') {
-      // Stale Chunk-1 placeholder, or the user accidentally blanked it.
-      // Either way an empty prompt is a guaranteed 400 — restore default.
+      // Stale pre-release placeholder, or the user accidentally blanked
+      // it. Either way an empty prompt is a guaranteed 400 — restore
+      // the default.
       out[key] = dflt;
       continue;
     }

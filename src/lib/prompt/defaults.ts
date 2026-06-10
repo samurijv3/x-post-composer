@@ -152,9 +152,10 @@ export function buildExclusionInstructions(settings: Settings): string {
   return lines.join('\n');
 }
 
-/** Build the {{charConstraint}} slot value. Char constraints are an
- *  *instruction*, not a hard validation, in Chunk 3 — exact counting +
- *  overage repair land in Chunk 4. */
+/** Build the {{charConstraint}} slot value — the prompt-side half of
+ *  length control. The deterministic half lives in the pipeline: when
+ *  the cap is on and the draft still measures >280 (lib/counting), one
+ *  tighten re-prompt fires. The soft cap has no deterministic gate. */
 export function buildCharConstraintInstruction(opts: {
   charCap: boolean;
   softCapChars: number;

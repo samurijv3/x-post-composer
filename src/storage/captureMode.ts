@@ -7,8 +7,8 @@
  * Mutual exclusion is enforced by representation: there is exactly one
  * value at any moment, so the panel cannot accidentally enable both
  * modes at once and content-script behavior is unambiguous on each
- * click. The two toggles (CaptureControls + Composer reply toggle)
- * both read and write this same field.
+ * click. The two toggles (the Voice screen's CaptureBanner and the
+ * Compose screen's ReplyContextBanner) both read and write this field.
  *
  * Content scripts cannot read `chrome.storage.session` directly (kept
  * trusted-only so the user's "Session only" API-key choice keeps its

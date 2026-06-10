@@ -60,8 +60,9 @@ export type ContentToBackground =
   // don't have to wait for the first port event.
   | { type: 'content:check-panel-state' }
   // Fired when the user clicks a tweet in reply-context mode. The
-  // background validates, persists the lock, broadcasts it back, and
-  // auto-clears the mode (one-shot).
+  // background persists the lock and broadcasts it back. The mode
+  // deliberately stays ON so the user can click another tweet to swap
+  // the lock; they turn it off in the panel when done.
   | { type: 'content:reply-context-selected'; context: ReplyContext }
   // Reply-context selection failed (truncated tweet, media-only, etc).
   // Routed separately from library-capture failures so the panel can

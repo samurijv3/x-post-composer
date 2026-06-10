@@ -5,7 +5,7 @@
 export interface PostDraft {
   /** The candidate post text. */
   text: string;
-  /** Character count as measured by twitter-text — populated in Chunk 3. */
+  /** X-weighted character count (twitter-text), set by the pipeline. */
   characterCount?: number;
 }
 

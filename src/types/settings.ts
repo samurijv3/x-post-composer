@@ -52,9 +52,8 @@ export interface Settings {
   /** Chip presets shown above the refine box. */
   chips: ChipPreset[];
 
-  /** Editable prompt templates with named slots. Real bodies arrive in
-   *  Chunk 3; the shape lives here so the storage and settings UI can
-   *  refer to it now. */
+  /** Editable prompt templates with named slots. The default bodies
+   *  live in lib/prompt/defaults.ts (the single source of truth). */
   promptTemplates: Record<PromptTemplateKey, PromptTemplate>;
 }
 
@@ -99,7 +98,7 @@ export const DEFAULT_SETTINGS: Settings = {
     noSmartQuotes: true,
   },
   // Small starter set of common AI-isms. Users can edit freely in the
-  // Output rules tab (lands in a later chunk).
+  // options page's Output rules section.
   doNotSay: [
     'delve',
     'tapestry',

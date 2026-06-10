@@ -1,10 +1,11 @@
 /**
  * Cheap, deterministic quality predicates.
  *
- * In v1 these only power a soft "low-quality?" hint on the Voice tab —
- * the user can always ignore them and keep an item. Phase 2's bulk
- * import will use them to filter the firehose. Either way the predicates
- * themselves must be load-bearing today, so they have full test coverage.
+ * DORMANT IN v1 — nothing imports this module yet. It exists (tested)
+ * for Phase 2's bulk archive import, which will use these to filter
+ * the firehose; the seam is documented in CLAUDE.md §3. Keeping the
+ * predicates load-bearing now means import bolts on without writing
+ * fresh untested filters later.
  *
  * Every predicate trims its input before measuring. None mutate input.
  */
@@ -57,8 +58,8 @@ export function isSingleWord(text: string): boolean {
 
 /**
  * True when the trimmed text is shorter than `min` characters.
- * `min` is measured in JavaScript code units (consistent with what users
- * see in the Voice tab); twitter-text-aware counting lives in Chunk 3.
+ * `min` is measured in plain JavaScript code units — a quality screen
+ * doesn't need X's weighted counting (that lives in lib/counting).
  */
 export function isBelowMinChars(text: string, min: number): boolean {
   return text.trim().length < min;

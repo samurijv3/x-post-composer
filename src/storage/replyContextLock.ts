@@ -6,10 +6,11 @@
  *
  * Storage area is `chrome.storage.session` so the lock is per-browser-
  * session by default, matching the rest of our "stays on the user's
- * machine, evaporates on full quit" model. Cleared on dismiss, on
- * mode-off via Clear button, or programmatically when the user
- * navigates within X's SPA (handled by the content script reading the
- * URL and notifying us).
+ * machine, evaporates on full quit" model. Cleared on overlay dismiss
+ * or the panel's Clear control — and deliberately PRESERVED across
+ * SPA navigation, so the captured context stays usable for generation
+ * while the on-page highlight simply hides on pages that don't render
+ * the locked tweet.
  *
  * Content scripts cannot read session storage directly. They get the
  * lock state via background pushes (`bg:reply-context-lock-state`)

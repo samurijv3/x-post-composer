@@ -4,9 +4,10 @@
  * this into a `LibraryItem` — content code never touches the corpus.
  *
  * Every field is "best effort": the content script reads from the most
- * stable DOM hooks it can find but X's markup is a moving target. If a
- * field cannot be read, the content script reports an extraction failure
- * via `extractionError` rather than guessing.
+ * stable DOM hooks it can find but X's markup is a moving target. When
+ * a load-bearing field cannot be read, the content script sends a
+ * `content:capture-failed` message with a `CaptureFailureReason`
+ * instead of guessing.
  */
 export interface RawCapture {
   /** Tweet body text exactly as rendered. */
