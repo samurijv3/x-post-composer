@@ -35,3 +35,4 @@ export {
   subscribeLastPrompt,
   type LastPromptRecord,
 } from './lastPrompt';
+export { setAutoReplyFlag, consumeAutoReplyFlag } from './autoReplyFlag';

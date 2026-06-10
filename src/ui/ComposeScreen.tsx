@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  consumeAutoReplyFlag,
   countItems,
   getCaptureMode,
   getSettings,
@@ -9,7 +10,7 @@ import {
   subscribeReplyContextLock,
   subscribeSettings,
 } from '../storage';
-import { sendToBackground, type BackgroundReply } from '../messaging';
+import { isMessageOfType, onNotice, sendToBackground, type BackgroundReply } from '../messaging';
 import { weightedLength, X_HARD_LIMIT } from '../lib/counting';
 import type {
   ChipPreset,
@@ -87,6 +88,45 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     const unsub = subscribeCaptureMode(setCaptureModeState);
     return () => unsub();
   }, []);
+
+  // ---- keyboard shortcut (Alt-Shift-R): auto-capture reply context ----
+  // The background opens the panel, stamps a one-shot session flag, and
+  // broadcasts a notice — both carrying the same timestamp. A panel
+  // opened BY the shortcut consumes the flag on mount; a panel that was
+  // already open hears the broadcast. The shared stamp dedupes the pair.
+  const lastShortcutAt = useRef<number>(0);
+  const captureFromShortcut = useCallback(
+    async (at: number) => {
+      if (at <= lastShortcutAt.current) return;
+      lastShortcutAt.current = at;
+      try {
+        const reply = await sendToBackground<
+          Extract<BackgroundReply, { type: 'bg:reply-context-result' }>
+        >({ type: 'panel:capture-reply-context' });
+        if (reply.ok && reply.context) {
+          await setReplyContextLock(reply.context);
+        } else {
+          onToast(reply.message ?? 'Could not capture reply context.');
+        }
+      } catch (err) {
+        onToast(err instanceof Error ? err.message : 'Could not capture reply context.');
+      }
+    },
+    [onToast],
+  );
+  useEffect(() => {
+    void consumeAutoReplyFlag().then((at) => {
+      // Ignore stale flags (a shortcut pressed for a long-gone panel);
+      // 15s comfortably covers a slow panel load.
+      if (at !== null && Date.now() - at < 15_000) void captureFromShortcut(at);
+    });
+    const unsub = onNotice((notice) => {
+      if (isMessageOfType(notice, 'bg:auto-reply-capture')) {
+        void captureFromShortcut(notice.at);
+      }
+    });
+    return () => unsub();
+  }, [captureFromShortcut]);
 
   // ---- composition state ----
   const [bullets, setBullets] = useState<string>('');

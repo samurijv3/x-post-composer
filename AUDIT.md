@@ -57,6 +57,10 @@ Checked off as fixes land on `chore/codebase-hardening`. Deviations from the ori
 - [ ] ARCH-04 · [ ] QUAL-02 · [ ] PERF-02 · [ ] UX-01 · [ ] DOC-02
 - [ ] SEC-02 · [ ] SEC-03 · [ ] API-02 · [ ] MODEL-01 · [ ] ARCH-05 · [ ] UX-02 · [ ] UX-03 · [ ] TEST-02 · [ ] REPO-01 · [ ] DATA-01 · [ ] DEV-01 · [ ] DEP-01
 
+### New findings during Phase 2
+
+- [x] **NEW-01 (High, Fix)** — _The keyboard shortcut's capture half was unwired._ The background set `autoReplyCapture:v1` and broadcast `bg:auto-reply-capture`, but no panel code consumed either — Alt-Shift-R only opened the panel; the documented "and start capturing reply context" behavior (manifest command description, README) silently did nothing. Phase 1 verified the background side but did not trace the panel-side consumer; surfaced while reordering the handler for MV3-02. Fixed during Phase 2 rather than deferred because the alternative — treating the background half as ARCH-04 dead code — would have deleted a documented feature: the panel now consumes the mount-time flag (stale after 15 s) and handles the broadcast, deduped by a shared timestamp, then runs the existing `panel:capture-reply-context` round-trip and sets the lock. Flag access moved behind `src/storage/autoReplyFlag.ts` per the storage-module pattern.
+
 ---
 
 ## Tooling results (run on this tree, not impressions)

@@ -14,7 +14,12 @@
  */
 import { defineBackground } from 'wxt/utils/define-background';
 import { broadcastNotice, isMessageOfType, onMessage } from '../../src/messaging';
-import { getCaptureMode, getReplyContextLock, setReplyContextLock } from '../../src/storage';
+import {
+  getCaptureMode,
+  getReplyContextLock,
+  setAutoReplyFlag,
+  setReplyContextLock,
+} from '../../src/storage';
 import type { ReplyContext } from '../../src/types';
 import { runGeneration, runRefine, runVerifyKey } from './generation';
 import {
@@ -24,8 +29,6 @@ import {
   replyContextFailureKind,
 } from './capture';
 import { pushToTabs, requestReplyContextFromActiveTab } from './tabs';
-
-const AUTO_REPLY_FLAG = 'autoReplyCapture:v1';
 
 /**
  * Set of currently-connected panel ports. The panel opens a port via
@@ -194,8 +197,12 @@ async function handleAutoReplyCommand(senderTab: chrome.tabs.Tab | undefined): P
     console.error('Side panel open from shortcut failed', error);
   }
 
-  await chrome.storage.session.set({ [AUTO_REPLY_FLAG]: Date.now() });
+  // Flag and broadcast carry the SAME stamp so the panel can dedupe
+  // the pair — a panel opened by this shortcut consumes the flag on
+  // mount and then also receives the broadcast.
+  const at = Date.now();
+  await setAutoReplyFlag(at);
   // The broadcast covers the case where the panel was already open and
   // would otherwise miss the flag (it's checked on mount only).
-  await broadcastNotice({ type: 'bg:auto-reply-capture', at: Date.now() });
+  await broadcastNotice({ type: 'bg:auto-reply-capture', at });
 }
