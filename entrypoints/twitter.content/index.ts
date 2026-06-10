@@ -360,26 +360,37 @@ export default defineContentScript({
     //
     // A single requestAnimationFrame loop keeps overlay positions in
     // sync with their target articles (scroll, layout shifts, virtual-
-    // scroll remount).
+    // scroll remount). Idle iterations (no overlay visible) perform no
+    // DOM queries.
     //
     // rAF caps work at ~60fps and skips when the tab is hidden.
     // ---------------------------------------------------------------
-    let rafId = window.requestAnimationFrame(function tick() {
+
+    // Re-finding the lock article is O(articles on page) DOM queries —
+    // too expensive to run per frame on someone else's site. The cached
+    // element going stale (X's virtual scroller unmounting it) is
+    // detected instantly via isConnected; a ~200ms periodic re-scan
+    // covers the article reappearing after navigation or a remount.
+    // When the lock is set but the article isn't on this page,
+    // findArticleByStatusId returns null and the highlight hides; the
+    // lock storage is preserved so generation can still use it.
+    const LOCK_RESCAN_MS = 200;
+    let lastLockScan = 0;
+    let rafId = window.requestAnimationFrame(function tick(now) {
       try {
-        // Re-find the lock article in case X virtual-scroll unmounted +
-        // remounted it. Compare to the currently-painted target to
-        // avoid redundant work. When the lock is set but the article
-        // isn't on this page (e.g. user navigated within X's SPA),
-        // findArticleByStatusId returns null and the highlight hides;
-        // the lock storage is preserved so generation can still use it.
         if (
           captureMode === 'reply-context' &&
           replyContextLock &&
           replyContextLock.targetStatusId
         ) {
-          const fresh = findArticleByStatusId(replyContextLock.targetStatusId);
-          if (fresh !== overlay.getLockTarget()) {
-            overlay.setLock(fresh);
+          const current = overlay.getLockTarget();
+          const targetLost = current !== null && !current.isConnected;
+          if (targetLost || now - lastLockScan >= LOCK_RESCAN_MS) {
+            lastLockScan = now;
+            const fresh = findArticleByStatusId(replyContextLock.targetStatusId);
+            if (fresh !== current) {
+              overlay.setLock(fresh);
+            }
           }
         }
 
