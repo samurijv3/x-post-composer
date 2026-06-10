@@ -4,7 +4,15 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['node_modules', '.output', '.wxt', 'dist', 'stats*'],
+    ignores: [
+      'node_modules',
+      '.output',
+      '.wxt',
+      'dist',
+      'stats*',
+      'coverage',
+      'design_handoff_margin_redesign',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
