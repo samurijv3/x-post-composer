@@ -15,10 +15,17 @@ export function ChipEditor({ chips, defaultChips, onSave }: ChipEditorProps) {
     setWorking(chips);
   }, [chips]);
 
+  // Text edits buffer locally and persist on blur — saving the whole
+  // settings record per keystroke spammed storage writes, re-rendered
+  // every subscriber, and flashed "Saved" continuously. Structural
+  // changes (add/remove/reset) still save immediately.
   function patch(idx: number, p: Partial<ChipPreset>): void {
-    const next = working.map((c, i) => (i === idx ? { ...c, ...p } : c));
-    setWorking(next);
-    onSave(next);
+    setWorking(working.map((c, i) => (i === idx ? { ...c, ...p } : c)));
+  }
+  function commitEdits(): void {
+    // `working` and `chips` share a reference exactly when nothing is
+    // edited (the sync effect above), so this skips no-op saves.
+    if (working !== chips) onSave(working);
   }
   function remove(idx: number): void {
     const next = working.filter((_, i) => i !== idx);
@@ -69,12 +76,14 @@ export function ChipEditor({ chips, defaultChips, onSave }: ChipEditorProps) {
               value={c.label}
               placeholder="Shorter"
               onChange={(e) => patch(idx, { label: e.target.value })}
+              onBlur={commitEdits}
             />
             <input
               type="text"
               value={c.instruction}
               placeholder="Cut it down. Keep only the sharpest line."
               onChange={(e) => patch(idx, { instruction: e.target.value })}
+              onBlur={commitEdits}
             />
             <button
               type="button"
