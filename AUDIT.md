@@ -48,6 +48,17 @@ Effort scale: **XS** ≤ 30 min · **S** ≤ 2 h · **M** ≤ 1 day · **L** > 1
 
 ---
 
+## Phase 2 remediation log
+
+Checked off as fixes land on `chore/codebase-hardening`. Deviations from the original proposal are noted inline on the finding.
+
+- [ ] MV3-01 · [ ] ARCH-01 · [ ] ARCH-02 · [ ] ARCH-03
+- [ ] SEC-01 · [ ] MV3-02 · [ ] MV3-03 · [ ] API-01 · [ ] TEST-01 · [ ] DOC-01 · [x] QUAL-01 · [ ] GIT-01 · [ ] PERF-01
+- [ ] ARCH-04 · [ ] QUAL-02 · [ ] PERF-02 · [ ] UX-01 · [ ] DOC-02
+- [ ] SEC-02 · [ ] SEC-03 · [ ] API-02 · [ ] MODEL-01 · [ ] ARCH-05 · [ ] UX-02 · [ ] UX-03 · [ ] TEST-02 · [ ] REPO-01 · [ ] DATA-01 · [ ] DEV-01 · [ ] DEP-01
+
+---
+
 ## Tooling results (run on this tree, not impressions)
 
 | Check        | Command                                                               | Result                                                                                                                                                            |
