@@ -97,6 +97,11 @@ export default defineBackground(() => {
     const wasOpen = openPanelPorts.size > 0;
     openPanelPorts.add(port);
     if (!wasOpen) void pushToTabs({ type: 'bg:panel-state', isOpen: true });
+    // The panel heartbeats over this port every ~20s. Receiving the
+    // message is the point: each one resets this worker's idle timer,
+    // so the worker (and with it `openPanelPorts`) stays alive exactly
+    // as long as a panel is open. The payload itself means nothing.
+    port.onMessage.addListener(() => {});
     port.onDisconnect.addListener(() => {
       openPanelPorts.delete(port);
       if (openPanelPorts.size === 0) {

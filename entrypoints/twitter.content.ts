@@ -116,6 +116,33 @@ export default defineContentScript({
     // ---------------------------------------------------------------
     // State pushes / requests
     // ---------------------------------------------------------------
+
+    /**
+     * Panel-open state is a lease, not a one-shot: the background
+     * worker can be killed and restarted (losing its in-memory port
+     * set) without this tab hearing about it, so trusting pushes alone
+     * can leave `panelOpen` stale in both directions. Re-validate on
+     * demand. Stale-false heals itself when the panel's port reconnects
+     * (the background pushes `isOpen: true`); stale-true — overlays
+     * painting with the panel closed — is the case this must catch.
+     */
+    function refreshPanelState(): void {
+      if (!isAlive()) return;
+      try {
+        void chrome.runtime
+          .sendMessage({ type: 'content:check-panel-state' })
+          .then((reply: unknown) => {
+            if (isPanelState(reply)) {
+              panelOpen = reply.isOpen;
+              applyOverlayState();
+            }
+          })
+          .catch(() => {});
+      } catch {
+        extensionAlive = false;
+      }
+    }
+
     try {
       void chrome.runtime
         .sendMessage({ type: 'content:check-capture-mode' })
@@ -135,18 +162,19 @@ export default defineContentScript({
           }
         })
         .catch(() => {});
-      void chrome.runtime
-        .sendMessage({ type: 'content:check-panel-state' })
-        .then((reply: unknown) => {
-          if (isPanelState(reply)) {
-            panelOpen = reply.isOpen;
-            applyOverlayState();
-          }
-        })
-        .catch(() => {});
     } catch {
       extensionAlive = false;
     }
+    refreshPanelState();
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refreshPanelState();
+    });
+    // Re-validate only while we believe the panel is open — the lease
+    // exists to clear overlays that would otherwise outlive the panel.
+    const panelLease = window.setInterval(() => {
+      if (panelOpen) refreshPanelState();
+    }, 30_000);
 
     chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
       if (!isAlive()) return false;
@@ -360,6 +388,7 @@ export default defineContentScript({
 
     window.addEventListener('beforeunload', () => {
       window.cancelAnimationFrame(rafId);
+      window.clearInterval(panelLease);
       overlay.destroy();
     });
   },
