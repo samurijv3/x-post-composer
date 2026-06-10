@@ -8,11 +8,21 @@
  * deterministic check + single repair is a backstop, not the primary
  * lever (CLAUDE.md ethos).
  */
-import type { LibraryItem, PromptTemplate, Settings } from '../../types';
+import type { LibraryItem, PromptTemplate, PromptTemplateKey, Settings } from '../../types';
 
-export const DEFAULT_REPLY_TEMPLATE: PromptTemplate = {
-  name: 'Reply',
-  body: `You are writing a reply on X in the user's voice. Output ONLY the reply text — no preamble, no quotation marks around it, no commentary.
+/**
+ * THE single source of truth for the default templates. `DEFAULT_SETTINGS`
+ * imports this record — there is deliberately no second copy anywhere.
+ *
+ * Generation templates (`reply`, `post`) carry the `===USER===` marker:
+ * everything above it is sent as the system message, everything below as
+ * the user message (see `splitPrompt`). Repair/refine/tighten templates
+ * omit the marker and go out as a single user message.
+ */
+export const DEFAULT_PROMPT_TEMPLATES: Record<PromptTemplateKey, PromptTemplate> = {
+  reply: {
+    name: 'Reply',
+    body: `You are writing a reply on X in the user's voice. Output ONLY the reply text — no preamble, no quotation marks around it, no commentary.
 
 VOICE GUIDE
 {{styleGuide}}
@@ -20,6 +30,9 @@ VOICE GUIDE
 PATTERNS TO AVOID
 {{exclusions}}
 
+LENGTH
+{{charConstraint}}
+===USER===
 EXAMPLES OF THE USER'S OWN REPLIES (sample these for tone and rhythm, not topic)
 {{examples}}
 
@@ -28,24 +41,20 @@ THE TWEET BEING REPLIED TO (by someone else)
 {{parentSection}}
 
 WHAT THE USER WANTS TO SAY (interpret these bullets — they are NOT the literal reply text)
-{{bullets}}
-
-LENGTH
-{{charConstraint}}`,
-  slots: [
-    'styleGuide',
-    'exclusions',
-    'examples',
-    'targetText',
-    'parentSection',
-    'bullets',
-    'charConstraint',
-  ],
-};
-
-export const DEFAULT_POST_TEMPLATE: PromptTemplate = {
-  name: 'Post',
-  body: `You are writing a standalone post on X in the user's voice. Output ONLY the post text — no preamble, no quotation marks around it, no commentary.
+{{bullets}}`,
+    slots: [
+      'styleGuide',
+      'exclusions',
+      'examples',
+      'targetText',
+      'parentSection',
+      'bullets',
+      'charConstraint',
+    ],
+  },
+  post: {
+    name: 'Post',
+    body: `You are writing a standalone post on X in the user's voice. Output ONLY the post text — no preamble, no quotation marks around it, no commentary.
 
 VOICE GUIDE
 {{styleGuide}}
@@ -53,27 +62,60 @@ VOICE GUIDE
 PATTERNS TO AVOID
 {{exclusions}}
 
+LENGTH
+{{charConstraint}}
+===USER===
 EXAMPLES OF THE USER'S OWN POSTS (sample these for tone and rhythm, not topic)
 {{examples}}
 
 WHAT THE USER WANTS TO SAY (interpret these bullets — they are NOT the literal post text)
-{{bullets}}
-
-LENGTH
-{{charConstraint}}`,
-  slots: ['styleGuide', 'exclusions', 'examples', 'bullets', 'charConstraint'],
-};
-
-export const DEFAULT_REPAIR_TEMPLATE: PromptTemplate = {
-  name: 'Repair',
-  body: `Your previous draft used patterns the user asked to avoid:
+{{bullets}}`,
+    slots: ['styleGuide', 'exclusions', 'examples', 'bullets', 'charConstraint'],
+  },
+  repair: {
+    name: 'Repair',
+    body: `Your previous draft used patterns the user asked to avoid:
 {{violations}}
 
 Rewrite the draft WITHOUT those patterns, keeping the same voice, length, and intent. Output ONLY the rewritten text — no preamble, no quotation marks around it.
 
 PREVIOUS DRAFT
 {{previousDraft}}`,
-  slots: ['violations', 'previousDraft'],
+    slots: ['violations', 'previousDraft'],
+  },
+  chipRefine: {
+    name: 'Chip refine',
+    body: `Refine the previous draft per this single instruction. Keep the same voice and intent. Output ONLY the rewritten text — no preamble, no quotation marks around it.
+
+INSTRUCTION
+{{instruction}}
+
+PREVIOUS DRAFT
+{{previousDraft}}`,
+    slots: ['instruction', 'previousDraft'],
+  },
+  moreLessRefine: {
+    name: 'More / less refine',
+    body: `Refine the previous draft per these notes. Keep the same voice and intent. Output ONLY the rewritten text — no preamble, no quotation marks around it.
+
+MORE OF (emphasise / add)
+{{more}}
+
+LESS OF (de-emphasise / avoid)
+{{less}}
+
+PREVIOUS DRAFT
+{{previousDraft}}`,
+    slots: ['more', 'less', 'previousDraft'],
+  },
+  tighten: {
+    name: 'Tighten',
+    body: `The previous draft is over the 280-character X limit. Tighten it to fit under 280 characters, preserving voice and meaning. Output ONLY the tightened text — no preamble, no quotation marks around it.
+
+PREVIOUS DRAFT
+{{previousDraft}}`,
+    slots: ['previousDraft'],
+  },
 };
 
 /** Format a list of library items as a numbered block for the

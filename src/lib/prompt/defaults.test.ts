@@ -1,11 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, type LibraryItem } from '../../types';
+import { DEFAULT_SETTINGS, type LibraryItem, type PromptTemplateKey } from '../../types';
 import {
   buildCharConstraintInstruction,
   buildExclusionInstructions,
   buildParentSection,
+  DEFAULT_PROMPT_TEMPLATES,
   formatExamples,
 } from './defaults';
+import { SYSTEM_USER_MARKER, validateTemplate } from './template';
+
+describe('DEFAULT_PROMPT_TEMPLATES', () => {
+  const keys = Object.keys(DEFAULT_PROMPT_TEMPLATES) as PromptTemplateKey[];
+
+  it('is the exact object DEFAULT_SETTINGS uses — no second copy', () => {
+    expect(DEFAULT_SETTINGS.promptTemplates).toBe(DEFAULT_PROMPT_TEMPLATES);
+  });
+
+  it.each(keys)('"%s" has no drift between declared slots and body', (key) => {
+    const v = validateTemplate(DEFAULT_PROMPT_TEMPLATES[key]);
+    expect(v.declaredButUnused).toEqual([]);
+    expect(v.usedButUndeclared).toEqual([]);
+  });
+
+  it('generation templates carry the system/user split marker', () => {
+    expect(DEFAULT_PROMPT_TEMPLATES.reply.body).toContain(SYSTEM_USER_MARKER);
+    expect(DEFAULT_PROMPT_TEMPLATES.post.body).toContain(SYSTEM_USER_MARKER);
+  });
+
+  it('repair/refine/tighten templates are single user messages (no marker)', () => {
+    for (const key of ['repair', 'chipRefine', 'moreLessRefine', 'tighten'] as const) {
+      expect(DEFAULT_PROMPT_TEMPLATES[key].body).not.toContain(SYSTEM_USER_MARKER);
+    }
+  });
+});
 
 function item(text: string): LibraryItem {
   return {

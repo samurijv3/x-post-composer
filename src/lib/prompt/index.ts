@@ -8,9 +8,7 @@ export {
   type SplitPrompt,
 } from './template';
 export {
-  DEFAULT_REPLY_TEMPLATE,
-  DEFAULT_POST_TEMPLATE,
-  DEFAULT_REPAIR_TEMPLATE,
+  DEFAULT_PROMPT_TEMPLATES,
   formatExamples,
   buildExclusionInstructions,
   buildCharConstraintInstruction,
