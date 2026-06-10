@@ -15,12 +15,17 @@ interface AvatarProps {
  * render the leading letters of the display name on a tinted disc.
  *
  * Network behaviour: this component is the only place in the codebase
- * that loads images from `pbs.twimg.com`. See CLAUDE.md §6 for the
- * inbound-image carve-out.
+ * that loads images from `pbs.twimg.com`, and it is the enforcement
+ * point for CLAUDE.md §6's image carve-out: any other host falls back
+ * to initials. Capture already filters to pbs.twimg.com, but rows come
+ * back out of IndexedDB (and one day out of imported backups) — the
+ * render-side gate makes the invariant hold no matter what is stored.
  */
+const ALLOWED_AVATAR_HOST = /^https:\/\/pbs\.twimg\.com\//;
+
 export function Avatar({ src, name, size = 40 }: AvatarProps) {
   const [failed, setFailed] = useState(false);
-  const showImg = src !== null && !failed;
+  const showImg = src !== null && ALLOWED_AVATAR_HOST.test(src) && !failed;
   const initials = computeInitials(name);
 
   return (
