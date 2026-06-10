@@ -5,4 +5,4 @@ dist
 stats*
 
 # Design prototype — reference material, not production code (see AUDIT.md REPO-01)
-design_handoff_margin_redesign
+docs/design

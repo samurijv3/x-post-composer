@@ -24,6 +24,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Per-machine agent settings — never shared
+.claude/settings.local.json
+
 # Secrets — NEVER commit anything in these patterns
 .env
 .env.*
