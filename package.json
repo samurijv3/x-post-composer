@@ -15,6 +15,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "verify": "eslint . && prettier --check . && tsc --noEmit && vitest run && wxt build",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
