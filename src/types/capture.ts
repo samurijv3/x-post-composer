@@ -13,6 +13,11 @@ export interface RawCapture {
   text: string;
   /** Author handle without the leading `@`. */
   authorHandle: string;
+  /** Author display name as rendered by X. Null when the name node can't be located. */
+  authorDisplayName: string | null;
+  /** Full URL to the author's avatar on `pbs.twimg.com`. Null when not found.
+   *  Loaded directly as `<img src>` in the panel — see CLAUDE.md §6. */
+  authorAvatarUrl: string | null;
   /** Permalink-derived id when found. Used as the LibraryItem id if present. */
   statusId: string | null;
   /** ISO 8601 timestamp from the `<time>` element when present. */
@@ -26,6 +31,10 @@ export interface RawCapture {
    *  views this is always false so it cannot mis-tag posts with sibling
    *  posts above them. */
   isPrecededByParentArticle: boolean;
+  /** True when the article contains media (images, video, link card,
+   *  quoted tweet). Used to surface the "saved text only" notice on
+   *  captures of mixed-content tweets. */
+  hasMedia: boolean;
 }
 
 /**
@@ -37,4 +46,5 @@ export type CaptureFailureReason =
   | 'missing-text'
   | 'missing-author'
   | 'truncated'
+  | 'media-only'
   | 'unknown';

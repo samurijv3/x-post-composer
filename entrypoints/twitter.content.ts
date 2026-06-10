@@ -1,27 +1,36 @@
 /**
  * Content script that runs on X.com / twitter.com pages.
  *
- * Job: while the user has capture mode on, intercept clicks on tweet
- * articles, extract their text and metadata, and forward the raw capture
- * to the background worker. The background validates the author and
- * decides whether to persist.
- *
- * Security invariants (CLAUDE.md §6):
+ * Responsibilities (CLAUDE.md §6):
+ *   - Read-only contact with X's existing DOM. We may extend it with
+ *     our own elements (the overlay) per the carve-out in §6, but we
+ *     never modify X's tree.
  *   - Never reads or holds the API key.
- *   - Never writes to X's DOM and never auto-posts.
- *   - All contact with the page is read-only and degrades gracefully
- *     when X's markup changes — extraction failures report a clear
- *     reason rather than guessing or throwing.
+ *   - Never auto-posts. The single output path is the clipboard, owned
+ *     by the panel.
+ *   - Failures degrade gracefully — extraction errors surface as a
+ *     clear notice rather than throwing into the page.
  *
- * X's markup is a moving target. We anchor on `data-testid` hooks
- * (the most stable surface available); when those drift, the user sees
- * a clean fallback message in the panel and can use the manual-paste
- * path instead.
+ * Architecture:
+ *   - A single capture-mode value (`'none' | 'library' | 'reply-context'`)
+ *     drives click behavior + overlay visibility.
+ *   - A reply-context lock (`ReplyContext | null`) drives the locked
+ *     highlight overlay, persisting across scroll on the current page
+ *     and clearing on navigation, dismiss, or replacement.
+ *   - Both pieces of state live in the background's chrome.storage.session
+ *     and are mirrored here via the typed messaging layer.
+ *
+ * X's markup is a moving target. We anchor on `data-testid` hooks (the
+ * most stable surface available); when those drift, the user sees a
+ * clean fallback rather than a broken extension.
  */
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { sendOneWay } from '../src/messaging';
 import type { RawCapture } from '../src/types/capture';
 import type { ReplyContext } from '../src/types';
+import type { ActiveCaptureMode } from '../src/storage/captureMode';
+
+type Mode = ActiveCaptureMode;
 
 export default defineContentScript({
   matches: [
@@ -32,19 +41,12 @@ export default defineContentScript({
   ],
   runAt: 'document_idle',
   main() {
-    let captureActive = false;
-
-    // True once the extension has been reloaded since this script was
-    // injected. Chrome leaves the orphaned content script attached to
-    // the page until the user refreshes the tab; any `chrome.runtime.*`
-    // call from here will throw "Extension context invalidated."
-    // We flip this flag the first time we observe such a throw and
-    // make the click handler / message listener no-ops afterwards.
+    // ---------------------------------------------------------------
+    // Extension-alive probe (orphaned content script after reload)
+    // ---------------------------------------------------------------
     let extensionAlive = true;
     const isAlive = (): boolean => {
       if (!extensionAlive) return false;
-      // `chrome.runtime?.id` reads as undefined once the runtime has
-      // been torn down — a synchronous, throw-free probe.
       try {
         if (!chrome.runtime?.id) {
           extensionAlive = false;
@@ -57,31 +59,120 @@ export default defineContentScript({
       return true;
     };
 
-    // Capture-mode lives in `chrome.storage.session`, which the content
-    // script cannot read directly (kept trusted-only so the user's
-    // "Session only" API-key choice stays isolated). Instead we ask the
-    // background for the current value on load and listen for pushes.
+    // ---------------------------------------------------------------
+    // Mirrored state from background
+    // ---------------------------------------------------------------
+    let captureMode: Mode = 'none';
+    let replyContextLock: ReplyContext | null = null;
+    // True only when at least one side-panel port is open. Drives
+    // overlay visibility: we never paint anything on x.com unless the
+    // user is actively in our UI.
+    let panelOpen = false;
+
+    // (No pathname tracking — the lock is preserved across navigation
+    // so the captured ReplyContext remains usable for generation. The
+    // on-page highlight naturally disappears when findArticleByStatusId
+    // returns null on a page that doesn't render the locked tweet.)
+
+    // ---------------------------------------------------------------
+    // Overlay system
+    // ---------------------------------------------------------------
+    const overlay = createOverlaySystem({
+      onDismiss: () => {
+        if (!isAlive()) return;
+        sendOneWay({ type: 'content:dismiss-reply-context' });
+      },
+    });
+
+    function applyOverlayState(): void {
+      // Suppress every overlay whenever the panel isn't actually open.
+      // The user can have a capture mode toggled on and the panel
+      // closed (state lives in storage), but visually nothing should
+      // appear on x.com without the user being in our UI.
+      if (!panelOpen) {
+        overlay.setLock(null);
+        overlay.setPreview(null);
+        return;
+      }
+
+      // The lock highlight only renders when reply-context mode is on.
+      // The lock itself stays in storage (so the panel can still use
+      // the captured context for generation) but the on-page indicator
+      // is mode-gated per the user's spec: "turn off capture mode →
+      // highlight disappears."
+      const lockArticle =
+        captureMode === 'reply-context' &&
+        replyContextLock &&
+        replyContextLock.targetStatusId
+          ? findArticleByStatusId(replyContextLock.targetStatusId)
+          : null;
+      overlay.setLock(lockArticle);
+
+      // Preview is suppressed when hovering the locked article so we
+      // don't paint two overlays on the same tweet.
+      const showPreview =
+        captureMode !== 'none' &&
+        hoveredArticle !== null &&
+        hoveredArticle !== lockArticle;
+      overlay.setPreview(showPreview ? hoveredArticle : null);
+    }
+
+    // ---------------------------------------------------------------
+    // State pushes / requests
+    // ---------------------------------------------------------------
     try {
-      chrome.runtime
+      void chrome.runtime
         .sendMessage({ type: 'content:check-capture-mode' })
         .then((reply: unknown) => {
-          if (isCaptureModeState(reply)) captureActive = reply.active;
+          if (isCaptureModeState(reply)) {
+            captureMode = reply.mode;
+            applyOverlayState();
+          }
         })
-        .catch(() => {
-          // Background may briefly be unresponsive at startup; the next
-          // push (or a click-driven mismatch) will recover.
-        });
+        .catch(() => {});
+      void chrome.runtime
+        .sendMessage({ type: 'content:check-reply-context-lock' })
+        .then((reply: unknown) => {
+          if (isReplyContextLockState(reply)) {
+            replyContextLock = reply.lock;
+            applyOverlayState();
+          }
+        })
+        .catch(() => {});
+      void chrome.runtime
+        .sendMessage({ type: 'content:check-panel-state' })
+        .then((reply: unknown) => {
+          if (isPanelState(reply)) {
+            panelOpen = reply.isOpen;
+            applyOverlayState();
+          }
+        })
+        .catch(() => {});
     } catch {
-      // Orphaned content script from a previous extension reload.
       extensionAlive = false;
     }
 
     chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
       if (!isAlive()) return false;
+
       if (isCaptureModeState(message)) {
-        captureActive = message.active;
+        captureMode = message.mode;
+        applyOverlayState();
         return false;
       }
+
+      if (isReplyContextLockState(message)) {
+        replyContextLock = message.lock;
+        applyOverlayState();
+        return false;
+      }
+
+      if (isPanelState(message)) {
+        panelOpen = message.isOpen;
+        applyOverlayState();
+        return false;
+      }
+
       if (isReplyContextRequest(message)) {
         try {
           const ctx = extractReplyContextFromComposer();
@@ -110,78 +201,194 @@ export default defineContentScript({
       return false;
     });
 
+    // ---------------------------------------------------------------
+    // Hover detection — drives preview overlay
+    // ---------------------------------------------------------------
+    let hoveredArticle: Element | null = null;
+
+    document.addEventListener('mouseover', (event) => {
+      // No mode active or panel closed → no preview, no work to do.
+      if (captureMode === 'none' || !panelOpen) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const article = target.closest('article[data-testid="tweet"]');
+      if (!article) {
+        if (hoveredArticle !== null) {
+          hoveredArticle = null;
+          applyOverlayState();
+        }
+        return;
+      }
+      // We deliberately do NOT suppress the preview when hovering over
+      // interactive children (Show more, links, action buttons). The
+      // preview communicates "this is the tweet you're hovering," not
+      // "this is what a click will capture." Click-routing in the
+      // capture-phase listener handles interactive elements correctly
+      // by passing them through to X.
+      if (article !== hoveredArticle) {
+        hoveredArticle = article;
+        applyOverlayState();
+      }
+    });
+
+    document.addEventListener('mouseout', (event) => {
+      // Only clear when the mouse leaves the entire document (related
+      // target is null). Element-to-element mouseouts inside the
+      // document are noisy and the corresponding mouseover handles them.
+      if (event.relatedTarget !== null) return;
+      if (hoveredArticle !== null) {
+        hoveredArticle = null;
+        applyOverlayState();
+      }
+    });
+
+    // ---------------------------------------------------------------
+    // Click handling
+    //
+    // Branching by mode:
+    //   - library:        existing flow — extract + send for save.
+    //   - reply-context:  new flow — extract reply context + send for lock.
+    //   - none:           let X's UI handle the click.
+    // ---------------------------------------------------------------
     document.addEventListener(
       'click',
       (event) => {
-        if (!captureActive) return;
-        // Silently bail when the runtime has been torn down by an
-        // extension reload. The user will see new captures work again
-        // after they refresh the x.com tab.
+        if (captureMode === 'none') return;
         if (!isAlive()) return;
         const target = event.target;
         if (!(target instanceof Element)) return;
 
         const article = target.closest('article[data-testid="tweet"]');
-        if (!article) {
-          // Click landed somewhere other than a tweet (sidebar, header,
-          // composer). Let X's own UI handle it.
-          return;
-        }
+        if (!article) return;
 
-        // Let X handle clicks on interactive controls inside the
-        // article — Show more, action buttons (Reply / Retweet / Like /
-        // etc.), and embedded links (@-mentions, hashtags, URLs). Only
-        // clicks on inert tweet body content trigger capture. This is
-        // what makes "Show more then click to capture" work in a single
-        // session of capture mode rather than requiring a toggle dance.
+        // Let X handle clicks on interactive children regardless of
+        // mode (Show more, action buttons, links).
         if (target.closest('button, a, [role="button"], [role="link"]')) {
           return;
         }
 
-        // From here on, the click belongs to us. Stop X from navigating.
+        // Don't intercept clicks on our own overlay's dismiss control.
+        if (target.closest('[data-margin-overlay]')) {
+          return;
+        }
+
         event.preventDefault();
         event.stopPropagation();
 
-        runCapture(article);
+        if (captureMode === 'library') {
+          runLibraryCapture(article);
+        } else if (captureMode === 'reply-context') {
+          runReplyContextSelect(article);
+        }
       },
       { capture: true },
     );
 
-    function runCapture(article: Element): void {
+    function runLibraryCapture(article: Element): void {
       try {
-        // Refuse to capture a tweet X is currently truncating. The
-        // alternative is saving the visible preview, which silently
-        // shortens the user's voice library — worse than asking the
-        // user to expand the tweet first. See the doc on
-        // `isTweetTruncated` for why we can't auto-expand.
         if (isTweetTruncated(article)) {
           sendOneWay({ type: 'content:capture-failed', reason: 'truncated' });
           return;
         }
-
         const capture = extractTweet(article);
-        if (capture === 'missing-text' || capture === 'missing-author') {
+        if (
+          capture === 'missing-text' ||
+          capture === 'missing-author' ||
+          capture === 'media-only'
+        ) {
           sendOneWay({ type: 'content:capture-failed', reason: capture });
           return;
         }
         sendOneWay({ type: 'content:captured-tweet', payload: capture });
       } catch {
-        // Defence in depth: an unexpected DOM shape should never throw
-        // back into the page. Surface a graceful failure instead.
         sendOneWay({ type: 'content:capture-failed', reason: 'unknown' });
       }
     }
+
+    function runReplyContextSelect(article: Element): void {
+      // Failures in reply-context mode flow through a separate
+      // message so the panel can surface a reply-context-appropriate
+      // toast instead of a "didn't save to voice" banner.
+      try {
+        if (isTweetTruncated(article)) {
+          sendOneWay({ type: 'content:reply-context-failed', reason: 'truncated' });
+          return;
+        }
+        const ctx = extractReplyContextFromArticle(article);
+        if ('error' in ctx) {
+          const reason = ctx.error.includes('media-only') ? 'media-only' : 'unknown';
+          sendOneWay({ type: 'content:reply-context-failed', reason });
+          return;
+        }
+        sendOneWay({ type: 'content:reply-context-selected', context: ctx });
+      } catch {
+        sendOneWay({ type: 'content:reply-context-failed', reason: 'unknown' });
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // rAF positioning loop + SPA-navigation watch
+    //
+    // A single requestAnimationFrame loop keeps overlay positions in
+    // sync with their target articles (scroll, layout shifts, virtual-
+    // scroll remount). The same loop watches the URL: when the path
+    // changes from where the lock was set, we clear the lock.
+    //
+    // rAF caps work at ~60fps and skips when the tab is hidden.
+    // ---------------------------------------------------------------
+    let rafId = window.requestAnimationFrame(function tick() {
+      try {
+        // Re-find the lock article in case X virtual-scroll unmounted +
+        // remounted it. Compare to the currently-painted target to
+        // avoid redundant work. When the lock is set but the article
+        // isn't on this page (e.g. user navigated within X's SPA),
+        // findArticleByStatusId returns null and the highlight hides;
+        // the lock storage is preserved so generation can still use it.
+        if (
+          captureMode === 'reply-context' &&
+          replyContextLock &&
+          replyContextLock.targetStatusId
+        ) {
+          const fresh = findArticleByStatusId(replyContextLock.targetStatusId);
+          if (fresh !== overlay.getLockTarget()) {
+            overlay.setLock(fresh);
+          }
+        }
+
+        overlay.reposition();
+      } catch {
+        // Defensive — never let the loop throw into the page.
+      }
+      rafId = window.requestAnimationFrame(tick);
+    });
+
+    window.addEventListener('beforeunload', () => {
+      window.cancelAnimationFrame(rafId);
+      overlay.destroy();
+    });
   },
 });
 
+// =====================================================================
+// Type guards
+// =====================================================================
+
 function isCaptureModeState(
   value: unknown,
-): value is { type: 'bg:capture-mode-state'; active: boolean } {
+): value is { type: 'bg:capture-mode-state'; mode: Mode } {
+  if (typeof value !== 'object' || value === null) return false;
+  if ((value as { type?: unknown }).type !== 'bg:capture-mode-state') return false;
+  const mode = (value as { mode?: unknown }).mode;
+  return mode === 'none' || mode === 'library' || mode === 'reply-context';
+}
+
+function isReplyContextLockState(
+  value: unknown,
+): value is { type: 'bg:reply-context-lock-state'; lock: ReplyContext | null } {
   return (
     typeof value === 'object' &&
     value !== null &&
-    (value as { type?: unknown }).type === 'bg:capture-mode-state' &&
-    typeof (value as { active?: unknown }).active === 'boolean'
+    (value as { type?: unknown }).type === 'bg:reply-context-lock-state'
   );
 }
 
@@ -195,24 +402,251 @@ function isReplyContextRequest(
   );
 }
 
+function isPanelState(value: unknown): value is { type: 'bg:panel-state'; isOpen: boolean } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { type?: unknown }).type === 'bg:panel-state' &&
+    typeof (value as { isOpen?: unknown }).isOpen === 'boolean'
+  );
+}
+
+// =====================================================================
+// Tweet extraction (existing logic preserved)
+// =====================================================================
+
+function extractTweet(
+  article: Element,
+): RawCapture | 'missing-text' | 'missing-author' | 'media-only' {
+  const textRoot = article.querySelector('[data-testid="tweetText"]');
+  const articleHasMedia = hasMedia(article);
+  if (!textRoot) {
+    // No text content found. If the article does contain media, this
+    // is a media-only post (which can't enter a text-only corpus);
+    // otherwise X probably changed its markup.
+    return articleHasMedia ? 'media-only' : 'missing-text';
+  }
+
+  const text = readVisibleText(textRoot).trim();
+  if (text === '') {
+    return articleHasMedia ? 'media-only' : 'missing-text';
+  }
+
+  const authorHandle = readAuthorHandle(article);
+  if (authorHandle === null || authorHandle === '') return 'missing-author';
+
+  return {
+    text,
+    authorHandle,
+    authorDisplayName: readDisplayName(article),
+    authorAvatarUrl: readAvatarUrl(article),
+    statusId: readStatusId(article),
+    timestamp: readTimestamp(article),
+    hasReplyContextNode: detectReplyContext(article),
+    inReplyToStatusId: null,
+    isPrecededByParentArticle: detectReplyByDomStructure(article),
+    hasMedia: articleHasMedia,
+  };
+}
+
 /**
- * Scrape the reply target (and one parent up, if visible) from around
- * X's open composer. Read-only — never touches the DOM.
+ * Extract a ReplyContext from a SPECIFIC article (the one the user
+ * clicked to select), as opposed to the composer-based extractor used
+ * by the deprecated button flow.
  *
- * Two layout cases X uses:
- *   - Modal reply (Reply from a feed/profile): composer + target render
- *     inside `[role="dialog"]`. We scope to the dialog so we don't
- *     accidentally grab the timeline behind it.
- *   - Inline reply (composer at the bottom of a status detail page):
- *     no dialog; the target lives in the page itself, above the
- *     composer in DOM order.
- *
- * Returns:
- *   - `null` when no composer is open (precondition the caller checks).
- *   - `{ error }` when a composer is open but we can't find a target.
- *   - `ReplyContext` on success. `grandparentText` may be null when the
- *     target is itself a top-level post (or only one tweet is visible).
+ * Target = the clicked article.
+ * Grandparent = the article in the previous cellInnerDiv, if any (same
+ * heuristic the reply-detection structural signal uses).
  */
+function extractReplyContextFromArticle(
+  article: Element,
+): ReplyContext | { error: string } {
+  const textRoot = article.querySelector('[data-testid="tweetText"]');
+  if (!textRoot) {
+    return { error: 'Could not read that tweet — X may have changed its markup.' };
+  }
+  const targetText = readVisibleText(textRoot).trim();
+  if (targetText === '') {
+    return { error: 'The target tweet is text-empty (or media-only — see the v1 limitation).' };
+  }
+
+  const grandparentArticle = findGrandparentArticle(article);
+  let grandparentText: string | null = null;
+  if (grandparentArticle) {
+    const gpText = grandparentArticle.querySelector('[data-testid="tweetText"]');
+    if (gpText) {
+      const t = readVisibleText(gpText).trim();
+      if (t !== '') grandparentText = t;
+    }
+  }
+
+  return {
+    targetText,
+    targetAuthorHandle: readAuthorHandle(article),
+    targetAuthorDisplayName: readDisplayName(article),
+    targetAuthorAvatarUrl: readAvatarUrl(article),
+    targetTimestamp: readTimestamp(article),
+    targetStatusId: readStatusId(article),
+    grandparentText,
+    hadUnreadableMedia:
+      hasMedia(article) || (grandparentArticle !== null && hasMedia(grandparentArticle)),
+  };
+}
+
+/**
+ * Find the parent tweet of `article` in the DOM, but only when we're
+ * confident the preceding article is actually a thread parent rather
+ * than an unrelated tweet in the timeline.
+ *
+ * Confidence sources (the contexts where X reliably renders parent
+ * context directly above a tweet):
+ *   - Status detail pages (`/handle/status/<id>`): the conversation
+ *     view; tweets above the focal are parent context.
+ *   - The `/with_replies` feed: X separates unrelated conversations
+ *     with empty cellInnerDiv spacers, so a non-empty previous cell
+ *     containing a tweet IS the parent.
+ *
+ * Other contexts — profile timelines (`/handle`), the home feed,
+ * search results, lists — X renders unrelated tweets stacked directly
+ * without spacers, so a previous-cell tweet is NOT necessarily the
+ * parent. We skip grandparent capture there rather than guess wrong.
+ * The user can hand-write the parent context into bullets if it matters.
+ */
+function findGrandparentArticle(article: Element): Element | null {
+  const path = window.location.pathname;
+  const onStatusDetail = /^\/[^/]+\/status\/\d+/.test(path);
+  const onRepliesFeed = /\/with_replies\/?$/.test(path);
+  if (!onStatusDetail && !onRepliesFeed) return null;
+
+  const cell = article.closest('[data-testid="cellInnerDiv"]');
+  if (!cell) return null;
+  const prevCell = cell.previousElementSibling;
+  if (!prevCell) return null;
+  return prevCell.querySelector('article[data-testid="tweet"]');
+}
+
+function findArticleByStatusId(statusId: string): Element | null {
+  const articles = document.querySelectorAll('article[data-testid="tweet"]');
+  for (const a of Array.from(articles)) {
+    if (readStatusId(a) === statusId) return a;
+  }
+  return null;
+}
+
+function detectReplyByDomStructure(article: Element): boolean {
+  const statusMatch = /^\/[^/]+\/status\/(\d+)/.exec(window.location.pathname);
+  if (statusMatch) {
+    const urlStatusId = statusMatch[1];
+    const articleStatusId = readStatusId(article);
+    if (articleStatusId !== null && articleStatusId !== urlStatusId) {
+      return true;
+    }
+    const allArticles = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
+    return allArticles.indexOf(article) > 0;
+  }
+  const cell = article.closest('[data-testid="cellInnerDiv"]');
+  if (!cell) return false;
+  const prevCell = cell.previousElementSibling;
+  if (!prevCell) return false;
+  if (prevCell.querySelector('article[data-testid="tweet"]')) return true;
+  const sep = prevCell.textContent?.trim() ?? '';
+  return sep === 'Show more replies' || sep === 'Show this thread';
+}
+
+function readVisibleText(root: Element): string {
+  const parts: string[] = [];
+  for (const node of Array.from(root.childNodes)) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      parts.push(node.textContent ?? '');
+    } else if (node instanceof Element) {
+      if (node.tagName === 'IMG') {
+        parts.push(node.getAttribute('alt') ?? '');
+      } else {
+        parts.push(readVisibleText(node));
+      }
+    }
+  }
+  return parts.join('');
+}
+
+function readAuthorHandle(article: Element): string | null {
+  const header = article.querySelector('[data-testid="User-Name"]');
+  if (!header) return null;
+  const anchors = header.querySelectorAll('a[href^="/"]');
+  for (const anchor of Array.from(anchors)) {
+    const href = anchor.getAttribute('href') ?? '';
+    const match = /^\/([A-Za-z0-9_]+)$/.exec(href);
+    if (match && match[1]) return match[1];
+  }
+  return null;
+}
+
+function readStatusId(article: Element): string | null {
+  const anchor = article.querySelector('a[href*="/status/"]');
+  if (!anchor) return null;
+  const href = anchor.getAttribute('href') ?? '';
+  const match = /\/status\/(\d+)/.exec(href);
+  return match && match[1] ? match[1] : null;
+}
+
+function readTimestamp(article: Element): string | null {
+  const time = article.querySelector('time[datetime]');
+  return time?.getAttribute('datetime') ?? null;
+}
+
+/**
+ * Read X's display name out of the User-Name header. The structure is
+ * roughly: `[User-Name] > [name-row link href="/handle"] > spans of name`
+ * + `[handle-row link href="/handle"] > "@handle"`. Both links point to
+ * the same `/handle` href, so we disambiguate by the leading "@".
+ */
+function readDisplayName(article: Element): string | null {
+  const header = article.querySelector('[data-testid="User-Name"]');
+  if (!header) return null;
+  const anchors = header.querySelectorAll('a[href^="/"]');
+  for (const anchor of Array.from(anchors)) {
+    const href = anchor.getAttribute('href') ?? '';
+    if (!/^\/[A-Za-z0-9_]+$/.test(href)) continue;
+    const text = readVisibleText(anchor).trim();
+    if (text === '' || text.startsWith('@')) continue;
+    return text;
+  }
+  return null;
+}
+
+/**
+ * Read the author's avatar URL. X renders avatars via `<img>` inside
+ * `[data-testid="Tweet-User-Avatar"]`; we only accept `pbs.twimg.com`
+ * sources to keep CLAUDE.md §6's image carve-out tight.
+ */
+function readAvatarUrl(article: Element): string | null {
+  const avatar = article.querySelector('[data-testid="Tweet-User-Avatar"]');
+  if (!avatar) return null;
+  const img = avatar.querySelector('img');
+  if (!img) return null;
+  const src = img.getAttribute('src') ?? '';
+  if (!/^https:\/\/pbs\.twimg\.com\//.test(src)) return null;
+  return src;
+}
+
+function detectReplyContext(article: Element): boolean {
+  const text = article.textContent ?? '';
+  return /\bReplying to\b/i.test(text);
+}
+
+function isTweetTruncated(article: Element): boolean {
+  if (article.querySelector('[data-testid="tweet-text-show-more-link"]')) return true;
+  const candidates = article.querySelectorAll('button, [role="button"], a[role="link"]');
+  for (const c of Array.from(candidates)) {
+    if (c.textContent?.trim() === 'Show more') return true;
+  }
+  return false;
+}
+
+// =====================================================================
+// Composer-based reply-context capture (legacy keyboard-shortcut path)
+// =====================================================================
+
 function extractReplyContextFromComposer():
   | ReplyContext
   | { error: string }
@@ -257,13 +691,15 @@ function extractReplyContextFromComposer():
   return {
     targetText,
     targetAuthorHandle: readAuthorHandle(target),
+    targetAuthorDisplayName: readDisplayName(target),
+    targetAuthorAvatarUrl: readAvatarUrl(target),
+    targetTimestamp: readTimestamp(target),
+    targetStatusId: readStatusId(target),
     grandparentText,
     hadUnreadableMedia: hasMedia(target) || (grandparent !== null && hasMedia(grandparent)),
   };
 }
 
-/** Best-effort detection of media on a tweet. Used to surface the
- *  text-only v1 limitation; never blocks capture. */
 function hasMedia(article: Element): boolean {
   if (article.querySelector('[data-testid="tweetPhoto"]')) return true;
   if (article.querySelector('[data-testid="videoComponent"]')) return true;
@@ -272,180 +708,276 @@ function hasMedia(article: Element): boolean {
   return false;
 }
 
-/**
- * Pull a `RawCapture` out of a tweet `<article>`. Returns a failure
- * reason string when a required field can't be read. Pure DOM read —
- * never mutates the page.
- */
-function extractTweet(
-  article: Element,
-): RawCapture | 'missing-text' | 'missing-author' {
-  const textRoot = article.querySelector('[data-testid="tweetText"]');
-  if (!textRoot) return 'missing-text';
+// =====================================================================
+// Overlay system
+//
+// Two overlay states:
+//   - preview: outline-only highlight that follows the hovered tweet
+//     while a capture mode is active. No fill, no controls.
+//   - lock:    outline + tinted fill on the captured reply-context
+//     tweet, with a dismiss control and a label below. Persists across
+//     scrolls; cleared on dismiss, mode-off, or SPA navigation.
+//
+// Per the §6 carve-out (see CLAUDE.md):
+//   - All overlay elements carry `data-margin-overlay` for easy audit.
+//   - All visuals are `pointer-events: none`. The dismiss control is
+//     the ONLY interactive child; it only clears extension-side state.
+//   - We never annotate X's own elements.
+// =====================================================================
 
-  const text = readVisibleText(textRoot).trim();
-  if (text === '') return 'missing-text';
+interface OverlaySystem {
+  setPreview(article: Element | null): void;
+  setLock(article: Element | null): void;
+  getLockTarget(): Element | null;
+  reposition(): void;
+  destroy(): void;
+}
 
-  const authorHandle = readAuthorHandle(article);
-  if (authorHandle === null || authorHandle === '') return 'missing-author';
+function createOverlaySystem(opts: { onDismiss: () => void }): OverlaySystem {
+  injectOverlayStyles();
+
+  const root = document.createElement('div');
+  root.setAttribute('data-margin-overlay', 'root');
+  root.style.position = 'fixed';
+  root.style.top = '0';
+  root.style.left = '0';
+  root.style.width = '0';
+  root.style.height = '0';
+  root.style.pointerEvents = 'none';
+  root.style.zIndex = '2147483000';
+  document.body.appendChild(root);
+
+  const previewEl = buildOverlayElement('preview');
+  const lockEl = buildOverlayElement('lock');
+  const dismissBtn = document.createElement('button');
+  dismissBtn.setAttribute('data-margin-overlay', 'dismiss');
+  dismissBtn.setAttribute('type', 'button');
+  dismissBtn.setAttribute('aria-label', 'Clear reply context');
+  dismissBtn.textContent = '×';
+  dismissBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    opts.onDismiss();
+  });
+  lockEl.appendChild(dismissBtn);
+
+  const labelEl = document.createElement('div');
+  labelEl.setAttribute('data-margin-overlay', 'label');
+  labelEl.textContent = '↑ pulled in as reply context';
+
+  root.appendChild(previewEl);
+  root.appendChild(lockEl);
+  root.appendChild(labelEl);
+
+  let previewTarget: Element | null = null;
+  let lockTarget: Element | null = null;
+  // Cache the last-applied rect per overlay element. The rAF loop calls
+  // `reposition` every frame; without this cache, every frame writes
+  // identical `style.top/left` values which interrupts the CSS
+  // transition (each style write is treated as a new target). With the
+  // cache, the transition only kicks off when the rect actually moves.
+  const cachedRects = new WeakMap<HTMLElement, { x: number; y: number; w: number; h: number }>();
+
+  function setPreview(article: Element | null): void {
+    const changed = article !== previewTarget;
+    previewTarget = article;
+    if (!article) {
+      previewEl.style.display = 'none';
+      return;
+    }
+    previewEl.style.display = 'block';
+    if (changed) animateOnce(previewEl);
+    positionElement(previewEl, article.getBoundingClientRect(), cachedRects);
+  }
+
+  function setLock(article: Element | null): void {
+    const changed = article !== lockTarget;
+    lockTarget = article;
+    const visible = article !== null;
+    lockEl.style.display = visible ? 'block' : 'none';
+    labelEl.style.display = visible ? 'block' : 'none';
+    if (article) {
+      if (changed) {
+        animateOnce(lockEl);
+        animateOnce(labelEl);
+      }
+      const rect = article.getBoundingClientRect();
+      positionElement(lockEl, rect, cachedRects);
+      positionLabel(labelEl, rect, cachedRects);
+    }
+  }
+
+  /**
+   * Add the `.moving` class briefly so CSS transitions apply during a
+   * target change, then remove it so subsequent per-frame scroll
+   * updates skip the transition (and thus stay perfectly in sync with
+   * the cursor's scroll position rather than lagging by the animation
+   * duration). 250 ms covers the 160 ms transition with a buffer.
+   */
+  function animateOnce(el: HTMLElement): void {
+    el.classList.add('moving');
+    // Long enough to cover the 0.16s lock transition. Preview's 0.08s
+    // also fits comfortably under this ceiling.
+    window.setTimeout(() => el.classList.remove('moving'), 220);
+  }
+
+  function reposition(): void {
+    if (previewTarget && previewEl.style.display !== 'none') {
+      positionElement(previewEl, previewTarget.getBoundingClientRect(), cachedRects);
+    }
+    if (lockTarget && lockEl.style.display !== 'none') {
+      const rect = lockTarget.getBoundingClientRect();
+      positionElement(lockEl, rect, cachedRects);
+      positionLabel(labelEl, rect, cachedRects);
+    }
+  }
+
+  function destroy(): void {
+    root.remove();
+  }
 
   return {
-    text,
-    authorHandle,
-    statusId: readStatusId(article),
-    timestamp: readTimestamp(article),
-    hasReplyContextNode: detectReplyContext(article),
-    inReplyToStatusId: null,
-    isPrecededByParentArticle: detectReplyByDomStructure(article),
+    setPreview,
+    setLock,
+    getLockTarget: () => lockTarget,
+    reposition,
+    destroy,
   };
 }
 
-/**
- * Decide whether the captured article is a reply (vs a standalone
- * post) based on the surrounding DOM. Two layouts X uses:
- *
- *   1. Feed views (home, profile, /with_replies). Each tweet lives in
- *      its own `cellInnerDiv`. X separates unrelated tweets with an
- *      empty cellInnerDiv spacer; threads have either the parent tweet
- *      OR a "Show more replies" toggle in the previous cell instead.
- *
- *   2. Status detail pages (`/handle/status/<id>`). Every article in
- *      the conversation EXCEPT the focal tweet is by definition a
- *      reply, regardless of author — the page IS a reply thread. The
- *      focal tweet itself is a reply when X shows parent context above
- *      it (it has its own parent rendered as an article above).
- *
- * Self-thread continuations are classified as reply on both layouts.
- * Per the Chunk-2 spec they're stylistically closer to replies than
- * standalone posts; the user can override per-item if they disagree.
- *
- * Limitation: the "Show more replies" / "Show this thread" separator
- * recognition is English-only. Localised UIs may classify a thread
- * continuation that sits below the separator as post until the user
- * overrides. The structural cellInnerDiv check still handles the
- * common cases regardless of language.
- */
-function detectReplyByDomStructure(article: Element): boolean {
-  // Branch 1: status detail page.
-  const statusMatch = /^\/[^/]+\/status\/(\d+)/.exec(window.location.pathname);
-  if (statusMatch) {
-    const urlStatusId = statusMatch[1];
-    const articleStatusId = readStatusId(article);
-    if (articleStatusId !== null && articleStatusId !== urlStatusId) {
-      // Some other tweet in the focal conversation — reply, by
-      // definition (it's either parent-context-above or a response).
-      return true;
-    }
-    // Article IS the focal tweet (or status id unreadable). It's a
-    // reply when X is rendering parent context above it.
-    const allArticles = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
-    return allArticles.indexOf(article) > 0;
-  }
-
-  // Branch 2: feed views.
-  const cell = article.closest('[data-testid="cellInnerDiv"]');
-  if (!cell) return false;
-  const prevCell = cell.previousElementSibling;
-  if (!prevCell) return false;
-  if (prevCell.querySelector('article[data-testid="tweet"]')) return true;
-  const sep = prevCell.textContent?.trim() ?? '';
-  return sep === 'Show more replies' || sep === 'Show this thread';
+function buildOverlayElement(kind: 'preview' | 'lock'): HTMLDivElement {
+  const el = document.createElement('div');
+  el.setAttribute('data-margin-overlay', kind);
+  el.style.position = 'fixed';
+  el.style.boxSizing = 'border-box';
+  el.style.pointerEvents = 'none';
+  el.style.display = 'none';
+  return el;
 }
 
-/**
- * X renders emoji as `<img alt="🎉">`. Plain `.textContent` would drop
- * the alt text and lose every emoji. Walk the tree and substitute
- * `alt` for image nodes so the captured text matches what the user sees.
- */
-function readVisibleText(root: Element): string {
-  const parts: string[] = [];
-  for (const node of Array.from(root.childNodes)) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      parts.push(node.textContent ?? '');
-    } else if (node instanceof Element) {
-      if (node.tagName === 'IMG') {
-        parts.push(node.getAttribute('alt') ?? '');
-      } else {
-        parts.push(readVisibleText(node));
+function positionElement(
+  el: HTMLElement,
+  rect: DOMRect,
+  cache: WeakMap<HTMLElement, { x: number; y: number; w: number; h: number }>,
+): void {
+  const x = Math.round(rect.left);
+  const y = Math.round(rect.top);
+  const w = Math.round(rect.width);
+  const h = Math.round(rect.height);
+  const last = cache.get(el);
+  if (last && last.x === x && last.y === y && last.w === w && last.h === h) return;
+  el.style.top = `${String(y)}px`;
+  el.style.left = `${String(x)}px`;
+  el.style.width = `${String(w)}px`;
+  el.style.height = `${String(h)}px`;
+  cache.set(el, { x, y, w, h });
+}
+
+function positionLabel(
+  el: HTMLElement,
+  rect: DOMRect,
+  cache: WeakMap<HTMLElement, { x: number; y: number; w: number; h: number }>,
+): void {
+  // Label anchors to the bottom-left of the lock highlight, just below
+  // the rectangle. Vertical offset of 4px keeps it visually attached
+  // to the bottom border without overlapping it. Width/height aren't
+  // applied because the label sizes to its content (the pill style).
+  const x = Math.round(rect.left + 8);
+  const y = Math.round(rect.bottom + 4);
+  const last = cache.get(el);
+  if (last && last.x === x && last.y === y) return;
+  el.style.top = `${String(y)}px`;
+  el.style.left = `${String(x)}px`;
+  cache.set(el, { x, y, w: 0, h: 0 });
+}
+
+let stylesInjected = false;
+function injectOverlayStyles(): void {
+  if (stylesInjected) return;
+  stylesInjected = true;
+  const style = document.createElement('style');
+  style.setAttribute('data-margin-overlay', 'styles');
+  // Define the overlay's own colour scope rather than reading the
+  // panel's `[data-theme]` token (X.com is its own document and we
+  // can't reach the panel's CSS variables from here). Two colour
+  // schemes: an oklch muted-blue that matches the panel's accent in
+  // light theme, and a slightly brighter variant for users browsing
+  // X in dark mode. We auto-detect via `prefers-color-scheme`.
+  style.textContent = `
+    [data-margin-overlay="root"] {
+      --margin-accent: oklch(0.56 0.12 250);
+      --margin-accent-fill: oklch(0.56 0.12 250 / 0.08);
+      --margin-accent-hover: oklch(0.5 0.13 250);
+      --margin-on-accent: oklch(0.99 0.005 250);
+    }
+    @media (prefers-color-scheme: dark) {
+      [data-margin-overlay="root"] {
+        --margin-accent: oklch(0.7 0.13 248);
+        --margin-accent-fill: oklch(0.7 0.13 248 / 0.10);
+        --margin-accent-hover: oklch(0.76 0.13 248);
+        --margin-on-accent: oklch(0.15 0.02 250);
       }
     }
-  }
-  return parts.join('');
-}
-
-/**
- * The author handle lives in `[data-testid="User-Name"]`. It has several
- * anchor children (display name, @handle). We want the one whose href
- * is exactly `/handle` (no `/status/`, no `/photo/`). That pattern is
- * what X uses for the handle link and skips the display-name anchor
- * which shares the same href.
- */
-function readAuthorHandle(article: Element): string | null {
-  const header = article.querySelector('[data-testid="User-Name"]');
-  if (!header) return null;
-  const anchors = header.querySelectorAll('a[href^="/"]');
-  for (const anchor of Array.from(anchors)) {
-    const href = anchor.getAttribute('href') ?? '';
-    const match = /^\/([A-Za-z0-9_]+)$/.exec(href);
-    if (match && match[1]) return match[1];
-  }
-  return null;
-}
-
-/**
- * The permalink anchor wraps the `<time>` element. Its href is
- * `/{handle}/status/{id}`. Return the id when found, else null.
- */
-function readStatusId(article: Element): string | null {
-  const anchor = article.querySelector('a[href*="/status/"]');
-  if (!anchor) return null;
-  const href = anchor.getAttribute('href') ?? '';
-  const match = /\/status\/(\d+)/.exec(href);
-  return match && match[1] ? match[1] : null;
-}
-
-function readTimestamp(article: Element): string | null {
-  const time = article.querySelector('time[datetime]');
-  return time?.getAttribute('datetime') ?? null;
-}
-
-/**
- * Best-effort reply detection. X renders a "Replying to @x" snippet
- * above replies; there is no stable testid on that block today, so we
- * fall back to a text scan of the whole article. The false-positive
- * case (a tweet that literally contains "Replying to" in its body) is
- * rare, and the Voice tab lets the user override the type. Localising
- * this is a Chunk-5 polish concern.
- */
-function detectReplyContext(article: Element): boolean {
-  const text = article.textContent ?? '';
-  return /\bReplying to\b/i.test(text);
-}
-
-/**
- * True if X has truncated this tweet (a "Show more" toggle is present
- * inside the article). Used to refuse capture rather than silently
- * saving the visible preview.
- *
- * Why we don't auto-click Show more: empirically verified that X's
- * handler is gated on `event.isTrusted === true`, which is set only
- * by the browser for real user input. JavaScript-dispatched events
- * — including a full pointerover → pointerdown → pointerup → click
- * sequence with authentic coordinates — never satisfy that check.
- * The only way to dispatch a trusted event from an extension is
- * `chrome.debugger.attach()` / DevTools Protocol, which requires the
- * `debugger` permission. That permission gives the extension full
- * DOM/JS control over the tab — far more than this extension wants
- * to ask for or users should grant. We document the limitation in
- * the README roadmap and ask the user to click Show more themselves.
- */
-function isTweetTruncated(article: Element): boolean {
-  if (article.querySelector('[data-testid="tweet-text-show-more-link"]')) return true;
-  // Fallback when the testid drifts: an exact-text "Show more" toggle.
-  // Strict equality so we never match "Show this thread" etc.
-  const candidates = article.querySelectorAll('button, [role="button"], a[role="link"]');
-  for (const c of Array.from(candidates)) {
-    if (c.textContent?.trim() === 'Show more') return true;
-  }
-  return false;
+    [data-margin-overlay="preview"] {
+      border: 2px solid color-mix(in oklab, var(--margin-accent) 70%, transparent);
+      border-radius: 16px;
+      background: transparent;
+    }
+    [data-margin-overlay="lock"] {
+      border: 2px solid var(--margin-accent);
+      border-radius: 16px;
+      background: var(--margin-accent-fill);
+    }
+    [data-margin-overlay="preview"].moving {
+      transition: top 0.08s ease-out, left 0.08s ease-out,
+                  width 0.08s ease-out, height 0.08s ease-out;
+    }
+    [data-margin-overlay="lock"].moving {
+      transition: top 0.16s ease-out, left 0.16s ease-out,
+                  width 0.16s ease-out, height 0.16s ease-out;
+    }
+    [data-margin-overlay="dismiss"] {
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 0;
+      background: var(--margin-accent);
+      color: var(--margin-on-accent);
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      pointer-events: auto;
+      box-shadow: 0 1px 3px oklch(0 0 0 / 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 0;
+    }
+    [data-margin-overlay="dismiss"]:hover {
+      background: var(--margin-accent-hover);
+    }
+    [data-margin-overlay="label"] {
+      position: fixed;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--margin-on-accent);
+      background: var(--margin-accent);
+      padding: 4px 10px;
+      border-radius: 6px;
+      pointer-events: none;
+      display: none;
+      box-shadow: 0 1px 3px oklch(0 0 0 / 0.18);
+      white-space: nowrap;
+      z-index: 2147483000;
+    }
+    [data-margin-overlay="label"].moving {
+      transition: top 0.16s ease-out, left 0.16s ease-out;
+    }
+  `;
+  document.head.appendChild(style);
 }

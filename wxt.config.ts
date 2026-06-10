@@ -17,9 +17,9 @@ export default defineConfig({
   // CLAUDE.md §1 (ethos: honest, transparent, no magic).
   imports: false,
   manifest: {
-    name: 'X Post Composer',
+    name: 'Margin',
     description:
-      'Scratch pad for composing X.com posts and replies in your own voice. Bring your own Anthropic API key.',
+      'In the margin of X — a scratch pad for composing X.com posts and replies in your own voice. Bring your own Anthropic API key.',
     permissions: ['storage', 'sidePanel', 'clipboardWrite', 'unlimitedStorage'],
     host_permissions: [
       'https://x.com/*',
@@ -28,7 +28,7 @@ export default defineConfig({
       'https://www.twitter.com/*',
     ],
     action: {
-      default_title: 'Open X Post Composer',
+      default_title: 'Open Margin',
     },
     side_panel: {
       default_path: 'sidepanel.html',
@@ -41,8 +41,7 @@ export default defineConfig({
           default: 'Alt+Shift+R',
           mac: 'Alt+Shift+R',
         },
-        description:
-          'Open the X Post Composer side panel and auto-capture the open reply context',
+        description: 'Open Margin and start capturing reply context',
       },
     },
   },

@@ -16,6 +16,38 @@ import type { PromptTemplate } from '../../types';
 const SLOT_RE = /\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g;
 
 /**
+ * Marker that, when present in a generation template's body, splits
+ * the rendered prompt into a SYSTEM portion (everything above) and a
+ * USER portion (everything below). The orchestrator passes them as
+ * separate fields to Anthropic — system messages are cacheable and
+ * are treated differently by the model than user content.
+ *
+ * Templates without this marker fall back to "everything is a single
+ * user message" — preserving backwards compatibility with any custom
+ * template a user has authored.
+ */
+export const SYSTEM_USER_MARKER = '===USER===';
+
+export interface SplitPrompt {
+  /** Empty string when no marker is present (caller sends as a single user message). */
+  system: string;
+  user: string;
+}
+
+/**
+ * Split a rendered prompt body at the SYSTEM_USER_MARKER. When the
+ * marker is absent, returns `{ system: '', user: <whole prompt> }`.
+ */
+export function splitPrompt(rendered: string): SplitPrompt {
+  const idx = rendered.indexOf(SYSTEM_USER_MARKER);
+  if (idx === -1) return { system: '', user: rendered };
+  return {
+    system: rendered.slice(0, idx).trim(),
+    user: rendered.slice(idx + SYSTEM_USER_MARKER.length).trim(),
+  };
+}
+
+/**
  * Substitute `{{slot}}` markers in the template body with the values
  * provided. Unknown slots in the body render as empty string.
  */

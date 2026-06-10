@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractSlotNames, renderTemplate, validateTemplate } from './template';
+import { extractSlotNames, renderTemplate, splitPrompt, SYSTEM_USER_MARKER, validateTemplate } from './template';
 import type { PromptTemplate } from '../../types';
 
 function tpl(body: string, slots: string[] = []): PromptTemplate {
@@ -67,5 +67,39 @@ describe('validateTemplate', () => {
     const v = validateTemplate(t);
     expect(v.declaredButUnused).toEqual(['b']);
     expect(v.usedButUndeclared).toEqual(['c']);
+  });
+});
+
+describe('splitPrompt', () => {
+  it('returns the whole prompt as user when no marker is present', () => {
+    const result = splitPrompt('hello world');
+    expect(result.system).toBe('');
+    expect(result.user).toBe('hello world');
+  });
+
+  it('splits at the marker, trimming whitespace from each side', () => {
+    const body = `you are an assistant.\n\n${SYSTEM_USER_MARKER}\n\nthe user wants to say hi.`;
+    const result = splitPrompt(body);
+    expect(result.system).toBe('you are an assistant.');
+    expect(result.user).toBe('the user wants to say hi.');
+  });
+
+  it('uses the FIRST marker if multiple are present', () => {
+    const body = `A\n${SYSTEM_USER_MARKER}\nB\n${SYSTEM_USER_MARKER}\nC`;
+    const result = splitPrompt(body);
+    expect(result.system).toBe('A');
+    expect(result.user).toBe(`B\n${SYSTEM_USER_MARKER}\nC`);
+  });
+
+  it('returns empty system when the marker is at the very start', () => {
+    const result = splitPrompt(`${SYSTEM_USER_MARKER}\nuser content`);
+    expect(result.system).toBe('');
+    expect(result.user).toBe('user content');
+  });
+
+  it('returns empty user when the marker is at the very end', () => {
+    const result = splitPrompt(`system content\n${SYSTEM_USER_MARKER}`);
+    expect(result.system).toBe('system content');
+    expect(result.user).toBe('');
   });
 });

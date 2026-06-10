@@ -20,6 +20,14 @@ export interface LibraryItem {
   source: 'capture' | 'manual' | 'import';
   /** Author handle without the leading `@`. */
   authorHandle: string;
+  /** Author display name as rendered by X (e.g. "Sam Altman"). Best-effort —
+   *  null on items captured before this field existed, or when X's markup
+   *  hides the name. */
+  authorDisplayName: string | null;
+  /** Full URL to the author's avatar on `pbs.twimg.com`. Best-effort —
+   *  null on items captured before this field existed or when the avatar
+   *  cannot be located. See CLAUDE.md §6 for the inbound-image carve-out. */
+  authorAvatarUrl: string | null;
   /** ISO 8601 string for when the tweet itself was published. */
   timestamp: string;
   /** Engagement counts from X, when available. `null` when unknown. */

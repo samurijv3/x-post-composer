@@ -8,11 +8,14 @@
  *   v1: object store `items` keyed by `id`, with index `byType` on `type`.
  *       Fields match the v1 LibraryItem shape including the always-null
  *       `embedding` field reserved for later semantic retrieval.
+ *   v2: adds `authorDisplayName` and `authorAvatarUrl` (both string | null)
+ *       to LibraryItem for X-native rendering. The upgrade backfills both
+ *       fields to null on existing rows so all reads see the v2 shape.
  */
 import type { LibraryItem } from '../types';
 
 export const DB_NAME = 'x-post-composer';
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 export const STORE_ITEMS = 'items';
 const INDEX_BY_TYPE = 'byType';
 
@@ -33,6 +36,32 @@ export function openCorpus(): Promise<IDBDatabase> {
       if (oldVersion < 1) {
         const store = db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
         store.createIndex(INDEX_BY_TYPE, 'type', { unique: false });
+      }
+      if (oldVersion < 2) {
+        // Backfill v2 fields on rows captured before display name and
+        // avatar URL existed. Runs inside the versionchange transaction
+        // so it completes before any read sees the new schema.
+        const tx = request.transaction;
+        if (tx) {
+          const store = tx.objectStore(STORE_ITEMS);
+          const cursorReq = store.openCursor();
+          cursorReq.onsuccess = () => {
+            const cursor = cursorReq.result;
+            if (!cursor) return;
+            const row = cursor.value as Partial<LibraryItem>;
+            let changed = false;
+            if (row.authorDisplayName === undefined) {
+              row.authorDisplayName = null;
+              changed = true;
+            }
+            if (row.authorAvatarUrl === undefined) {
+              row.authorAvatarUrl = null;
+              changed = true;
+            }
+            if (changed) cursor.update(row);
+            cursor.continue();
+          };
+        }
       }
     };
     request.onsuccess = () => {

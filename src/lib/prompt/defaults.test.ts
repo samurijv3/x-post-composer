@@ -14,6 +14,8 @@ function item(text: string): LibraryItem {
     type: 'post',
     source: 'manual',
     authorHandle: 'me',
+    authorDisplayName: null,
+    authorAvatarUrl: null,
     timestamp: '2026-01-01T00:00:00Z',
     engagement: null,
     embedding: null,

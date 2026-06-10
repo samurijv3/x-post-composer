@@ -24,9 +24,13 @@ const ANTHROPIC_VERSION = '2023-06-01';
 export interface MessagesCallRequest {
   apiKey: string;
   model: string;
-  /** Full assembled prompt body — sent as a single user message so the
-   *  "Inspect last prompt" view shows exactly what we sent. */
+  /** Body of the user message. */
   prompt: string;
+  /** Optional system message. When non-empty, sent as the `system`
+   *  parameter with `cache_control: { type: "ephemeral" }` so the
+   *  stable framing (voice guide, exclusions, char rules) gets cached
+   *  by Anthropic for ~5 minutes — reused-call cost drops to ~10%. */
+  system?: string;
   temperature: number;
   maxTokens: number;
 }
@@ -75,6 +79,22 @@ export async function callAnthropic(req: MessagesCallRequest): Promise<MessagesC
 
   let response: Response;
   try {
+    // Build the request body. When `system` is non-empty, pass it as
+    // an array with `cache_control` so Anthropic caches the system
+    // tokens for ~5 minutes — re-used initial-generation prompts get
+    // a ~90% discount on the cached portion. Refine/repair calls
+    // (which omit system) skip caching entirely.
+    const body: Record<string, unknown> = {
+      model: req.model,
+      max_tokens: req.maxTokens,
+      temperature: req.temperature,
+      messages: [{ role: 'user', content: req.prompt }],
+    };
+    if (req.system && req.system.trim() !== '') {
+      body.system = [
+        { type: 'text', text: req.system, cache_control: { type: 'ephemeral' } },
+      ];
+    }
     response = await fetch(ANTHROPIC_API, {
       method: 'POST',
       headers: {
@@ -83,12 +103,7 @@ export async function callAnthropic(req: MessagesCallRequest): Promise<MessagesC
         'anthropic-version': ANTHROPIC_VERSION,
         'anthropic-dangerous-direct-browser-access': 'true',
       },
-      body: JSON.stringify({
-        model: req.model,
-        max_tokens: req.maxTokens,
-        temperature: req.temperature,
-        messages: [{ role: 'user', content: req.prompt }],
-      }),
+      body: JSON.stringify(body),
     });
   } catch (error) {
     return {

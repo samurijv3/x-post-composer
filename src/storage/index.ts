@@ -17,7 +17,24 @@ export {
   DB_NAME,
   DB_VERSION,
 } from './corpus';
-export { getCaptureMode, setCaptureMode, subscribeCaptureMode } from './captureMode';
+export {
+  getCaptureMode,
+  setCaptureMode,
+  subscribeCaptureMode,
+  type ActiveCaptureMode,
+} from './captureMode';
+export {
+  getReplyContextLock,
+  setReplyContextLock,
+  subscribeReplyContextLock,
+} from './replyContextLock';
+export {
+  getThemePreference,
+  setThemePreference,
+  subscribeTheme,
+  bindDocumentTheme,
+  type ThemePreference,
+} from './theme';
 export {
   getLastPrompt,
   setLastPrompt,

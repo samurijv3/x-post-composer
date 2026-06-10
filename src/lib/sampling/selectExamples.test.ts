@@ -9,6 +9,8 @@ function item(id: string, type: LibraryItem['type'], text = id): LibraryItem {
     type,
     source: 'manual',
     authorHandle: 'me',
+    authorDisplayName: null,
+    authorAvatarUrl: null,
     timestamp: '2026-01-01T00:00:00Z',
     engagement: null,
     embedding: null,

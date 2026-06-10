@@ -29,8 +29,10 @@ import {
   getAllItems,
   getApiKey,
   getCaptureMode,
+  getReplyContextLock,
   getSettings,
   setLastPrompt,
+  setReplyContextLock,
 } from '../src/storage';
 import type {
   GenerationRequest,
@@ -55,6 +57,7 @@ import {
   buildParentSection,
   formatExamples,
   renderTemplate,
+  splitPrompt,
 } from '../src/lib/prompt';
 import { isOver280, weightedLength } from '../src/lib/counting';
 import { callAnthropic, verifyKey } from '../src/api/anthropic';
@@ -68,6 +71,17 @@ const X_HOSTS = [
 ];
 
 const AUTO_REPLY_FLAG = 'autoReplyCapture:v1';
+
+/**
+ * Set of currently-connected panel ports. The panel opens a port via
+ * `chrome.runtime.connect({ name: 'margin-panel' })` on mount, and the
+ * port closes automatically when the panel context is destroyed
+ * (closed by the user, tab closed, etc.). We track the count so the
+ * content script can suppress all overlays when no panel is open —
+ * the highlight only makes sense when the user is actively in the
+ * extension's UI.
+ */
+const openPanelPorts = new Set<chrome.runtime.Port>();
 
 export default defineBackground(() => {
   chrome.sidePanel
@@ -84,12 +98,35 @@ export default defineBackground(() => {
     void handleAutoReplyCommand(senderTab);
   });
 
+  // Panel-open tracking — see the comment on openPanelPorts.
+  chrome.runtime.onConnect.addListener((port) => {
+    if (port.name !== 'margin-panel') return;
+    const wasOpen = openPanelPorts.size > 0;
+    openPanelPorts.add(port);
+    if (!wasOpen) void pushToTabs({ type: 'bg:panel-state', isOpen: true });
+    port.onDisconnect.addListener(() => {
+      openPanelPorts.delete(port);
+      if (openPanelPorts.size === 0) {
+        void pushToTabs({ type: 'bg:panel-state', isOpen: false });
+      }
+    });
+  });
+
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'session') return;
-    const change = changes['captureMode:v1'];
-    if (!change) return;
-    const active = change.newValue === true;
-    void pushToTabs({ type: 'bg:capture-mode-state', active });
+
+    const modeChange = changes['activeCaptureMode:v1'];
+    if (modeChange) {
+      const next = modeChange.newValue;
+      const mode = next === 'library' || next === 'reply-context' ? next : 'none';
+      void pushToTabs({ type: 'bg:capture-mode-state', mode });
+    }
+
+    const lockChange = changes['replyContextLock:v1'];
+    if (lockChange) {
+      const lock = (lockChange.newValue as ReplyContext | undefined) ?? null;
+      void pushToTabs({ type: 'bg:reply-context-lock-state', lock });
+    }
   });
 
   onMessage(async (message) => {
@@ -116,17 +153,48 @@ export default defineBackground(() => {
     }
 
     if (isMessageOfType(message, 'content:capture-failed')) {
+      const kind = failureReasonToSaveResultKind(message.reason);
+      if (kind) {
+        await broadcastNotice({ type: 'bg:save-result', kind });
+      }
+      return { type: 'bg:capture-ack', ok: false };
+    }
+
+    if (isMessageOfType(message, 'content:reply-context-failed')) {
       await broadcastNotice({
-        type: 'bg:capture-notice',
-        ok: false,
-        message: failureReasonMessage(message.reason),
+        type: 'bg:reply-context-error',
+        kind: replyContextFailureKind(message.reason),
       });
       return { type: 'bg:capture-ack', ok: false };
     }
 
     if (isMessageOfType(message, 'content:check-capture-mode')) {
-      const active = await getCaptureMode();
-      return { type: 'bg:capture-mode-state', active };
+      const mode = await getCaptureMode();
+      return { type: 'bg:capture-mode-state', mode };
+    }
+
+    if (isMessageOfType(message, 'content:check-reply-context-lock')) {
+      const lock = await getReplyContextLock();
+      return { type: 'bg:reply-context-lock-state', lock };
+    }
+
+    if (isMessageOfType(message, 'content:check-panel-state')) {
+      return { type: 'bg:panel-state', isOpen: openPanelPorts.size > 0 };
+    }
+
+    if (isMessageOfType(message, 'content:reply-context-selected')) {
+      // The content script has already extracted target + grandparent +
+      // status id. Persist as the active lock. Reply-context mode stays
+      // ON deliberately so the user can hover other tweets and click
+      // to swap the locked context without re-toggling the mode. They
+      // turn it off in the panel when done.
+      await setReplyContextLock(message.context);
+      return { type: 'bg:reply-context-lock-state', lock: message.context };
+    }
+
+    if (isMessageOfType(message, 'content:dismiss-reply-context')) {
+      await setReplyContextLock(null);
+      return { type: 'bg:reply-context-lock-state', lock: null };
     }
 
     if (isMessageOfType(message, 'panel:generate')) {
@@ -224,8 +292,9 @@ async function runRefine(request: RefineRequest): Promise<GenerationResult> {
         message: `Chip "${kind.chipId}" not found in current settings.`,
       };
     }
+    const instruction = escalateChipInstruction(chip.instruction, kind.intensity);
     initialPrompt = renderTemplate(settings.promptTemplates.chipRefine, {
-      instruction: chip.instruction,
+      instruction,
       previousDraft: request.previousDraftText,
     });
   } else {
@@ -281,10 +350,16 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
     fixSmartQuotes: settings.structuralRules.noSmartQuotes,
   };
 
+  // Split at the `===USER===` marker. Generation templates put stable
+  // framing (voice guide, exclusions, char rules) above the marker so
+  // it can be sent as a cached system message; refine + repair
+  // templates omit the marker and go entirely as a single user message.
+  const firstSplit = splitPrompt(initialPrompt);
   const firstCall = await callAnthropic({
     apiKey,
     model: settings.model,
-    prompt: initialPrompt,
+    system: firstSplit.system,
+    prompt: firstSplit.user,
     temperature,
     maxTokens: MAX_TOKENS,
   });
@@ -317,10 +392,12 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
       previousDraft: firstFixed.text,
     });
 
+    const repairSplit = splitPrompt(repairPrompt);
     const repairCall = await callAnthropic({
       apiKey,
       model: settings.model,
-      prompt: repairPrompt,
+      system: repairSplit.system,
+      prompt: repairSplit.user,
       temperature: settings.temperature.regenerate,
       maxTokens: MAX_TOKENS,
     });
@@ -343,10 +420,12 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
     const tightenPrompt = renderTemplate(settings.promptTemplates.tighten, {
       previousDraft: finalText,
     });
+    const tightenSplit = splitPrompt(tightenPrompt);
     const tightenCall = await callAnthropic({
       apiKey,
       model: settings.model,
-      prompt: tightenPrompt,
+      system: tightenSplit.system,
+      prompt: tightenSplit.user,
       temperature: settings.temperature.generate,
       maxTokens: MAX_TOKENS,
     });
@@ -533,35 +612,43 @@ function isReplyContextErr(raw: unknown): raw is { ok: false; message: string } 
 // ---------------------------------------------------------------------
 
 async function handleCapturedTweet(capture: RawCapture): Promise<void> {
+  // Every capture attempt — success or failure — focuses the Voice
+  // screen so the user always lands where the save-result banner shows.
+  await broadcastNotice({ type: 'bg:focus-voice' });
+
   const settings = await getSettings();
   if (settings.handle.trim() === '') {
     await broadcastNotice({
-      type: 'bg:capture-notice',
-      ok: false,
-      message: 'Set your X handle in the Account tab before capturing.',
+      type: 'bg:save-result',
+      kind: 'not-mine',
+      rejectedAuthor: capture.authorHandle,
     });
     return;
   }
 
   if (!validateAuthor(capture.authorHandle, settings.handle)) {
     await broadcastNotice({
-      type: 'bg:capture-notice',
-      ok: false,
-      message: `Rejected: tweet is by @${capture.authorHandle}, not @${settings.handle}.`,
+      type: 'bg:save-result',
+      kind: 'not-mine',
+      rejectedAuthor: capture.authorHandle,
     });
     return;
   }
 
+  const itemType = classifyType({
+    hasReplyContextNode: capture.hasReplyContextNode,
+    inReplyToStatusId: capture.inReplyToStatusId,
+    isPrecededByParentArticle: capture.isPrecededByParentArticle,
+  });
+
   const item: LibraryItem = {
     id: capture.statusId ?? crypto.randomUUID(),
     text: capture.text,
-    type: classifyType({
-      hasReplyContextNode: capture.hasReplyContextNode,
-      inReplyToStatusId: capture.inReplyToStatusId,
-      isPrecededByParentArticle: capture.isPrecededByParentArticle,
-    }),
+    type: itemType,
     source: 'capture',
     authorHandle: settings.handle.replace(/^@/, '').trim(),
+    authorDisplayName: capture.authorDisplayName,
+    authorAvatarUrl: capture.authorAvatarUrl,
     timestamp: capture.timestamp ?? new Date().toISOString(),
     engagement: null,
     embedding: null,
@@ -571,18 +658,18 @@ async function handleCapturedTweet(capture: RawCapture): Promise<void> {
   const outcome = await tryAddItem(item);
   if (outcome === 'duplicate') {
     await broadcastNotice({
-      type: 'bg:capture-notice',
-      ok: false,
-      message: 'Already in your library.',
+      type: 'bg:save-result',
+      kind: 'duplicate',
+      duplicateOfId: item.id,
     });
     return;
   }
 
   await broadcastNotice({
-    type: 'bg:capture-notice',
-    ok: true,
-    message: `Saved as ${item.type}.`,
+    type: 'bg:save-result',
+    kind: capture.hasMedia ? 'text-media' : 'success',
     itemId: item.id,
+    itemType,
   });
   await broadcastNotice({ type: 'bg:library-changed' });
 }
@@ -609,6 +696,10 @@ async function handleManualAdd(
     type: itemType,
     source: 'manual',
     authorHandle: settings.handle.replace(/^@/, '').trim(),
+    // Manual paste has no DOM source for these — the row renders without
+    // an avatar and shows the handle only.
+    authorDisplayName: null,
+    authorAvatarUrl: null,
     timestamp: new Date().toISOString(),
     engagement: null,
     embedding: null,
@@ -636,19 +727,57 @@ async function tryAddItem(item: LibraryItem): Promise<'added' | 'duplicate'> {
   }
 }
 
-function failureReasonMessage(reason: string): string {
-  switch (reason) {
-    case 'missing-text':
-      return 'Could not read that tweet — X may have changed its markup. Try the manual-paste path.';
-    case 'missing-author':
-      return 'Could not read the tweet author. Try the manual-paste path.';
-    case 'no-tweet-under-cursor':
-      return 'No tweet under that click. Aim at the tweet body.';
-    case 'truncated':
-      return "This tweet is truncated by X. Click \"Show more\" on the tweet first, then click it again to capture the full text. (X gates the expansion behind a real user click; we can't trigger it programmatically.)";
-    default:
-      return 'Capture failed for an unknown reason. Try the manual-paste path.';
+type SaveResultKind = 'success' | 'text-media' | 'duplicate' | 'not-mine' | 'truncated' | 'media-only';
+
+/**
+ * Map a content-script failure reason onto a save-result banner kind.
+ * `missing-text` / `missing-author` / `unknown` / `no-tweet-under-cursor`
+ * don't map to any banner — they're edge cases the user can't really
+ * act on, so we stay silent rather than surfacing a useless message.
+ */
+function failureReasonToSaveResultKind(reason: string): SaveResultKind | null {
+  if (reason === 'truncated') return 'truncated';
+  if (reason === 'media-only') return 'media-only';
+  return null;
+}
+
+/**
+ * Reply-context-mode failures share kinds with save-result so the panel
+ * can render reply-context-flavoured wording in the same banner chrome.
+ */
+function replyContextFailureKind(
+  reason: string,
+): 'truncated' | 'media-only' | 'unknown' {
+  if (reason === 'truncated') return 'truncated';
+  if (reason === 'media-only') return 'media-only';
+  return 'unknown';
+}
+
+/**
+ * Wrap a chip's stored instruction with an intensity preamble so
+ * repeated presses produce compounding effects. The model sees the
+ * same base instruction every time, but the framing escalates so it
+ * understands the user is asking for MORE of the same direction —
+ * not the same level of "more" each time.
+ *
+ * Press 1 → bare instruction.
+ * Press 2 → "Push harder than a single pass."
+ * Press 3 → "Third time asking. Apply dramatically."
+ * Press 4+ → "Nth pass. Maximum intensity. Don't hold back."
+ *
+ * The previous draft is the result of the previous press, so the
+ * compounding stacks naturally — each refine starts from the already-
+ * refined version and pushes it further in the same direction.
+ */
+function escalateChipInstruction(instruction: string, intensity: number): string {
+  if (intensity <= 1) return instruction;
+  if (intensity === 2) {
+    return `${instruction}\n\nThis is the second press of the same chip — push noticeably harder than a single pass would. The previous draft is already the result of one application; this one should go further.`;
   }
+  if (intensity === 3) {
+    return `${instruction}\n\nThis is the third press of the same chip. The user has now asked for this direction three times. Apply the instruction dramatically — the result should be unmistakably more in this direction than the previous draft.`;
+  }
+  return `${instruction}\n\nThis is press #${String(intensity)} of the same chip. The user has repeatedly asked for this direction. Apply MAXIMUM intensity — don't be subtle. The result should be a clear, undeniable step in this direction beyond what the previous draft showed.`;
 }
 
 // ---------------------------------------------------------------------

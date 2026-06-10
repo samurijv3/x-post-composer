@@ -121,6 +121,9 @@ VOICE GUIDE
 PATTERNS TO AVOID
 {{exclusions}}
 
+LENGTH
+{{charConstraint}}
+===USER===
 EXAMPLES OF THE USER'S OWN REPLIES (sample these for tone and rhythm, not topic)
 {{examples}}
 
@@ -129,10 +132,7 @@ THE TWEET BEING REPLIED TO (by someone else)
 {{parentSection}}
 
 WHAT THE USER WANTS TO SAY (interpret these bullets — they are NOT the literal reply text)
-{{bullets}}
-
-LENGTH
-{{charConstraint}}`,
+{{bullets}}`,
       slots: [
         'styleGuide',
         'exclusions',
@@ -153,14 +153,14 @@ VOICE GUIDE
 PATTERNS TO AVOID
 {{exclusions}}
 
+LENGTH
+{{charConstraint}}
+===USER===
 EXAMPLES OF THE USER'S OWN POSTS (sample these for tone and rhythm, not topic)
 {{examples}}
 
 WHAT THE USER WANTS TO SAY (interpret these bullets — they are NOT the literal post text)
-{{bullets}}
-
-LENGTH
-{{charConstraint}}`,
+{{bullets}}`,
       slots: ['styleGuide', 'exclusions', 'examples', 'bullets', 'charConstraint'],
     },
     repair: {

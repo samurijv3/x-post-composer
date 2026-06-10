@@ -1,4 +1,6 @@
-# X Post Composer
+# Margin
+
+*In the margin of X.*
 
 A Chrome extension scratch pad for composing X.com posts and replies in your own voice. You bring your own Anthropic API key. The extension reads the tweet being replied to, samples your saved writing for voice, and drafts something that sounds like you — which you copy into X and finish by hand.
 

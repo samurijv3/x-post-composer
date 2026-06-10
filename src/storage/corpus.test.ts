@@ -5,9 +5,11 @@ import {
   _resetCorpusCache,
   addItem,
   countItems,
+  DB_NAME,
   deleteItem,
   getAllItems,
   getItemsByType,
+  STORE_ITEMS,
   updateItem,
 } from './corpus';
 
@@ -18,6 +20,8 @@ function makeItem(overrides: Partial<LibraryItem> = {}): LibraryItem {
     type: overrides.type ?? 'post',
     source: overrides.source ?? 'manual',
     authorHandle: overrides.authorHandle ?? 'me',
+    authorDisplayName: overrides.authorDisplayName ?? null,
+    authorAvatarUrl: overrides.authorAvatarUrl ?? null,
     timestamp: overrides.timestamp ?? '2026-01-01T00:00:00Z',
     engagement: overrides.engagement ?? null,
     embedding: overrides.embedding ?? null,
@@ -77,5 +81,45 @@ describe('corpus store', () => {
     await addItem(makeItem({ id: 'e1' }));
     const [item] = await getAllItems();
     expect(item?.embedding).toBeNull();
+  });
+
+  it('v1→v2 migration backfills authorDisplayName and authorAvatarUrl as null', async () => {
+    // Seed a v1 database directly, inserting a row that lacks the v2
+    // fields, then let openCorpus() trigger the upgrade on next read.
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        const store = db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
+        store.createIndex('byType', 'type', { unique: false });
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction(STORE_ITEMS, 'readwrite');
+        tx.objectStore(STORE_ITEMS).add({
+          id: 'legacy-1',
+          text: 'pre-migration',
+          type: 'post',
+          source: 'capture',
+          authorHandle: 'me',
+          timestamp: '2025-01-01T00:00:00Z',
+          engagement: null,
+          embedding: null,
+          createdAt: 1,
+        });
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error);
+      };
+      req.onerror = () => reject(req.error);
+    });
+    _resetCorpusCache();
+
+    const items = await getAllItems();
+    expect(items).toHaveLength(1);
+    expect(items[0]?.authorDisplayName).toBeNull();
+    expect(items[0]?.authorAvatarUrl).toBeNull();
   });
 });

@@ -18,6 +18,7 @@ import type {
   RefineRequest,
   ReplyContext,
 } from '../types/generation';
+import type { ActiveCaptureMode } from '../storage/captureMode';
 
 /** Requests the side panel sends to the background worker. */
 export type PanelToBackground =
@@ -50,7 +51,25 @@ export type ContentToBackground =
   // `chrome.storage.session` directly (kept trusted-only so the user's
   // "Session only" API-key choice keeps its isolation), so they ask the
   // background for the current capture-mode value instead.
-  | { type: 'content:check-capture-mode' };
+  | { type: 'content:check-capture-mode' }
+  // Sister request to the above — fetch the current reply-context lock
+  // on content-script load so the overlay can re-paint without waiting
+  // for a state push.
+  | { type: 'content:check-reply-context-lock' }
+  // Initial fetch of panel-open state on content-script load so we
+  // don't have to wait for the first port event.
+  | { type: 'content:check-panel-state' }
+  // Fired when the user clicks a tweet in reply-context mode. The
+  // background validates, persists the lock, broadcasts it back, and
+  // auto-clears the mode (one-shot).
+  | { type: 'content:reply-context-selected'; context: ReplyContext }
+  // Reply-context selection failed (truncated tweet, media-only, etc).
+  // Routed separately from library-capture failures so the panel can
+  // show reply-context-appropriate wording rather than a save-to-voice
+  // banner.
+  | { type: 'content:reply-context-failed'; reason: CaptureFailureReason }
+  // Fired by the overlay's dismiss control (the X button).
+  | { type: 'content:dismiss-reply-context' };
 
 /** Replies the background returns to a request. */
 export type BackgroundReply =
@@ -62,7 +81,13 @@ export type BackgroundReply =
   // proactively pushes to each content script when the panel flips
   // capture mode. Same shape on purpose — content's handler treats both
   // arrival paths identically.
-  | { type: 'bg:capture-mode-state'; active: boolean }
+  | { type: 'bg:capture-mode-state'; mode: ActiveCaptureMode }
+  // Reply to `content:check-reply-context-lock` AND the push from
+  // background when the lock changes (set / cleared).
+  | { type: 'bg:reply-context-lock-state'; lock: ReplyContext | null }
+  // Reply to `content:check-panel-state`. Same shape the background
+  // pushes to content via tabs.sendMessage when ports open/close.
+  | { type: 'bg:panel-state'; isOpen: boolean }
   | { type: 'bg:generation-result'; result: GenerationResult }
   | { type: 'bg:reply-context-result'; ok: boolean; context?: ReplyContext; message?: string }
   | { type: 'bg:error'; message: string };
@@ -70,7 +95,12 @@ export type BackgroundReply =
 /** Messages the background sends TO a content script via
  *  `chrome.tabs.sendMessage`. Separate from panel-bound replies. */
 export type BackgroundToContent =
-  | { type: 'bg:capture-mode-state'; active: boolean }
+  | { type: 'bg:capture-mode-state'; mode: ActiveCaptureMode }
+  | { type: 'bg:reply-context-lock-state'; lock: ReplyContext | null }
+  // Pushed whenever the count of open side-panel ports goes 0↔n. The
+  // content script suppresses all visual overlays when isOpen is false
+  // so x.com stays untouched whenever the user has the panel closed.
+  | { type: 'bg:panel-state'; isOpen: boolean }
   | { type: 'bg:capture-reply-context-request' };
 
 /**
@@ -90,7 +120,27 @@ export type BackgroundNotice =
   // Fired by the keyboard shortcut. The panel switches to reply mode
   // and fires capture-reply-context on receipt. A timestamp lets stale
   // notices (panel that opens long after the shortcut) be ignored.
-  | { type: 'bg:auto-reply-capture'; at: number };
+  | { type: 'bg:auto-reply-capture'; at: number }
+  // Result of a capture attempt, with enough detail for the Voice
+  // screen's save-result banner to show the right message.
+  | {
+      type: 'bg:save-result';
+      kind: 'success' | 'text-media' | 'duplicate' | 'not-mine' | 'truncated' | 'media-only';
+      itemId?: string;
+      itemType?: 'post' | 'reply';
+      rejectedAuthor?: string;
+      duplicateOfId?: string;
+    }
+  // The panel listens for this and switches to the Voice screen, so
+  // the user always lands where the save-result banner appears.
+  | { type: 'bg:focus-voice' }
+  // Reply-context-mode selection failure. Mirrors `bg:save-result` —
+  // we send the *kind* and let the panel render reply-context-flavoured
+  // wording in the same .save-result banner chrome as save failures.
+  | {
+      type: 'bg:reply-context-error';
+      kind: 'truncated' | 'media-only' | 'unknown';
+    };
 
 /** Every message shape that flows through `chrome.runtime`. */
 export type AnyMessage =
@@ -117,6 +167,9 @@ export function isBackgroundNotice(message: unknown): message is BackgroundNotic
   return (
     isMessageOfType(message, 'bg:library-changed') ||
     isMessageOfType(message, 'bg:capture-notice') ||
-    isMessageOfType(message, 'bg:auto-reply-capture')
+    isMessageOfType(message, 'bg:auto-reply-capture') ||
+    isMessageOfType(message, 'bg:save-result') ||
+    isMessageOfType(message, 'bg:focus-voice') ||
+    isMessageOfType(message, 'bg:reply-context-error')
   );
 }

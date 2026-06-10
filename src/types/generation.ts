@@ -15,6 +15,17 @@ export interface ReplyContext {
   targetText: string;
   /** Author handle of the target tweet, when readable. Display-only. */
   targetAuthorHandle: string | null;
+  /** Author display name of the target tweet, when readable. Display-only. */
+  targetAuthorDisplayName: string | null;
+  /** Avatar URL on `pbs.twimg.com`. See CLAUDE.md §6 for the inbound-image
+   *  carve-out. Display-only. */
+  targetAuthorAvatarUrl: string | null;
+  /** ISO 8601 publish time of the target tweet. Display-only. */
+  targetTimestamp: string | null;
+  /** Status id of the target tweet, when readable from the permalink
+   *  anchor's href. Used by the highlight overlay to re-find the
+   *  article after X's virtual scroll unmounts and remounts it. */
+  targetStatusId: string | null;
   /** The tweet that the target was itself a reply to (one level up).
    *  Null when the target is a top-level post. */
   grandparentText: string | null;
@@ -56,7 +67,16 @@ export interface RefineRequest {
 }
 
 export type RefineKind =
-  | { type: 'chip'; chipId: string }
+  | {
+      type: 'chip';
+      chipId: string;
+      /** How many times the user has clicked this chip in the current
+       *  session (1 on first press, 2 on second, etc.). The background
+       *  escalates the wording of the chip's instruction based on this
+       *  so repeated presses produce compounding effects rather than
+       *  the AI shrugging off subsequent identical asks. */
+      intensity: number;
+    }
   | { type: 'moreless'; more: string; less: string };
 
 export interface GenerationResultOk {
