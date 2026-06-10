@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isOver280, isOverSoftCap, weightedLength, X_HARD_LIMIT } from './twitter';
+import { isOver280, weightedLength, X_HARD_LIMIT } from './twitter';
 
 describe('weightedLength', () => {
   it('matches JS length for plain ASCII', () => {
@@ -50,12 +50,5 @@ describe('isOver280', () => {
 
   it('uses the X hard limit of 280', () => {
     expect(X_HARD_LIMIT).toBe(280);
-  });
-});
-
-describe('isOverSoftCap', () => {
-  it('uses JS code-unit length (our own cap, not X-weighted)', () => {
-    expect(isOverSoftCap('a'.repeat(1001), 1000)).toBe(true);
-    expect(isOverSoftCap('a'.repeat(1000), 1000)).toBe(false);
   });
 });

@@ -11,12 +11,11 @@
  * undercounts URL-bearing tweets and overcounts non-Latin scripts —
  * either way it disagrees with what X shows the user.
  *
- * We expose three things:
+ * We expose two things:
  *   - `weightedLength(text)` — the official count.
  *   - `isOver280(text)`     — the deterministic ≤280 gate.
- *   - `isOverSoftCap(text, n)` — uncapped guardrail (raw `.length`,
- *     intentionally — the soft cap is our own thing, not X's, and X
- *     weighting would be misleading here).
+ * (The soft cap, by contrast, is prompt-side only — an instruction in
+ * the template, with no deterministic gate.)
  */
 
 interface TwitterTextLike {
@@ -53,8 +52,4 @@ export function weightedLength(text: string): number {
 
 export function isOver280(text: string): boolean {
   return weightedLength(text) > X_HARD_LIMIT;
-}
-
-export function isOverSoftCap(text: string, softCapChars: number): boolean {
-  return text.length > softCapChars;
 }

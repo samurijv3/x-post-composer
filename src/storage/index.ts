@@ -13,7 +13,6 @@ export {
   updateItem,
   deleteItem,
   getAllItems,
-  getItemsByType,
   countItems,
   DB_NAME,
   DB_VERSION,

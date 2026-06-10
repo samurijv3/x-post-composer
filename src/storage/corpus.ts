@@ -17,6 +17,9 @@ import type { LibraryItem } from '../types';
 export const DB_NAME = 'x-post-composer';
 export const DB_VERSION = 2;
 export const STORE_ITEMS = 'items';
+// Schema-level seam: no v1 reader queries this index (sampling filters
+// in memory), but Phase-2 retrieval will, and indexes are cheapest to
+// carry from day one rather than added via migration later.
 const INDEX_BY_TYPE = 'byType';
 
 let cachedDb: IDBDatabase | null = null;
@@ -111,15 +114,6 @@ export async function deleteItem(id: string): Promise<void> {
 export async function getAllItems(): Promise<LibraryItem[]> {
   const db = await openCorpus();
   const result = await promisifyRequest(txStore(db, 'readonly').getAll());
-  return result as LibraryItem[];
-}
-
-/** Read every item of the requested type. */
-export async function getItemsByType(type: LibraryItem['type']): Promise<LibraryItem[]> {
-  const db = await openCorpus();
-  const store = txStore(db, 'readonly');
-  const index = store.index(INDEX_BY_TYPE);
-  const result = await promisifyRequest(index.getAll(type));
   return result as LibraryItem[];
 }
 

@@ -111,18 +111,13 @@ export type BackgroundToContent =
  */
 export type BackgroundNotice =
   | { type: 'bg:library-changed' }
-  | {
-      type: 'bg:capture-notice';
-      ok: boolean;
-      message: string;
-      itemId?: string;
-    }
-  // Fired by the keyboard shortcut. The panel switches to reply mode
-  // and fires capture-reply-context on receipt. A timestamp lets stale
-  // notices (panel that opens long after the shortcut) be ignored.
+  // Fired by the keyboard shortcut for a panel that is ALREADY open
+  // (a panel the shortcut just opened consumes the session flag on
+  // mount instead). The timestamp matches the flag's so the panel can
+  // dedupe the pair.
   | { type: 'bg:auto-reply-capture'; at: number }
-  // Result of a capture attempt, with enough detail for the Voice
-  // screen's save-result banner to show the right message.
+  // Result of a capture attempt, with enough detail for the floating
+  // save-result banner to show the right message.
   | {
       type: 'bg:save-result';
       kind: 'success' | 'text-media' | 'duplicate' | 'not-mine' | 'truncated' | 'media-only';
@@ -131,9 +126,6 @@ export type BackgroundNotice =
       rejectedAuthor?: string;
       duplicateOfId?: string;
     }
-  // The panel listens for this and switches to the Voice screen, so
-  // the user always lands where the save-result banner appears.
-  | { type: 'bg:focus-voice' }
   // Reply-context-mode selection failure. Mirrors `bg:save-result` —
   // we send the *kind* and let the panel render reply-context-flavoured
   // wording in the same .save-result banner chrome as save failures.
@@ -166,10 +158,8 @@ export function isMessageOfType<T extends AnyMessage['type']>(
 export function isBackgroundNotice(message: unknown): message is BackgroundNotice {
   return (
     isMessageOfType(message, 'bg:library-changed') ||
-    isMessageOfType(message, 'bg:capture-notice') ||
     isMessageOfType(message, 'bg:auto-reply-capture') ||
     isMessageOfType(message, 'bg:save-result') ||
-    isMessageOfType(message, 'bg:focus-voice') ||
     isMessageOfType(message, 'bg:reply-context-error')
   );
 }

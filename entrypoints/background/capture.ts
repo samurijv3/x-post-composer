@@ -9,10 +9,6 @@ import type { LibraryItem, RawCapture } from '../../src/types';
 import { classifyType, validateAuthor } from '../../src/lib/voice';
 
 export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
-  // Every capture attempt — success or failure — focuses the Voice
-  // screen so the user always lands where the save-result banner shows.
-  await broadcastNotice({ type: 'bg:focus-voice' });
-
   const settings = await getSettings();
   if (settings.handle.trim() === '') {
     await broadcastNotice({

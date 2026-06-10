@@ -117,10 +117,8 @@ function PanelShell() {
     return () => window.clearTimeout(t);
   }, [replyContextError]);
 
-  // Note: we no longer auto-switch to Voice on capture — the floating
-  // banner makes any screen valid for surfacing the result. The
-  // bg:focus-voice notice is now a no-op; left in the contracts for
-  // backward compatibility with already-broadcast notices.
+  // Note: we deliberately do NOT auto-switch to Voice on capture — the
+  // floating banner makes any screen valid for surfacing the result.
 
   function openOptions(): void {
     void chrome.runtime.openOptionsPage();

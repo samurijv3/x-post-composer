@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrandMark } from './BrandMark';
-import {
-  IcChevL,
-  IcCheck,
-  IcData,
-  IcKey,
-  IcMoon,
-  IcPrompt,
-  IcSettings,
-  IcSliders,
-  IcSun,
-} from './icons';
+import { IcChevL, IcCheck, IcData, IcKey, IcMoon, IcPrompt, IcSliders, IcSun } from './icons';
 import {
   getThemePreference,
   setThemePreference,
@@ -148,6 +138,3 @@ function ThemeNavButton() {
     </button>
   );
 }
-
-// Silence unused import while sections wire up.
-void IcSettings;

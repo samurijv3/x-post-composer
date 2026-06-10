@@ -33,10 +33,6 @@ export interface Settings {
   /** How many library items the prompt builder is allowed to consider. */
   poolSize: number;
 
-  /** Percent of the example budget reserved for manually picked items.
-   *  Inert in v1 (Phase 2 surfaces it once import lands). */
-  manualCorpusBalance: number;
-
   /** Free-text guidance always injected into the prompt. */
   styleGuide: string;
 
@@ -95,7 +91,6 @@ export const DEFAULT_SETTINGS: Settings = {
   charCapDefault: true,
   softCapChars: 1000,
   poolSize: 20,
-  manualCorpusBalance: 70,
   styleGuide: '',
   temperature: { generate: 0.7, regenerate: 0.9 },
   structuralRules: {

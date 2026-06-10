@@ -8,7 +8,6 @@ import {
   DB_NAME,
   deleteItem,
   getAllItems,
-  getItemsByType,
   STORE_ITEMS,
   updateItem,
 } from './corpus';
@@ -65,16 +64,6 @@ describe('corpus store', () => {
     expect(await countItems()).toBe(1);
     const remaining = await getAllItems();
     expect(remaining[0]?.id).toBe('b');
-  });
-
-  it('filters by type via the byType index', async () => {
-    await addItem(makeItem({ id: 'p1', type: 'post' }));
-    await addItem(makeItem({ id: 'p2', type: 'post' }));
-    await addItem(makeItem({ id: 'r1', type: 'reply' }));
-    const posts = await getItemsByType('post');
-    const replies = await getItemsByType('reply');
-    expect(posts.map((i) => i.id).sort()).toEqual(['p1', 'p2']);
-    expect(replies.map((i) => i.id)).toEqual(['r1']);
   });
 
   it('persists embedding as null in v1 records', async () => {
