@@ -17,6 +17,7 @@ export {
   countItems,
   DB_NAME,
   DB_VERSION,
+  EXPORT_SCHEMA_VERSION,
 } from './corpus';
 export {
   getCaptureMode,

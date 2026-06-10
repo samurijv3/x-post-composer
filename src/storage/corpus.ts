@@ -16,6 +16,13 @@ import type { LibraryItem } from '../types';
 
 export const DB_NAME = 'x-post-composer';
 export const DB_VERSION = 2;
+/**
+ * Version stamped into library-export JSON. Tracks the LibraryItem ROW
+ * shape, which is defined by the DB schema version — bump alongside
+ * DB_VERSION whenever a migration changes the row shape, so a future
+ * import can tell what it is reading.
+ */
+export const EXPORT_SCHEMA_VERSION = DB_VERSION;
 export const STORE_ITEMS = 'items';
 // Schema-level seam: no v1 reader queries this index (sampling filters
 // in memory), but Phase-2 retrieval will, and indexes are cheapest to

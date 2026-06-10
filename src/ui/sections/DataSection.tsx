@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { clearAllItems, getAllItems } from '../../storage';
+import { clearAllItems, EXPORT_SCHEMA_VERSION, getAllItems } from '../../storage';
 import { IcCheck, IcExport, IcTrash } from '../icons';
 import { isMessageOfType, onNotice } from '../../messaging';
 
@@ -43,7 +43,7 @@ export function DataSection({ onSaved }: Props) {
       const items = await getAllItems();
       const payload = {
         exportedAt: new Date().toISOString(),
-        schemaVersion: 1,
+        schemaVersion: EXPORT_SCHEMA_VERSION,
         items,
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -96,7 +96,7 @@ export function DataSection({ onSaved }: Props) {
         <ul className="spec-list">
           <li>
             <span>Format</span>
-            <span className="mono-val">JSON · schema v1</span>
+            <span className="mono-val">JSON · schema v{EXPORT_SCHEMA_VERSION}</span>
           </li>
           <li>
             <span>Includes</span>
