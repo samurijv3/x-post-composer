@@ -126,18 +126,23 @@ type SaveResultKind =
   | 'duplicate'
   | 'not-mine'
   | 'truncated'
-  | 'media-only';
+  | 'media-only'
+  | 'unreadable';
 
 /**
  * Map a content-script failure reason onto a save-result banner kind.
- * `missing-text` / `missing-author` / `unknown` / `no-tweet-under-cursor`
- * don't map to any banner — they're edge cases the user can't really
- * act on, so we stay silent rather than surfacing a useless message.
+ * Extraction failures (`missing-text` / `missing-author` / `unknown` —
+ * usually X markup drift) surface as a generic "couldn't read that
+ * tweet" banner: the user clicked and deserves a response, and the
+ * banner points them at the manual-paste fallback. Only
+ * `no-tweet-under-cursor` stays silent — it genuinely means the click
+ * wasn't on a tweet.
  */
 export function failureReasonToSaveResultKind(reason: string): SaveResultKind | null {
   if (reason === 'truncated') return 'truncated';
   if (reason === 'media-only') return 'media-only';
-  return null;
+  if (reason === 'no-tweet-under-cursor') return null;
+  return 'unreadable';
 }
 
 /**

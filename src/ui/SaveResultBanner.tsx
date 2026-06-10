@@ -6,7 +6,8 @@ export type SaveResultKind =
   | 'duplicate'
   | 'not-mine'
   | 'truncated'
-  | 'media-only';
+  | 'media-only'
+  | 'unreadable';
 
 export interface SaveResult {
   kind: SaveResultKind;
@@ -29,6 +30,7 @@ export const SAVE_META: Record<SaveResultKind, BannerMeta> = {
   'not-mine': { tone: 'danger', autodismiss: true, iconKey: 'x' },
   truncated: { tone: 'warn', autodismiss: true, iconKey: 'warn' },
   'media-only': { tone: 'danger', autodismiss: true, iconKey: 'x' },
+  unreadable: { tone: 'danger', autodismiss: true, iconKey: 'x' },
 };
 
 interface Props {
@@ -39,10 +41,10 @@ interface Props {
 }
 
 /**
- * The six-state save-result banner. Lives at the panel-shell level
- * (in App.tsx's sticky slot) so it floats at the top of the panel
- * viewport regardless of which screen is active or how far the user
- * has scrolled within a screen.
+ * The save-result banner (one branch per SaveResultKind). Lives at the
+ * panel-shell level (in App.tsx's sticky slot) so it floats at the top
+ * of the panel viewport regardless of which screen is active or how
+ * far the user has scrolled within a screen.
  */
 export function SaveResultBanner({ result, handle, onDismiss, onShowDup }: Props) {
   const meta = SAVE_META[result.kind];
@@ -85,6 +87,14 @@ export function SaveResultBanner({ result, handle, onDismiss, onShowDup }: Props
     msg = (
       <>
         This post is media only. Margin learns from text, so there’s nothing to add to your voice.
+      </>
+    );
+  } else if (result.kind === 'unreadable') {
+    title = 'Not saved — couldn’t read that tweet';
+    msg = (
+      <>
+        X may have changed its markup. Try again after a refresh, or paste the text in with{' '}
+        <strong>Add manually</strong> on the Voice screen.
       </>
     );
   } else {

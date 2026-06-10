@@ -121,7 +121,14 @@ export type BackgroundNotice =
   // save-result banner to show the right message.
   | {
       type: 'bg:save-result';
-      kind: 'success' | 'text-media' | 'duplicate' | 'not-mine' | 'truncated' | 'media-only';
+      kind:
+        | 'success'
+        | 'text-media'
+        | 'duplicate'
+        | 'not-mine'
+        | 'truncated'
+        | 'media-only'
+        | 'unreadable';
       itemId?: string;
       itemType?: 'post' | 'reply';
       rejectedAuthor?: string;
