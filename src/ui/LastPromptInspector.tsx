@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getLastPrompt, subscribeLastPrompt, type LastPromptRecord } from '../storage';
 import { weightedLength } from '../lib/counting';
+import { splitPrompt } from '../lib/prompt';
 import { IcCheck, IcCopy, IcSearch } from './icons';
 
 /**
@@ -10,8 +11,9 @@ import { IcCheck, IcCopy, IcSearch } from './icons';
  * live updates so it reflects refines as they fire.
  *
  * The prompt stored is the rendered template (potentially containing
- * the `===USER===` marker). We split it here for display so the
- * blocks match what was actually sent to Anthropic.
+ * the `===USER===` marker). It is split with the same `splitPrompt`
+ * the orchestrator uses, so the blocks shown match what was actually
+ * sent to Anthropic byte for byte.
  */
 export function LastPromptInspector() {
   const [open, setOpen] = useState<boolean>(false);
@@ -32,15 +34,6 @@ export function LastPromptInspector() {
     } catch {
       // ignore
     }
-  }
-
-  function splitPrompt(prompt: string): { system: string; user: string } {
-    const idx = prompt.indexOf('===USER===');
-    if (idx === -1) return { system: '', user: prompt };
-    return {
-      system: prompt.slice(0, idx).trim(),
-      user: prompt.slice(idx + '===USER==='.length).trim(),
-    };
   }
 
   return (
