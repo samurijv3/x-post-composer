@@ -27,6 +27,7 @@
     "@types/chrome": "^0.1.27",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@vitest/coverage-v8": "^4.1.8",
     "@wxt-dev/module-react": "^1.2.2",
     "eslint": "^10.4.1",
     "fake-indexeddb": "^6.2.5",
