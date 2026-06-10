@@ -112,9 +112,9 @@ export function TemplateRow({
           {markerMissing && (
             <p className="help" style={{ color: 'var(--warn)' }}>
               <strong>Heads up:</strong> the <code>===USER===</code> marker is missing. The whole
-              template will be sent as a single user message — no system framing, no prompt caching.
-              Add <code>===USER===</code> on its own line to separate the stable instructions
-              (above) from the per-call inputs (below).
+              template will be sent as a single user message with no system framing. Add{' '}
+              <code>===USER===</code> on its own line to separate the stable instructions (above)
+              from the per-call inputs (below).
             </p>
           )}
           <div className="field-row">

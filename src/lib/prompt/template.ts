@@ -19,8 +19,10 @@ const SLOT_RE = /\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g;
  * Marker that, when present in a generation template's body, splits
  * the rendered prompt into a SYSTEM portion (everything above) and a
  * USER portion (everything below). The orchestrator passes them as
- * separate fields to Anthropic — system messages are cacheable and
- * are treated differently by the model than user content.
+ * separate fields to Anthropic — the model treats system framing
+ * differently from user content. (Caching of the system portion only
+ * applies above a per-model minimum prefix size; see
+ * `MessagesCallRequest.system` in src/api/anthropic.ts.)
  *
  * Templates without this marker fall back to "everything is a single
  * user message" — preserving backwards compatibility with any custom
