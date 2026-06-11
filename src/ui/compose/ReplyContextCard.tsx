@@ -1,23 +1,45 @@
 import type { ReplyContext } from '../../types';
 import { Avatar } from '../Avatar';
-import { IcReply, IcX } from '../icons';
+import { IcChevR, IcReply, IcX } from '../icons';
 import { formatRelativeTweetTime } from '../../lib/format/relativeTime';
 
 interface ReplyContextCardProps {
   context: ReplyContext;
   onClear: () => void;
+  /** When provided, the card's own header collapses it back to its
+   *  compact form (the draft view's peek) — the compact toggle and the
+   *  card are the SAME header in two sizes, never two stacked headers. */
+  onCollapse?: () => void;
 }
 
 /** The captured tweet, rendered X-native style, with a clear control. */
-export function ReplyContextCard({ context, onClear }: ReplyContextCardProps) {
+export function ReplyContextCard({ context, onClear, onCollapse }: ReplyContextCardProps) {
   const relTime = formatRelativeTweetTime(context.targetTimestamp);
   return (
     <div className="context-card">
       <div className="ctx-top">
-        <IcReply style={{ width: 15, height: 15, color: 'var(--accent)' }} />
-        <span className="eyebrow" style={{ color: 'var(--accent)' }}>
-          Replying to
-        </span>
+        {onCollapse ? (
+          <button
+            type="button"
+            className="brief-ctx-toggle"
+            title="Hide the tweet you're replying to"
+            aria-expanded={true}
+            onClick={onCollapse}
+          >
+            <IcReply style={{ width: 15, height: 15, color: 'var(--accent)' }} />
+            <span className="eyebrow" style={{ color: 'var(--accent)' }}>
+              Replying to
+            </span>
+            <IcChevR className="ctx-chev open" />
+          </button>
+        ) : (
+          <>
+            <IcReply style={{ width: 15, height: 15, color: 'var(--accent)' }} />
+            <span className="eyebrow" style={{ color: 'var(--accent)' }}>
+              Replying to
+            </span>
+          </>
+        )}
         <span className="head-spacer" />
         <button
           type="button"

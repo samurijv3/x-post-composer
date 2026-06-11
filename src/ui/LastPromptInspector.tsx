@@ -1,29 +1,49 @@
 import { useEffect, useState } from 'react';
 import { getLastPrompt, subscribeLastPrompt, type LastPromptRecord } from '../storage';
 import { weightedLength } from '../lib/counting';
-import { IcCheck, IcCopy, IcSearch } from './icons';
+import { IcCheck, IcChevR, IcCopy, IcSearch } from './icons';
 
 /**
  * Live view of the most recent pipeline invocation — every Anthropic
  * call in order (generate/refine, then the optional repair and tighten
- * passes), each as a labelled System + User pair, with the final
- * Response last. Reads `chrome.storage.session.lastPrompt:v2` and
- * subscribes for live updates so it reflects refines as they fire.
+ * passes), each as a collapsible section holding its System + User
+ * pair, with the final Response always visible. Reads
+ * `chrome.storage.session.lastPrompt:v2` and subscribes for live
+ * updates so it reflects refines as they fire.
  *
- * The record is written by the pipeline at send time, so the blocks
- * shown match what was actually sent to Anthropic byte for byte —
- * transparency is load-bearing (design.md).
+ * A single-call invocation opens expanded (one click to the content);
+ * multi-call chains start collapsed so the chain reads as a summary
+ * first. The record is written by the pipeline at send time, so the
+ * blocks shown match what was actually sent to Anthropic byte for
+ * byte — transparency is load-bearing (design.md).
  */
 export function LastPromptInspector() {
   const [open, setOpen] = useState<boolean>(false);
   const [record, setRecord] = useState<LastPromptRecord | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [openCalls, setOpenCalls] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
     void getLastPrompt().then(setRecord);
     const unsub = subscribeLastPrompt(setRecord);
     return () => unsub();
   }, []);
+
+  // New invocation → reset the accordion: a lone call opens itself,
+  // a chain starts collapsed.
+  useEffect(() => {
+    if (record === null) return;
+    setOpenCalls(record.calls.length === 1 ? new Set([0]) : new Set());
+  }, [record]);
+
+  function toggleCall(i: number): void {
+    setOpenCalls((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  }
 
   async function copy(key: string, text: string): Promise<void> {
     try {
@@ -100,18 +120,33 @@ export function LastPromptInspector() {
                     {when}
                   </span>
                 </div>
-                {record.calls.map((call, i) => (
-                  <div key={`call-${String(i)}`}>
-                    <span className="eyebrow" style={{ display: 'block', margin: '10px 0 4px' }}>
-                      Call {i + 1} — {call.label}
-                    </span>
-                    {block(`${String(i)}:system`, 'System', call.system)}
-                    {block(`${String(i)}:user`, 'User', call.user)}
-                  </div>
-                ))}
-                <span className="eyebrow" style={{ display: 'block', margin: '10px 0 4px' }}>
-                  Final response
-                </span>
+                {record.calls.map((call, i) => {
+                  const isOpen = openCalls.has(i);
+                  return (
+                    <div key={`call-${String(i)}`} className={`insp-call ${isOpen ? 'open' : ''}`}>
+                      <button
+                        type="button"
+                        className="insp-call-head"
+                        aria-expanded={isOpen}
+                        onClick={() => toggleCall(i)}
+                      >
+                        <IcChevR className="insp-call-chev" />
+                        <span className="insp-call-title">
+                          Call {i + 1} · {call.label}
+                        </span>
+                        <span className="insp-count">
+                          {weightedLength(call.system) + weightedLength(call.user)} chars
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <div className="insp-call-body">
+                          {block(`${String(i)}:system`, 'System', call.system)}
+                          {block(`${String(i)}:user`, 'User', call.user)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 {block('response', 'Response', record.response, true)}
               </div>
             );

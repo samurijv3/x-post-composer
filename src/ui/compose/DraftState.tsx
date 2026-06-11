@@ -109,20 +109,23 @@ export function DraftState({
         <>
           <div className="brief">
             {/* One chip, not two: in reply mode the mode IS "reply to
-                @handle", and the whole chip is the context peek. */}
-            {hasContext ? (
+                @handle", and the whole chip is the context peek. While
+                the peek is open, the chip yields — the card directly
+                below IS the expanded version of it (one header, two
+                sizes, never both). */}
+            {hasContext && !contextOpen ? (
               <button
                 type="button"
                 className="brief-peek"
                 title={peekTitle}
-                aria-expanded={contextOpen}
-                onClick={() => setContextOpen(!contextOpen)}
+                aria-expanded={false}
+                onClick={() => setContextOpen(true)}
               >
                 reply to @{reply.replyContext?.targetAuthorHandle ?? '—'}
               </button>
-            ) : (
+            ) : !hasContext ? (
               <span className={`badge ${mode}`}>{mode}</span>
-            )}
+            ) : null}
             <button
               type="button"
               className="brief-main"
@@ -142,27 +145,37 @@ export function DraftState({
               <IcTrash />
             </button>
           </div>
-          {/* The peeked tweet unfolds directly from the pill it was
-              opened with — never below unrelated controls. */}
           {contextOpen && reply.replyContext && (
-            <ReplyContextCard context={reply.replyContext} onClear={reply.onClearReplyContext} />
+            <ReplyContextCard
+              context={reply.replyContext}
+              onClear={reply.onClearReplyContext}
+              onCollapse={() => setContextOpen(false)}
+            />
           )}
         </>
       ) : (
         <div className="card inset" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {hasContext && reply.replyContext ? (
-            <>
+            // The compact row and the full card are the SAME header in
+            // two sizes: opening replaces one with the other.
+            contextOpen ? (
+              <ReplyContextCard
+                context={reply.replyContext}
+                onClear={reply.onClearReplyContext}
+                onCollapse={() => setContextOpen(false)}
+              />
+            ) : (
               <div className="brief-ctx">
                 <button
                   type="button"
                   className="brief-ctx-toggle"
                   title={peekTitle}
-                  aria-expanded={contextOpen}
-                  onClick={() => setContextOpen(!contextOpen)}
+                  aria-expanded={false}
+                  onClick={() => setContextOpen(true)}
                 >
                   <IcReply />
                   Replying to @{reply.replyContext.targetAuthorHandle ?? '—'}
-                  <IcChevR className={`ctx-chev ${contextOpen ? 'open' : ''}`} />
+                  <IcChevR className="ctx-chev" />
                 </button>
                 <span className="head-spacer" />
                 <button
@@ -176,14 +189,7 @@ export function DraftState({
                   <IcX />
                 </button>
               </div>
-              {/* Unfolds right under the row, above the angle box. */}
-              {contextOpen && (
-                <ReplyContextCard
-                  context={reply.replyContext}
-                  onClear={reply.onClearReplyContext}
-                />
-              )}
-            </>
+            )
           ) : (
             <ReplyContextBanner
               compact

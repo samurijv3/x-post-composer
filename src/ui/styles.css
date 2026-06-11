@@ -2247,3 +2247,54 @@ code {
 .brief-ctx-toggle .ctx-chev.open {
   transform: rotate(90deg);
 }
+
+/* Inspector call accordion — each Anthropic call is a collapsible
+   section so a multi-call chain reads as a summary first. */
+.insp-call {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+.insp-call-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.insp-call-head:hover {
+  background: var(--surface-3);
+}
+.insp-call-chev {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--text-3);
+  transition: transform 0.12s ease;
+}
+.insp-call.open .insp-call-chev {
+  transform: rotate(90deg);
+}
+.insp-call-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.insp-call-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border-top: 1px solid var(--hairline);
+}
