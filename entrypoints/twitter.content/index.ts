@@ -99,6 +99,12 @@ export default defineContentScript({
     // itself is preserved in storage so the captured ReplyContext stays
     // usable for generation; the panel card remains throughout.
     let lockAffirmedPath: string | null = null;
+    // Set when a lock lands while a modal is open and nothing is
+    // affirmed yet (e.g. reply-context mode was turned on inside the
+    // modal): the modal's own URL is transient noise, so the anchor is
+    // deferred to whatever page the modal CLOSES onto — measured at
+    // the close, never guessed in advance.
+    let affirmOnModalClose = false;
 
     function awayFromLockPath(): boolean {
       return lockAffirmedPath !== null && lockAffirmedPath !== window.location.pathname;
@@ -149,6 +155,7 @@ export default defineContentScript({
         // trashcan remains the recovery path.
         replyContextLock = null;
         lockAffirmedPath = null;
+        affirmOnModalClose = false;
         applyOverlayState();
         if (!isAlive()) return;
         sendOneWay({ type: 'content:dismiss-reply-context' });
@@ -277,13 +284,18 @@ export default defineContentScript({
         // A new lock (the user clicked a tweet, possibly in another
         // tab) re-affirms the highlight for THIS tab's current page —
         // unless a modal is open: a selection made inside a modal keeps
-        // the pre-modal affirmation, so closing the modal hands the
-        // highlight back to the underlying page (the modal's own URL is
-        // noise, not a place to anchor to).
+        // the pre-modal affirmation (the modal's own URL is noise, not
+        // a place to anchor to), and when there IS no prior affirmation
+        // (mode turned on inside the modal), the anchor is deferred to
+        // the page the modal closes onto.
         if (message.lock === null) {
           lockAffirmedPath = null;
-        } else if (!xModalOpen || lockAffirmedPath === null) {
+          affirmOnModalClose = false;
+        } else if (!xModalOpen) {
           lockAffirmedPath = window.location.pathname;
+          affirmOnModalClose = false;
+        } else if (lockAffirmedPath === null) {
+          affirmOnModalClose = true;
         }
         replyContextLock = message.lock;
         applyOverlayState();
@@ -497,6 +509,15 @@ export default defineContentScript({
             const modalNow = isXModalOpen();
             if (modalNow !== xModalOpen) {
               xModalOpen = modalNow;
+              if (!modalNow && affirmOnModalClose) {
+                // The deferred anchor: a lock that was first affirmed
+                // inside the modal belongs to the page the modal just
+                // revealed.
+                affirmOnModalClose = false;
+                if (replyContextLock !== null) {
+                  lockAffirmedPath = window.location.pathname;
+                }
+              }
               applyOverlayState();
             }
 
