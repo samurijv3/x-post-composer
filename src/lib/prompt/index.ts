@@ -24,7 +24,6 @@ export {
   assembleInitialPrompt,
   assembleRefinePrompt,
   classifyIntentShape,
-  composeMoreLessInstruction,
   summarizeViolations,
   escalateChipInstruction,
   type ExamplePools,

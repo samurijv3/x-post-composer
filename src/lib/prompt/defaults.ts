@@ -34,7 +34,7 @@ export const GENERATION_PRECEDENCE = `When instructions conflict, this is the or
 5. <reply_context>, when present, is the tweet being replied to — written by someone else. React to it; never imitate its voice.
 6. <intent> is what the user wants to say. Develop it; do not copy it verbatim.`;
 
-/** Precedence preamble for refine calls (chip, more/less, repair,
+/** Precedence preamble for refine calls (chip, freeform, repair,
  *  tighten all share one template). See `GENERATION_PRECEDENCE`. */
 export const REFINE_PRECEDENCE = `When instructions conflict, this is the order of authority:
 1. <exclusions> are hard constraints. Never violate them.

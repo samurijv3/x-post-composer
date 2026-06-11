@@ -60,7 +60,7 @@ export function PromptsSection({ onSaved }: Props) {
         <p className="opt-card-desc">
           The exact text sent to the model. Each template has a System body (stable framing) and a
           User body (per-call content), sent as separate message roles. Slots like{' '}
-          <code>{'{{bullets}}'}</code> are filled at generation time. Chips, more/less steering, and
+          <code>{'{{bullets}}'}</code> are filled at generation time. Chips, freeform feedback, and
           the pipeline’s repair and tighten passes all run through the one Refine template — only
           its <code>{'{{instruction}}'}</code> changes. One open at a time.
         </p>

@@ -35,7 +35,7 @@ export type PanelToBackground =
   // assemble → call → autoFix → check → optional repair → optional
   // tighten). The `isRegenerate` flag on the request bumps temperature.
   | { type: 'panel:generate'; request: GenerationRequest }
-  // Refine an existing draft via a chip or a more/less debounced fire.
+  // Refine an existing draft via a chip or freeform typed feedback.
   // Same post-pipeline as generate (autoFix → repair → tighten) but
   // does NOT touch the example pool.
   | { type: 'panel:refine'; request: RefineRequest }

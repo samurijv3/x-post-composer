@@ -9,8 +9,6 @@ import {
   IcChevR,
   IcCopy,
   IcEdit,
-  IcLess,
-  IcMore,
   IcRefresh,
   IcReply,
   IcTrash,
@@ -24,7 +22,7 @@ import { ReplyContextBanner } from './ReplyContextBanner';
 import { ReplyContextCard } from './ReplyContextCard';
 import type { BriefControls, ReplyContextControls } from './types';
 
-const MORELESS_MAX = 140;
+const FREEFORM_MAX = 280;
 
 /** What the draft card needs to render the current result. */
 export interface DraftView {
@@ -41,15 +39,13 @@ export interface DraftView {
   canUndo: boolean;
 }
 
-/** Chip + more/less steering controls under the draft. */
+/** Chip + freeform-feedback controls under the draft. */
 export interface RefineControls {
   chips: ChipPreset[];
   chipCounts: Record<string, number>;
   flash: string | null;
-  moreText: string;
-  setMoreText: (v: string) => void;
-  lessText: string;
-  setLessText: (v: string) => void;
+  steerText: string;
+  setSteerText: (v: string) => void;
   canApplySteer: boolean;
   onSteerKey: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
   onApplyChip: (c: ChipPreset) => void;
@@ -358,38 +354,17 @@ export function DraftState({
         )}
         <div className="refine-block">
           <span className="eyebrow">Steer it</span>
-          <div className="moreless-grid">
-            <div className="ml-cell">
-              <span className="ml-label">
-                <IcMore /> More of
-              </span>
-              <textarea
-                rows={2}
-                maxLength={MORELESS_MAX}
-                value={refine.moreText}
-                disabled={busy}
-                onKeyDown={refine.onSteerKey}
-                onChange={(e) => refine.setMoreText(e.target.value)}
-                placeholder="the dry humor, concrete detail…"
-              />
-            </div>
-            <div className="ml-cell">
-              <span className="ml-label">
-                <IcLess /> Less of
-              </span>
-              <textarea
-                rows={2}
-                maxLength={MORELESS_MAX}
-                value={refine.lessText}
-                disabled={busy}
-                onKeyDown={refine.onSteerKey}
-                onChange={(e) => refine.setLessText(e.target.value)}
-                placeholder="hedging, jargon, hype…"
-              />
-            </div>
-          </div>
+          <textarea
+            rows={2}
+            maxLength={FREEFORM_MAX}
+            value={refine.steerText}
+            disabled={busy}
+            onKeyDown={refine.onSteerKey}
+            onChange={(e) => refine.setSteerText(e.target.value)}
+            placeholder="tell it what to change — lead with the joke, cut the hedge, more of the dry humor…"
+          />
           <div className="steer-apply">
-            <span className="help">Describe a tweak, then apply.</span>
+            <span className="help">Type feedback in your own words, then apply.</span>
             <button
               type="button"
               className="btn primary sm"

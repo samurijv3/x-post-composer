@@ -145,8 +145,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   // renders the result.
   const [lifecycle, dispatchDraft] = useReducer(reduceDraftLifecycle, INITIAL_DRAFT_LIFECYCLE);
   const [expanded, setExpanded] = useState<boolean>(false);
-  const [moreText, setMoreText] = useState<string>('');
-  const [lessText, setLessText] = useState<string>('');
+  const [steerText, setSteerText] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
   const [flash, setFlash] = useState<string | null>(null);
   const [chipCounts, setChipCounts] = useState<Record<string, number>>({});
@@ -254,10 +253,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     setError(null);
     setExpanded(false);
     setChipCounts({});
-    if (!opts.isRegenerate) {
-      setMoreText('');
-      setLessText('');
-    }
+    if (!opts.isRegenerate) setSteerText('');
     const myId = ++requestSeq.current;
     // Whether this generate will REPLACE a visible draft decides the
     // timed-undo toast when it lands.
@@ -318,9 +314,9 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
 
   async function applySteer(): Promise<void> {
     if (busy || content === null) return;
-    if (moreText.trim() === '' && lessText.trim() === '') return;
+    if (steerText.trim() === '') return;
     setChipCounts({});
-    await runRefine({ type: 'moreless', more: moreText, less: lessText });
+    await runRefine({ type: 'freeform', instruction: steerText });
   }
 
   async function runRefine(kind: RefineRequest['kind']): Promise<void> {
@@ -405,8 +401,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   function discard(): void {
     dispatchDraft({ type: 'discarded' });
     setBullets('');
-    setMoreText('');
-    setLessText('');
+    setSteerText('');
     setExpanded(false);
     setChipCounts({});
     setError(null);
@@ -470,11 +465,9 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     chips,
     chipCounts,
     flash,
-    moreText,
-    setMoreText,
-    lessText,
-    setLessText,
-    canApplySteer: !busy && (moreText.trim() !== '' || lessText.trim() !== ''),
+    steerText,
+    setSteerText,
+    canApplySteer: !busy && steerText.trim() !== '',
     onSteerKey: steerKey,
     onApplyChip: (c) => void applyChip(c),
     onApplySteer: () => void applySteer(),

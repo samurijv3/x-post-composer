@@ -69,10 +69,10 @@ export function assembleInitialPrompt(
 }
 
 /**
- * Build a refine prompt — chip, more/less, repair, and tighten all go
+ * Build a refine prompt — chip, freeform, repair, and tighten all go
  * through here, so every revision pass carries the same voice anchor
  * (style guide + exclusions in the system body) as generation. The
- * instruction is panel-supplied for chip/more-less and code-supplied
+ * instruction is panel-supplied for chip/freeform and code-supplied
  * for repair/tighten (`buildRepairInstruction`, `TIGHTEN_INSTRUCTION`).
  */
 export function assembleRefinePrompt(
@@ -168,19 +168,4 @@ export function escalateChipInstruction(instruction: string, intensity: number):
     return `${instruction}\n\nThis is the third press of the same chip. The user has now asked for this direction three times. Apply the instruction dramatically — the result should be unmistakably more in this direction than the previous draft.`;
   }
   return `${instruction}\n\nThis is press #${String(intensity)} of the same chip. The user has repeatedly asked for this direction. Apply MAXIMUM intensity — don't be subtle. The result should be a clear, undeniable step in this direction beyond what the previous draft showed.`;
-}
-
-/**
- * Compose the panel's more/less steering fields into the single
- * instruction string the unified refine template expects. Either side
- * may be blank (one line comes back); both blank returns '' — callers
- * guard against sending an empty refine, this function just composes.
- */
-export function composeMoreLessInstruction(more: string, less: string): string {
-  const lines: string[] = [];
-  const moreTrimmed = more.trim();
-  const lessTrimmed = less.trim();
-  if (moreTrimmed !== '') lines.push(`More of: ${moreTrimmed}`);
-  if (lessTrimmed !== '') lines.push(`Less of: ${lessTrimmed}`);
-  return lines.join('\n');
 }

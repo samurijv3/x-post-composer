@@ -52,9 +52,12 @@ export interface GenerationRequest {
 
 /**
  * The shape sent by the panel when refining an existing draft.
- * `kind` discriminates between a chip click and a more/less debounced
- * refire; the background looks up chips by id against current Settings
- * so any edit the user just made is always honoured.
+ * `kind` discriminates the entry point — a chip click, the freeform
+ * feedback box, or one of the code-supplied passes (polish / refit);
+ * every kind renders through the single refine template with its full
+ * voice anchor. The background looks up chips by id against current
+ * Settings so any edit the user just made is always honoured.
+ * In-flight only — never stored, so reshaping it needs no migration.
  */
 export interface RefineRequest {
   /** Mode of the original generation (used by `setLastPrompt` only). */
@@ -77,7 +80,8 @@ export type RefineKind =
        *  the AI shrugging off subsequent identical asks. */
       intensity: number;
     }
-  | { type: 'moreless'; more: string; less: string };
+  /** Typed feedback from the freeform box — the instruction verbatim. */
+  | { type: 'freeform'; instruction: string };
 
 export interface GenerationResultOk {
   ok: true;

@@ -30,7 +30,6 @@ import {
   assembleInitialPrompt,
   assembleRefinePrompt,
   buildRepairInstruction,
-  composeMoreLessInstruction,
   escalateChipInstruction,
   summarizeViolations,
   TIGHTEN_INSTRUCTION,
@@ -100,7 +99,7 @@ export async function runGeneration(request: GenerationRequest): Promise<Generat
 }
 
 // ---------------------------------------------------------------------
-// Refine entry — composes the instruction (chip or more/less), renders
+// Refine entry — composes the instruction (chip or freeform), renders
 // it through the single refine template, then runs the same
 // post-processing pipeline.
 // ---------------------------------------------------------------------
@@ -141,15 +140,15 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
         ? `refine (chip: ${chip.label}, press ${String(kind.intensity)})`
         : `refine (chip: ${chip.label})`;
   } else {
-    instruction = composeMoreLessInstruction(kind.more, kind.less);
+    instruction = kind.instruction.trim();
     if (instruction === '') {
       return {
         ok: false,
         kind: 'bad-request',
-        message: 'more/less are both empty — nothing to refine on.',
+        message: 'The feedback box is empty — nothing to refine on.',
       };
     }
-    initialLabel = 'refine (more/less)';
+    initialLabel = 'refine (freeform)';
   }
 
   return runPipeline({

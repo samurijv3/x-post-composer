@@ -5,7 +5,6 @@ import {
   assembleInitialPrompt,
   assembleRefinePrompt,
   classifyIntentShape,
-  composeMoreLessInstruction,
   escalateChipInstruction,
   summarizeViolations,
   type ExamplePools,
@@ -100,29 +99,6 @@ describe('classifyIntentShape', () => {
   it('treats empty and whitespace-only input as prose', () => {
     expect(classifyIntentShape('')).toBe('prose');
     expect(classifyIntentShape('   \n  ')).toBe('prose');
-  });
-});
-
-describe('composeMoreLessInstruction', () => {
-  it('composes both sides into two labelled lines', () => {
-    expect(composeMoreLessInstruction('warmth', 'hedging')).toBe(
-      'More of: warmth\nLess of: hedging',
-    );
-  });
-
-  it('returns a single line when only one side is filled', () => {
-    expect(composeMoreLessInstruction('specifics', '')).toBe('More of: specifics');
-    expect(composeMoreLessInstruction('  ', 'jargon')).toBe('Less of: jargon');
-  });
-
-  it('trims each side', () => {
-    expect(composeMoreLessInstruction('  bite  ', '  filler  ')).toBe(
-      'More of: bite\nLess of: filler',
-    );
-  });
-
-  it('returns an empty string when both sides are blank', () => {
-    expect(composeMoreLessInstruction('', '   ')).toBe('');
   });
 });
 
