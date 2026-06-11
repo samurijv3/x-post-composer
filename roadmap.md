@@ -1,0 +1,236 @@
+# Voice Composer for X — Product Roadmap & Design Source of Truth
+
+_Last updated: June 2026. This document is the canonical reference for what we're building and why. Every Claude Code build prompt from here forward should be derived from it. When a decision recorded here turns out wrong, update this doc rather than silently diverging — same discipline as `CLAUDE.md`._
+
+---
+
+## North Star
+
+The highest-quality, most genuinely-_in-your-voice_ composer for serious writers on X — and radically transparent in a market full of opaque engagement-farming tools.
+
+The wedge is **taste and trust**, not volume. The target user posts deliberately and would be embarrassed by AI-sounding output: founders, writers, researchers, people building a reputation. That segment is underserved precisely _because_ most competitors chase the volume crowd — which means the crowdedness of the space is our friend, not our problem. Everyone else races toward automation and scale; that leaves the "I want to sound like _me_, better and faster" lane open.
+
+Three commitments flow from this and should not be quietly eroded by any feature:
+
+1. **All-in on X.** Depth on one platform is the moat. We do not spread across LinkedIn/TikTok/Instagram (see _What We're Deliberately Not Building_).
+2. **Honest LLM wrapper.** Prompts are visible and editable; the user can always inspect exactly what was sent to the model. We are the opposite of a slick UI hiding a thin prompt. Transparency is a feature, not an afterthought — it's load-bearing for trust.
+3. **Local-first, BYO-key, privacy-preserving.** The user's data and key stay on their machine; the only external call is to their chosen LLM provider. No middleman server.
+
+---
+
+## Core Concepts
+
+_These four systems underpin nearly every roadmap item. They're documented here once, in full, so individual phase items can reference them without re-explaining._
+
+### A. The Example-Streams Model (how we define the user's voice)
+
+The user's voice is taught to the tool through saved writing. There are **three sources** and **one orthogonal quality flag**. Keeping these on separate axes is what makes the whole model coherent — the early confusion came from treating them as competing peers.
+
+**Source** — where an item came from. System-assigned, mutually exclusive, every item has exactly one:
+
+- `manual` — handpicked by the user ("save to voice"). The user individually chose it.
+- `shipped` — a draft composed in the tool, approved, and copied out to X. Self-curating; accumulates automatically over time (see _Draft Lifecycle_).
+- `archive` — bulk-imported from the user's X archive export. High volume, **unfiltered** — its job is breadth, not curation.
+
+**Star** (`favorite: boolean`) — a judgment the user lays on top, **orthogonal to source**. Any individually-engaged item can be starred. This is _not_ a fourth source; it's a flag on a different axis. A shipped tweet you love is `source: shipped, favorite: true`. This is why "can something be both shipped and a favorite?" was never really a conflict — they're different dimensions.
+
+**Why stars exist as a distinct tier:** handpicking changes job over the tool's life. Early on it's an _onboarding_ move (bootstrap a high-signal pool fast). Later it becomes a _canon_ move — the crown jewels, "you at your best, the bar every tweet should hit." If favorites just sat in the general pool with equal sampling odds, your ceiling would get averaged back into your mean — the exact thing the feature is meant to prevent. So stars get **guaranteed presence**, not just better odds.
+
+**Sampling model** (how examples are chosen per generation):
+
+- **Two sampled tiers, balanced by a slider:**
+  - _Curated_ = `manual` + `shipped`, pooled. Filled first.
+  - _Archive_ = the noisy backstop. Tops up only to the extent curated doesn't fill the budget.
+  - Controlled by the **balance slider** (default 70/30 curated/archive) and the **sample-size slider** (`poolSize`, min 5 / max 40 / default 20). The balance slider is inert until an archive exists (Phase 7).
+- **Stars sit on top, with their own pool:** a **fixed N** of starred items (user-adjustable, default ~3–5, hard-capped at a fraction of the total budget so they can't drown out range), **shuffled** among all stars, **guaranteed in every prompt** — separate from and additive to the `poolSize` sampled pool. This is the structural fix for the drowning-out problem: stars never compete for sample slots because they were never in the pool.
+
+**Starring boundary & promotion:**
+
+- Starring is available on `manual` and `shipped` items only. The archive is, by definition, the stream you _haven't_ individually engaged with — so you don't star from it directly.
+- To elevate an archive tweet: **find it via X's own search, then handpick it** through the normal capture gesture. No archive-browser feature needed — X's search is better than anything we'd build, and it's where the user's muscle memory already lives. The promotion _is_ the act of attention.
+- **Dedupe on capture:** if a handpicked tweet already exists in the library (commonly: it's also in the archive), the handpick **wins and updates the existing record** (`source → manual`) rather than inserting a duplicate. Same logic applies to a shipped tweet later handpicked. Dedupe key: tweet ID if captured, normalized text otherwise. Missing this silently skews the voice toward whatever got double-counted.
+
+### B. Prompt Architecture ("prompt-assembly-v2")
+
+Everything is text to the model at send time — there is no separate "attachment" channel that gets parsed more rigorously. What makes a model _use_ context well is **structure, labeling, and explicit priority**, not delivery mechanism. The current prompts are tidy but predate several decisions and have one quiet quality leak (voice-blind refinements). The principles:
+
+- **System / user boundary, decided by one test: does this block change between two consecutive calls?**
+  - _System_ (invariant call-to-call): role definition, the "output ONLY the text, no preamble/quotes" rule (stated once here, not repeated per template), the precedence preamble, the style guide, and the exclusions.
+  - _User_ (changes call-to-call): the example blocks (freshly sampled each call → user), the reply context, the length constraint (set per-composition), and the intent.
+  - Bonus: a stable system block is **cacheable** — a real latency/cost win later for a tool firing many short calls per session. Getting the boundary right today keeps that option open; a sloppy boundary forfeits it.
+- **XML-style tags delimit every block** (e.g. `<style_guide>…</style_guide>`). Models respect explicit open/close boundaries far more reliably than ALL-CAPS headers, and the benefit scales as the prompt grows. Replaces the current caps headers and the literal `===USER===` marker (which becomes a real message-role split).
+- **Two example blocks, not three:**
+  - `<aspirational_examples>` — the starred items. Instruction: _"the user at their best; the bar to reach for."_
+  - `<voice_examples>` — the sampled curated/archive pool. Instruction (keep the current good framing): _"match tone and rhythm, not topic."_
+  - Curated-vs-archive is a _sampling-weight_ decision, not a labeling one — the model doesn't need to know a sampled example's origin. Only stars carry a distinct instruction, so only they get a distinct block.
+- **Precedence preamble, fixed in code** (this is an opinionated decision, not a user setting): exclusions are hard constraints → style guide is authoritative → aspirational examples are the bar → voice examples are range → reply context is _to react to, not imitate_ → intent is what to develop.
+- **Refinements carry a voice anchor.** _(This is the highest-impact fix.)_ The current chip / more-less / repair / tighten prompts contain only the previous draft + an instruction — no style guide, no exclusions. They're voice-blind, so each pass drifts toward generic, which is why polish passes through the original prompt felt necessary. Fix: every refinement gets a proper system block (role + output rule + style guide + exclusions). Carrying exclusions also prevents refinements from _reintroducing_ banned patterns (fewer repair round-trips).
+- **Chip and freeform refinement collapse into one template.** Once more/less becomes a single freeform instruction acting on the previous draft, it's structurally identical to a chip (instruction + previous draft + voice anchor). One refine template, two entry points (canned chip vs. typed feedback). Repair and tighten are the same template with a system-supplied instruction.
+- **Intent framing varies by input shape.** Disconnected fragments → _"these are loose thoughts; find the throughline and weave them."_ Flowing prose → _"this is a direction to develop and tighten."_ Same content, different job. A simple "does this look like a list?" heuristic is enough — don't over-engineer the classification; the user can always lean one way.
+- _(The "tweet.md" idea resolves here: the value was never a user-facing markdown export — it was clean, structured, labeled context. That's exactly what this section delivers internally. No export feature.)_
+
+### C. Draft Lifecycle (one model that resolves many small questions)
+
+Several dogfooding items were really symptoms of the tool lacking a crisp draft state model. Designing it once dissolves them.
+
+**States:** `empty` → `generating` → `active` (editable, refinable) → `committed` (on copy-to-X).
+
+- A draft is **active** from generation through any editing/refinement.
+- **Copy-to-X commits it.** Copy is the lifecycle "done" signal: it resolves any pending timed-undo, (optionally) saves the committed text to the corpus as a `shipped` example, and arms the workbench to accept new context.
+- **Two distinct meanings of "done" that must not be collapsed:** "I'm done with this draft in the tool" (a _lifecycle_ state) vs. "this text became a published tweet" (a _corpus_ event). Copy signals both, but they're modeled separately — conflating them is what would let the corpus fill with not-quite-final text.
+- **New context and Regenerate replace the active draft**, each guarded by a **timed undo (~5 seconds, the Gmail-undo-send convention)** — never a confirmation modal. Replace immediately, show an unintrusive "undo?" toast, commit if untouched.
+- **Manual edits keep the draft active and ride through the commit** — they're part of what ships.
+- **Two undo scopes coexist:** the _timed undo_ reverses a draft _replacement_ (new context / regenerate); the _one-level refinement undo_ reverses a _refinement_ (chip / freeform / polish). Different scopes, both present.
+
+### D. Security & Data Posture (enforced by `CLAUDE.md`; summarized here)
+
+- **BYO key.** The key lives only in the background service worker's reach — never injected into the X page, never in a content script, never logged, never anywhere except the LLM provider call. Stored in `chrome.storage.local` (never `.sync`); an optional in-memory `session` mode exists for cautious users.
+- **No fake at-rest encryption** (it's security theater on a public repo). Honest posture: stored unencrypted, protected by the OS account + extension sandbox; blast radius of a leak is bounded to API spend and is fully revocable; **users should set a spend cap.** Stated plainly in README and near the key field.
+- **No telemetry, no phoning home, no analytics.** One external host only.
+- **Read-only DOM contact, never writes, never auto-posts.** Output goes to the clipboard only. DOM reads anchor on the most stable hooks available and degrade gracefully.
+- **Privacy claim is precise:** "no middleman server," _not_ "nothing leaves your device" — tweet content and drafts are sent to the chosen LLM provider as prompt content. Say so.
+- **Corpus in versioned IndexedDB** (local, unsynced); config + key in `chrome.storage.local`. **Export-library-as-JSON** is the portable backup, since local data doesn't follow the user across machines.
+
+---
+
+## Sequencing Rationale
+
+Order is driven by dependency and felt-improvement-per-unit-work, not excitement. The discipline: **the polish work (bugs, the passive draft view) is what makes the tool feel rough _right now_; the ambitious features (bundles, threads) are what make it feel impressive. Ship the polish first — a rough tool with amazing features still feels rough.** Don't let later phases jump the queue because they're the fun part.
+
+Two dependency notes that fix the order:
+
+- **The direct editor (Phase 3) must precede the shipped-tweet corpus loop (Phase 4).** Until the editor exists, the user finishes drafts in X's box, so the copied text ≠ the posted text — saving it would pollute the corpus with pre-final versions during exactly the window drafts are least final. The editor makes copied ≈ posted, which makes the loop trustworthy.
+- **Prompt-assembly-v2 (Phase 1) creates the `<aspirational_examples>` block, but the Star tier (Phase 5) populates it.** The block ships present-but-empty and lights up when stars exist — same seam pattern as the deferred embedding field.
+
+---
+
+## Phase 1 — Prompt Assembly v2
+
+_Self-contained, sits behind the existing assembly seam, and improves **every generation and every refinement immediately** — including fixing the voice-blind refinement drift. Highest leverage per unit of work; depends on nothing else._
+
+- Restructure all templates per **Core Concept B**: XML-tagged blocks, system/user split (real message roles, dropping the literal `===USER===` marker), precedence preamble in code, output rule hoisted into system.
+- Split the single examples block into `<aspirational_examples>` + `<voice_examples>` with their distinct instructions. The aspirational block may be empty until Phase 5 — wire it to `favorite: true`.
+- **Give refinements a voice anchor** (style guide + exclusions in every refine/repair/tighten prompt). This is the single most impactful change in the phase.
+- Collapse chip + freeform refinement into one refine template, two entry points. (The _UI_ swap of more/less → freeform box lives in Phase 3; coordinate — the template change here anticipates it.)
+- Implement intent-shape framing (fragments vs. prose) with a simple heuristic.
+- Keep content slots editable in the template UI; precedence logic stays in code. Everything remains visible through the existing prompt inspector.
+- **Open question to settle at build:** confirm whether intent-shape framing should be two selectable sub-templates or a single template with a variable framing line.
+
+## Phase 2 — Bug Fixes (trust & polish)
+
+_Contained, and they're what make the tool feel unfinished today — especially important for a publicly-built, open-source project._
+
+- **Overlay-robustness cluster (treat as one root fix).** The selection/highlight overlay persists over X's modals (e.g. the reply pop-up), and behaves inconsistently inside X lists and on `/status/` thread URLs. Root cause is shared: the overlay doesn't track X's navigation and modal states. Lean on X's own state signals rather than tracking position independently; explore hide / send-backward behavior when a modal opens. Fixing piecemeal will whack-a-mole.
+- **X-ing out of the reply-context highlight should clear context** — identical behavior to clicking the trashcan icon.
+- **"Show me" CTA wiring.** When saving a tweet that's already in the corpus, the "already saved → Show me" CTA currently does nothing; it should scroll the existing item into view in the library list and flash/highlight it.
+- **Navigate-away-from-X overlay.** When the panel is open but the user leaves X, show a translucent "go back to X" overlay. Minor, and related to the overlay state-awareness work above.
+
+## Phase 3 — Workbench + Draft Lifecycle
+
+_The biggest felt improvement. Dogfooding revealed the draft view is too passive — the user wants to work a draft like clay, not regenerate it. Builds Core Concept C._
+
+- **Direct editing in the draft view** _(the keystone — several items lean on it)_: type, delete, reformat in place. **Hand edits bypass exclusions** ("your text is ground truth — you do you"); only _model_ output (a subsequent chip/freeform/polish pass on the edited text) gets re-checked.
+- **Implement the draft state model** (empty/generating/active/committed) and **timed undo (~5s)** for replacements; keep the separate one-level refinement undo.
+- **Copy-to-X commits the draft** (the lifecycle trigger; sets up Phase 4).
+- **≤280 toggle on an existing draft = refit, not regenerate** — preserve the draft's content, adjust only the length to the new requirement; give it a distinct UI label so it never reads as "start over."
+- **Polish-pass button** — feed the current draft back for a tightening/refinement pass. (Emerged organically in dogfooding — strong signal it's real.)
+- **Freeform refinement box replaces the more/less boxes** (chips stay — they earned their keep). **Paste-a-draft folds into direct editing** — pasting text into the editable draft and refining it _is_ the "dump a finished draft" mode; no separate mode switch needed.
+- **"Longer" chip** to pair with "Shorter." (Trivial — a seeded chip record.)
+- **Keyboard shortcut to copy the draft.**
+- **Bulleted input** in the prompt box (real bullets, not typed asterisks) feeding the intent-shape framing from Phase 1.
+- **New context clears the active draft**, guarded by the timed undo.
+- **Small add — colon-usage anti-AI rule.** New toggleable structural exclusion for AI-ish colon constructions ("The result:", "The real leverage:"). **Default off** and **narrow** (mid-sentence colon followed by a clause — _not_ times, ratios, or lists), because colons are common in legitimate writing.
+
+## Phase 4 — Shipped-Tweet Corpus Loop
+
+_Sits directly on the Phase 3 lifecycle. The self-reinforcing engine: the tool gets more like-you the more you use it._
+
+- On copy-commit, **save the committed text to the corpus as a `source: shipped` voice example.** A setting (default on) governs this, with a per-draft override — not every drafted tweet should shape future voice.
+- This is **example accumulation, not behavioral mutation** — robust and fully transparent (every example is visible, editable, deletable). It is explicitly _not_ automatic learning (see _Not Building_).
+- Dedupe per Core Concept A (a shipped tweet later handpicked is the same item).
+- **Bundle auto-filing** (a shipped post auto-files to its source bundle) depends on Phase 6 and is additive — the loop works fully without it.
+- _Optional, later:_ capture the draft→shipped diff as data that could one day power _ratified_ style-guide suggestions ("you tend to cut hedging") — offered for confirmation, never applied silently.
+
+## Phase 5 — Star Tier + Example-Streams Sampling
+
+*Lights up the aspirational block from Phase 1 and completes the voice model. Works on `manual` + `shipped` immediately; the curated/archive *balance* only becomes meaningful once an archive exists (Phase 7).*
+
+- Add `favorite: boolean` to `LibraryItem`, orthogonal to `source`.
+- **Star toggle** on any `manual` or `shipped` item; a **visible star count** somewhere quiet, to encourage a small, curated set (visibility is the real control — resist building favorite-ranking or bulk-starring tools, which erode the very property that makes stars useful).
+- **Sampling:** guaranteed-on-top fixed N starred items (own pool, shuffled, additive to `poolSize`), per Core Concept A.
+- Wire the **curated/archive balance slider** (built but disabled since original v1) to activate alongside Phase 7.
+- Enforce the **starring boundary + promotion-via-X-search + dedupe** from Core Concept A.
+- _Parked micro-concern:_ if a large set of shipped stars ever drowns the oldest deliberate handpicks _within_ the starred pool, add a small guarantee for handpicked stars — only if actually felt.
+
+## Phase 6 — Context Bundles
+
+_The most differentiated near-term bet, and part of the wedge. Builds on the `selectExamples` seam._
+
+- Let the user **multi-select specific tweets as the primary seed** for a post/reply, instead of sampling the general corpus. Canonical example: a "day X" series, where the new entry should read like its siblings, not like the user's average tweet.
+- **Saveable, recallable bundles.** A bundle is, architecturally, a constrained `selectExamples` source.
+- **Auto-update:** a new post in a series auto-files into its bundle after shipping (ties to the Phase 4 loop) — the bundle becomes a living, self-reinforcing template for a format.
+- This is essentially **user-controlled manual retrieval** — cheaper, more predictable, and more transparent than automatic semantic retrieval, and it may reduce or remove the need for it. Controllable user-curated voice targeting is the opposite of the opaque tools we're differentiating against.
+
+## Phase 7 — Archive Import + Screening (the onboarding on-ramp)
+
+_Reframed from "eventually" to a priority: it's what makes the tool valuable on day one for a new user. Upload archive → instant corpus → drafts that already sound like you. The difference between a tool people try and a tool people keep._
+
+- **Accept the X archive `.zip`**, locate and parse the relevant files inside (`tweets.js` / parts, `account.js` for the handle) — feel as much like a simple file upload as possible; don't make the user dig out a specific file.
+- Apply the **quality-screening predicates** (built as pure functions in the original v1; activated here): emoji-only, single-word, below-min-char, dedup, exclude pure retweets, etc.
+- Capture **engagement/recency metadata** from the archive (`favorite_count`, `retweet_count`, `created_at`, reply metadata) — free and non-fragile. _Caveat: replies-received counts and impressions are generally not in the archive; likes, reposts, and age are._
+- Store as `source: archive`, `embedding: null`. **Activates the curated/archive balance slider** (default 70/30).
+- **Auto-generate a style-guide draft** from a sample of the archive as an onboarding beat. **Critical: confirm-don't-assert.** Present it as an editable draft the user ratifies ("does this sound right?"), never as asserted fact. A subtly-wrong auto-asserted style guide annoys the user _and_ silently poisons every subsequent generation. Same generate-then-confirm discipline as post/reply classification.
+- _The onboarding first-run flow itself is a separate, holistic design for later._ This phase delivers the **capability** as a settings feature; it does not specify the first-run sequence.
+
+## Phase 8 — Multi-LLM BYOK
+
+_Cheap, low-maintenance, widens the addressable audience, and table stakes for a BYOK tool._
+
+- A **provider-adapter interface** supporting the major LLMs (in addition to Anthropic) via BYO key.
+- **Hidden unlock:** Anthropic offers no embeddings endpoint (one reason retrieval was deferred); other providers do. So this work quietly de-risks Phase 9 — multi-LLM and semantic retrieval are secretly entangled.
+
+## Phase 9 — Semantic Retrieval _(conditional)_
+
+_Build only if sampling + bundles prove too manual in practice. Bundles (Phase 6) may largely obviate it._
+
+- Auto-select the most relevant voice examples via embeddings instead of shuffled sampling.
+- Embeddings via **local in-browser model (Transformers.js)** or a provider endpoint (available once Phase 8 ships). Local keeps the privacy story intact at the cost of a one-time model download.
+- The nullable `embedding` field, the `selectExamples` seam, and versioned IndexedDB were all reserved for exactly this — it bolts in without a refactor.
+
+## Phase 10 — First-Class Thread Handling
+
+_A real project with its own milestone, not a quick win. The `posts[]` draft shape was built from day one specifically so this bolts on without a refactor._
+
+- Threads don't fit the post/reply split — they get their own mode (toggle single-post ↔ thread).
+- User sets a **min/max post count** that shapes the output (tight 1–3 vs. stretched 7–9); the model won't obey perfectly, so validate the count afterward and nudge if wildly off.
+- The two output rules **interact, applied per post:** ≤280 mode caps each post at 280; uncapped mode soft-caps each post (~1,000 chars) to prevent a runaway.
+- **Output as ordered cards, each with its own copy button** (optional numbering toggle) — mirrors how X's native thread composer works, one tweet at a time. No clunky mega-dump.
+
+## Phase 11 — Media / Quote-Tweet Understanding
+
+_The most likely "I really wish it could see that" moment in real use, but genuinely hard._
+
+- Give the tool a semantic understanding of image and quote-tweet content as reply context. Today, context capture is **text-only** (a known limitation).
+- Hard parts: pulling media off X's DOM and passing it through (multimodal models can accept images, so the model side is feasible; the extraction side is the work).
+
+---
+
+## What We're Deliberately Not Building (and why)
+
+_Recorded so good-sounding bad ideas don't quietly return._
+
+- **Multi-platform expansion (LinkedIn / TikTok / Instagram).** Each is a separate, independently-breaking, fragile DOM integration to maintain forever — untenable for a solo builder. Voice doesn't transfer across registers (LinkedIn-earnest ≠ X-dry ≠ TikTok-captions), so the corpus story multiplies too. TikTok is video-first; text composition isn't even the point there. **Depth on one platform is the moat; breadth is surface-area-as-liability.** Going all-in on delighting the X user beats being "good enough" everywhere.
+- **Managed "no-key-needed" paid tier (flat monthly).** Flat fee against metered, uncapped LLM usage is a gross-margin trap (and the power users torch it). It also adds payments, fraud surface, and support, and — fatally — destroys the "no middleman server" privacy story by making _us_ the middleman. _Decision: not commercializing._ (If that ever changes: usage-plus-margin or credits, never flat-rate.)
+- **Agentic reply queue (auto-find threads, auto-draft, schedule at "natural" times).** Functionally this is sophisticated inauthentic-engagement tooling; platforms actively police it, and the "randomized natural-feeling times" detail exists specifically to evade detection — which is the tell. It corrodes the anti-slop trust that _is_ our core asset (it's the slop, one level up the stack). Approval also isn't actually cheap for a taste-driven user, and candidate-finding is a separate, harder product. The bottleneck doesn't move where the volume framing assumes.
+- **Automatic behavioral learning (mutating model behavior from edit patterns).** We can't fine-tune frozen API models anyway, so "learning" would mean inferring patterns from edits and feeding them back — but the signal is treacherously noisy (why _did_ you change that?), it overfits to recent edits and drifts the voice, and it's the _least transparent_ feature imaginable (a system silently changing behavior), which fights the wedge. **The good version is Phase 4** (accumulate shipped tweets as examples) plus optional _ratified_ style-guide suggestions — never silent mutation.
+
+---
+
+## Open Decisions / Future Holistic Design
+
+_Small or deferred, surfaced so they're not lost._
+
+- **Onboarding first-run experience** — designed holistically later. Capabilities (archive import, style-guide generation) exist as settings features in the meantime.
+- **Intent-shape framing implementation** — two selectable sub-templates vs. one template with a variable line (settle at Phase 1 build).
+- **Within-curated handpick protection** — only if drowning is actually felt after Phase 5.
+- **Verify the transparency features actually shipped** — the prompt inspector, the editable prompt-template UI, and export-as-JSON are believed present but untested end-to-end. They _are_ the no-snake-oil wedge, so confirm they work, not just that the UI gestures at them.
