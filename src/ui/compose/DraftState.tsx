@@ -2,7 +2,7 @@ import type { KeyboardEvent } from 'react';
 import type { ChipPreset } from '../../types';
 import type { Span } from '../../lib/exclusion';
 import { X_HARD_LIMIT } from '../../lib/counting';
-import { renderWithHighlights } from '../highlights';
+import { DraftEditor } from './DraftEditor';
 import { LastPromptInspector } from '../LastPromptInspector';
 import {
   IcCheck,
@@ -29,6 +29,10 @@ export interface DraftView {
   text: string;
   residualViolations: Span[];
   refined: boolean;
+  /** The user typed in the draft — their text is ground truth now. */
+  handEdited: boolean;
+  /** Lifecycle phase is `committed` (copied, no edits since). */
+  committed: boolean;
   count: number;
   over: boolean;
   copied: boolean;
@@ -60,6 +64,7 @@ interface DraftStateProps {
   expanded: boolean;
   setExpanded: (v: boolean) => void;
   error: ErrorKind | null;
+  onEditDraft: (text: string) => void;
   onRegenerate: () => void;
   onUndo: () => void;
   onCopy: () => void;
@@ -79,6 +84,7 @@ export function DraftState({
   expanded,
   setExpanded,
   error,
+  onEditDraft,
   onRegenerate,
   onUndo,
   onCopy,
@@ -171,6 +177,16 @@ export function DraftState({
         <div className="draft-head">
           <span className="eyebrow">Your draft</span>
           {draft.refined && !busy && <span className="badge reply">refined</span>}
+          {draft.handEdited && !busy && (
+            <span className="badge" title="You've edited this draft — your text is kept as-is">
+              edited
+            </span>
+          )}
+          {draft.committed && !busy && (
+            <span className="badge ok" title="Copied to X — edits after this re-open the draft">
+              copied
+            </span>
+          )}
           <span className="head-spacer" />
           <button
             type="button"
@@ -208,9 +224,12 @@ export function DraftState({
         ) : (
           <>
             <div className="draft-body">
-              <p className="draft-text" key={draft.text}>
-                {renderWithHighlights(draft.text, draft.residualViolations)}
-              </p>
+              <DraftEditor
+                text={draft.text}
+                violations={draft.residualViolations}
+                disabled={busy}
+                onEdit={onEditDraft}
+              />
             </div>
             {draft.over && (
               <div className="draft-warn">
@@ -224,14 +243,20 @@ export function DraftState({
               </div>
             )}
             <div className="draft-actions">
-              <button type="button" className="btn primary lg" onClick={onCopy} disabled={busy}>
+              <button
+                type="button"
+                className="btn primary lg"
+                onClick={onCopy}
+                disabled={busy}
+                title="Copy the draft — ⇧⌘↵ (Ctrl+Shift+Enter)"
+              >
                 {draft.copied ? (
                   <>
                     <IcCheck /> Copied
                   </>
                 ) : (
                   <>
-                    <IcCopy /> Copy to X
+                    <IcCopy /> Copy to X <span className="kbd kbd-on">⇧⌘↵</span>
                   </>
                 )}
               </button>

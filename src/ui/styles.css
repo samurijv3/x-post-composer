@@ -2152,3 +2152,58 @@ code {
     flex-direction: column;
   }
 }
+
+/* Draft editor — the directly-editable draft surface. The textarea
+   carries the real text; the backdrop (only while residual violations
+   exist) renders the highlight marks behind the glyphs. Both layers
+   MUST share exact text metrics or the marks drift off the words. */
+.draft-editor {
+  position: relative;
+}
+.draft-editor-layer {
+  font: inherit;
+  font-size: var(--fs-lg);
+  line-height: 1.66;
+  letter-spacing: -0.005em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.draft-editor-backdrop {
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  pointer-events: none;
+}
+.draft-editor-backdrop mark {
+  color: transparent;
+  border-radius: 3px;
+}
+.draft-editor-input {
+  /* fully override the global textarea chrome — the editor reads as
+     the draft itself, not as a form field */
+  position: relative;
+  display: block;
+  width: 100%;
+  background: transparent;
+  color: var(--text);
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
+  resize: none;
+  overflow: hidden;
+}
+[data-theme='dark'] .draft-editor-input {
+  background: transparent;
+}
+.draft-editor-input:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.badge.ok {
+  background: color-mix(in oklab, var(--ok) 14%, transparent);
+  color: var(--ok);
+}

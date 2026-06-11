@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
   consumeAutoReplyFlag,
   countItems,
@@ -13,7 +13,8 @@ import {
 } from '../storage';
 import { isMessageOfType, onNotice, sendToBackground, type BackgroundReply } from '../messaging';
 import { weightedLength, X_HARD_LIMIT } from '../lib/counting';
-import { mergeReplyContextSelection } from '../lib/replyContext';
+import { isSameTweet, mergeReplyContextSelection } from '../lib/replyContext';
+import { emitDraftCommit, INITIAL_DRAFT_LIFECYCLE, reduceDraftLifecycle } from '../lib/draft';
 import type {
   ChipPreset,
   GenerationRequest,
@@ -22,7 +23,6 @@ import type {
   ReplyContext,
   Settings,
 } from '../types';
-import type { Span } from '../lib/exclusion';
 import type { ToastData } from './Toast';
 import { PreDraftState } from './compose/PreDraftState';
 import { DraftState, type DraftView, type RefineControls } from './compose/DraftState';
@@ -138,14 +138,12 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
 
   // ---- composition state ----
   const [bullets, setBullets] = useState<string>('');
-  const [phase, setPhase] = useState<'idle' | 'drafting' | 'done'>('idle');
-  const [draft, setDraft] = useState<string>('');
-  const [residualViolations, setResidualViolations] = useState<Span[]>([]);
-  const [wasRepaired, setWasRepaired] = useState<boolean>(false);
-  const [prevDraft, setPrevDraft] = useState<string | null>(null);
-  const [prevResidual, setPrevResidual] = useState<Span[]>([]);
-  const [prevRepaired, setPrevRepaired] = useState<boolean>(false);
-  const [refined, setRefined] = useState<boolean>(false);
+  // The draft lifecycle (empty → generating → active → committed) is a
+  // pure reducer in lib/draft — every consequential transition,
+  // including stale-request gating and both undo scopes, is decided
+  // (and tested) there. This component only dispatches events and
+  // renders the result.
+  const [lifecycle, dispatchDraft] = useReducer(reduceDraftLifecycle, INITIAL_DRAFT_LIFECYCLE);
   const [expanded, setExpanded] = useState<boolean>(false);
   const [moreText, setMoreText] = useState<string>('');
   const [lessText, setLessText] = useState<string>('');
@@ -154,12 +152,64 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   const [chipCounts, setChipCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState<ErrorKind | null>(null);
 
-  // Latest-call-wins coordination.
+  // Latest-call-wins coordination (the reducer's pendingSeq is the
+  // authoritative gate; this ref numbers the requests and lets the
+  // error paths skip stale toasts).
   const requestSeq = useRef<number>(0);
+  // Render-fresh mirrors for async handlers and []-deps effects.
+  const lifecycleRef = useRef(lifecycle);
+  lifecycleRef.current = lifecycle;
+  const replyContextRef = useRef(replyContext);
+  replyContextRef.current = replyContext;
 
   const hasContext = replyContext !== null;
-  const hasDraft = phase !== 'idle';
-  const busy = phase === 'drafting';
+  const content = lifecycle.content;
+  const draft = content?.text ?? '';
+  const hasDraft = lifecycle.phase !== 'empty';
+  const busy = lifecycle.phase === 'generating';
+
+  // ---- timed undo (replacement scope, ~5 s Gmail convention) ----
+  // The reducer holds the snapshot; this is the only timer. A panel
+  // close during the window means the replacement stands (in-panel
+  // state, deliberately unpersisted).
+  const REPLACEMENT_UNDO_MS = 5000;
+  useEffect(() => {
+    if (lifecycle.replaced === null) return;
+    const t = window.setTimeout(
+      () => dispatchDraft({ type: 'replacement-expired' }),
+      REPLACEMENT_UNDO_MS,
+    );
+    return () => window.clearTimeout(t);
+  }, [lifecycle.replaced]);
+
+  const fireReplacementToast = useCallback(
+    (message: string) => {
+      onToast(message, {
+        label: 'Undo',
+        onClick: () => dispatchDraft({ type: 'replacement-undone' }),
+      });
+    },
+    [onToast],
+  );
+
+  // ---- new context clears the active draft (guarded by timed undo) ----
+  // "New context" = a reply-context lock arriving that is a different
+  // tweet from the immediately-previous lock (same-tweet re-deliveries
+  // are enrichments, not new context). Clearing the lock is NOT new
+  // context — the draft stays.
+  const prevLockRef = useRef<ReplyContext | null | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevLockRef.current;
+    prevLockRef.current = replyContext;
+    if (prev === undefined) return; // initial subscription fire
+    if (replyContext === null) return; // cleared ≠ new
+    if (prev !== null && isSameTweet(prev, replyContext)) return; // enrichment
+    const lc = lifecycleRef.current;
+    if (lc.content === null && lc.phase !== 'generating') return; // nothing to clear
+    const hadDraft = lc.content !== null;
+    dispatchDraft({ type: 'new-context' });
+    if (hadDraft) fireReplacementToast('Draft cleared — new reply context');
+  }, [replyContext, fireReplacementToast]);
 
   // ---- handlers ----
   async function toggleReplyContextMode(): Promise<void> {
@@ -171,12 +221,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
 
   async function generate(opts: { isRegenerate: boolean }): Promise<void> {
     if (!opts.isRegenerate && bullets.trim() === '') return;
-    setPhase('drafting');
     setError(null);
-    setRefined(false);
-    setPrevDraft(null);
-    setPrevResidual([]);
-    setPrevRepaired(false);
     setExpanded(false);
     setChipCounts({});
     if (!opts.isRegenerate) {
@@ -184,6 +229,10 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
       setLessText('');
     }
     const myId = ++requestSeq.current;
+    // Whether this generate will REPLACE a visible draft decides the
+    // timed-undo toast when it lands.
+    const replacesDraft = lifecycleRef.current.content !== null;
+    dispatchDraft({ type: 'generation-started', seq: myId });
     const request: GenerationRequest = {
       mode: hasContext ? 'reply' : 'post',
       bullets,
@@ -196,36 +245,37 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
         Extract<BackgroundReply, { type: 'bg:generation-result' }>
       >({ type: 'panel:generate', request });
       if (myId !== requestSeq.current) return;
-      applyResult(reply.result);
+      applyResult(reply.result, myId, replacesDraft);
       void refreshLibraryCount();
     } catch (err) {
       if (myId !== requestSeq.current) return;
-      setPhase('done');
+      dispatchDraft({ type: 'generation-failed', seq: myId });
       setError('other');
       onToast(err instanceof Error ? err.message : 'Generation failed.');
     }
   }
 
-  function applyResult(result: GenerationResult): void {
+  function applyResult(result: GenerationResult, seq: number, replacesDraft: boolean): void {
     if (!result.ok) {
-      setPhase('done');
+      dispatchDraft({ type: 'generation-failed', seq });
       setError(result.kind);
       return;
     }
     setError(null);
-    const text = result.draft.posts[0]?.text ?? '';
-    setDraft(text);
-    setResidualViolations(result.residualViolations);
-    setWasRepaired(result.wasRepaired);
-    setPhase('done');
+    dispatchDraft({
+      type: 'generation-succeeded',
+      seq,
+      draft: {
+        text: result.draft.posts[0]?.text ?? '',
+        residualViolations: result.residualViolations,
+        wasRepaired: result.wasRepaired,
+      },
+    });
+    if (replacesDraft) fireReplacementToast('Draft replaced');
   }
 
   async function applyChip(chip: ChipPreset): Promise<void> {
-    if (busy || draft === '') return;
-    setPrevDraft(draft);
-    setPrevResidual(residualViolations);
-    setPrevRepaired(wasRepaired);
-    setRefined(true);
+    if (busy || content === null) return;
     setFlash(chip.id);
     const nextCount = (chipCounts[chip.id] ?? 0) + 1;
     setChipCounts((c) => ({ ...c, [chip.id]: nextCount }));
@@ -237,22 +287,21 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   }
 
   async function applySteer(): Promise<void> {
-    if (busy || draft === '') return;
+    if (busy || content === null) return;
     if (moreText.trim() === '' && lessText.trim() === '') return;
-    setPrevDraft(draft);
-    setPrevResidual(residualViolations);
-    setPrevRepaired(wasRepaired);
-    setRefined(true);
     setChipCounts({});
     await runRefine({ type: 'moreless', more: moreText, less: lessText });
   }
 
   async function runRefine(kind: RefineRequest['kind']): Promise<void> {
-    setPhase('drafting');
     const myId = ++requestSeq.current;
+    // Refine reshapes the CURRENT text — hand edits included. Only the
+    // model's output gets re-checked; the user's words went in as-is.
+    const previousDraftText = lifecycleRef.current.content?.text ?? '';
+    dispatchDraft({ type: 'refine-started', seq: myId });
     const request: RefineRequest = {
       mode: hasContext ? 'reply' : 'post',
-      previousDraftText: draft,
+      previousDraftText,
       charCap,
       kind,
     };
@@ -261,44 +310,66 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
         Extract<BackgroundReply, { type: 'bg:generation-result' }>
       >({ type: 'panel:refine', request });
       if (myId !== requestSeq.current) return;
-      applyResult(reply.result);
+      applyResult(reply.result, myId, false);
     } catch (err) {
       if (myId !== requestSeq.current) return;
-      setPhase('done');
+      dispatchDraft({ type: 'generation-failed', seq: myId });
       setError('other');
       onToast(err instanceof Error ? err.message : 'Refine failed.');
     }
   }
 
   function undo(): void {
-    if (prevDraft === null) return;
-    setDraft(prevDraft);
-    setResidualViolations(prevResidual);
-    setWasRepaired(prevRepaired);
-    setPrevDraft(null);
-    setRefined(false);
+    dispatchDraft({ type: 'refine-undone' });
     setChipCounts({});
   }
 
-  async function copy(): Promise<void> {
+  function editDraft(text: string): void {
+    dispatchDraft({ type: 'hand-edited', text });
+  }
+
+  const copy = useCallback(async (): Promise<void> => {
+    const current = lifecycleRef.current;
+    if (current.content === null || current.phase === 'generating') return;
     try {
-      await navigator.clipboard.writeText(draft);
+      await navigator.clipboard.writeText(current.content.text);
       setCopied(true);
+      // Copy signals two separate facts: the lifecycle state flips to
+      // committed (resolving the timed undo), and the corpus EVENT
+      // fires — nothing listens in v1; Phase 4's shipped-tweet loop
+      // subscribes via onDraftCommit.
+      dispatchDraft({ type: 'committed' });
+      emitDraftCommit({
+        text: current.content.text,
+        mode: replyContextRef.current !== null ? 'reply' : 'post',
+        handEdited: current.content.handEdited,
+        committedAt: Date.now(),
+      });
       onToast('Copied to clipboard');
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
       onToast('Could not copy.');
     }
-  }
+  }, [onToast]);
+
+  // Panel-scoped copy shortcut: ⇧⌘↵ / Ctrl+Shift+Enter. Chosen to pair
+  // with ⌘↵ (generate / apply steer) and to avoid Chrome's own
+  // bindings; plain ⌘C stays untouched for normal text copying.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent): void {
+      if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey) || !e.shiftKey) return;
+      e.preventDefault();
+      void copy();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [copy]);
 
   function discard(): void {
-    setPhase('idle');
-    setDraft('');
+    dispatchDraft({ type: 'discarded' });
     setBullets('');
-    setPrevDraft(null);
     setMoreText('');
     setLessText('');
-    setRefined(false);
     setExpanded(false);
     setChipCounts({});
     setError(null);
@@ -307,17 +378,18 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
 
   function retry(): void {
     setError(null);
-    void generate({ isRegenerate: hasDraft });
+    void generate({ isRegenerate: lifecycleRef.current.content !== null });
   }
 
   function genKey(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    // Shift+mod+Enter is the copy shortcut (window-level) — let it pass.
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
       e.preventDefault();
       if (!busy && bullets.trim() !== '') void generate({ isRegenerate: false });
     }
   }
   function steerKey(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
       e.preventDefault();
       void applySteer();
     }
@@ -348,12 +420,14 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   };
   const draftView: DraftView = {
     text: draft,
-    residualViolations,
-    refined,
+    residualViolations: content?.residualViolations ?? [],
+    refined: lifecycle.refineSnapshot !== null,
+    handEdited: content?.handEdited ?? false,
+    committed: lifecycle.phase === 'committed',
     count,
     over,
     copied,
-    canUndo: prevDraft !== null,
+    canUndo: lifecycle.refineSnapshot !== null,
   };
   const refineControls: RefineControls = {
     chips,
@@ -393,6 +467,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
           expanded={expanded}
           setExpanded={setExpanded}
           error={error}
+          onEditDraft={editDraft}
           onRegenerate={() => void generate({ isRegenerate: true })}
           onUndo={undo}
           onCopy={() => void copy()}
