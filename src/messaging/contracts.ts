@@ -41,7 +41,13 @@ export type PanelToBackground =
   | { type: 'panel:refine'; request: RefineRequest }
   // Ask the background to coordinate a reply-context capture from the
   // active x.com tab's open composer.
-  | { type: 'panel:capture-reply-context' };
+  | { type: 'panel:capture-reply-context' }
+  // Initial fetch of "is the active tab on X" on panel mount; updates
+  // arrive as bg:active-tab-state notices afterwards.
+  | { type: 'panel:check-active-tab' }
+  // The off-X overlay's "Open x.com" button: focus an existing X tab
+  // or open a fresh one. Explicit user gesture only.
+  | { type: 'panel:open-x-tab' };
 
 /** Requests a content script sends to the background worker. */
 export type ContentToBackground =
@@ -91,6 +97,10 @@ export type BackgroundReply =
   | { type: 'bg:panel-state'; isOpen: boolean }
   | { type: 'bg:generation-result'; result: GenerationResult }
   | { type: 'bg:reply-context-result'; ok: boolean; context?: ReplyContext; message?: string }
+  // Reply to `panel:check-active-tab` and `panel:open-x-tab` AND the
+  // notice the background broadcasts when the active tab's on-X state
+  // changes (tab switch / navigation). Same shape on purpose.
+  | { type: 'bg:active-tab-state'; onX: boolean }
   | { type: 'bg:error'; message: string };
 
 /** Messages the background sends TO a content script via
@@ -140,7 +150,10 @@ export type BackgroundNotice =
   | {
       type: 'bg:reply-context-error';
       kind: 'truncated' | 'media-only' | 'unknown';
-    };
+    }
+  // Pushed (panels-open only) when the active tab switches on/off X —
+  // drives the panel's "go back to X" overlay state.
+  | { type: 'bg:active-tab-state'; onX: boolean };
 
 /** Every message shape that flows through `chrome.runtime`. */
 export type AnyMessage =
@@ -165,6 +178,7 @@ export function isBackgroundNotice(message: unknown): message is BackgroundNotic
     isMessageOfType(message, 'bg:library-changed') ||
     isMessageOfType(message, 'bg:auto-reply-capture') ||
     isMessageOfType(message, 'bg:save-result') ||
-    isMessageOfType(message, 'bg:reply-context-error')
+    isMessageOfType(message, 'bg:reply-context-error') ||
+    isMessageOfType(message, 'bg:active-tab-state')
   );
 }

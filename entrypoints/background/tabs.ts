@@ -1,17 +1,51 @@
 /**
  * Talking to x.com tabs: broadcasting state pushes to every tab's
- * content script, and the request/response round-trip that asks the
- * active tab to read the open composer's reply context.
+ * content script, the request/response round-trip that asks the
+ * active tab to read the open composer's reply context, and the
+ * active-tab-on-X probe behind the panel's "go back to X" state.
  */
 import type { BackgroundReply, BackgroundToContent } from '../../src/messaging';
+import { isXPageUrl } from '../../src/lib/url';
 import type { ReplyContext } from '../../src/types';
 
+/** Match-pattern twin of `isXPageUrl` (src/lib/url) — keep in sync. */
 export const X_HOSTS = [
   'https://x.com/*',
   'https://www.x.com/*',
   'https://twitter.com/*',
   'https://www.twitter.com/*',
 ];
+
+/**
+ * Whether the focused window's active tab is on X. Needs NO new
+ * permissions: without the "tabs" permission, chrome populates
+ * `tab.url` only for hosts in host_permissions (ours: X), so for any
+ * other page the url is absent and `isXPageUrl(undefined)` is false —
+ * exactly the answer we want, without ever seeing non-X URLs.
+ */
+export async function isActiveTabOnX(): Promise<boolean> {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  return isXPageUrl(tab?.url);
+}
+
+/**
+ * Focus an existing X tab (preferring the current window) or open a
+ * fresh one. Behind the off-X overlay's "Open x.com" button — runs only
+ * on that explicit user click.
+ */
+export async function focusOrOpenXTab(): Promise<void> {
+  const candidates = await chrome.tabs.query({ url: X_HOSTS });
+  const current = await chrome.windows.getLastFocused();
+  const target = candidates.find((t) => t.windowId === current.id) ?? candidates[0];
+  if (target?.id !== undefined) {
+    await chrome.tabs.update(target.id, { active: true });
+    if (target.windowId !== undefined && target.windowId !== current.id) {
+      await chrome.windows.update(target.windowId, { focused: true });
+    }
+    return;
+  }
+  await chrome.tabs.create({ url: 'https://x.com/home' });
+}
 
 /** Fire-and-forget a message to every x.com tab that has our content script. */
 export async function pushToTabs(message: BackgroundToContent): Promise<void> {

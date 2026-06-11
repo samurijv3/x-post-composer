@@ -15,7 +15,7 @@ import { OptionsPage } from './OptionsPage';
 import { SaveResultBanner, SAVE_META, type SaveResult } from './SaveResultBanner';
 import { ReplyContextErrorBanner, type ReplyContextError } from './ReplyContextErrorBanner';
 import { getSettings } from '../storage';
-import { isMessageOfType, onNotice } from '../messaging';
+import { isMessageOfType, onNotice, sendToBackground, type BackgroundReply } from '../messaging';
 import './styles.css';
 
 type Screen = 'compose' | 'voice';
@@ -72,6 +72,43 @@ function PanelShell() {
   useEffect(() => {
     void getSettings().then((s) => setHandle(s.handle));
   }, []);
+
+  // ---- "go back to X" overlay state ----
+  // null = unknown (nothing shows until the background answers). The
+  // background pushes bg:active-tab-state on tab switch/navigation
+  // while a panel is open; we fetch once on mount to seed it.
+  const [onX, setOnX] = useState<boolean | null>(null);
+  // "Compose anyway" hides the overlay for this off-X stint; returning
+  // to X re-arms it so the next stray navigation shows it again.
+  const [offXDismissed, setOffXDismissed] = useState<boolean>(false);
+  useEffect(() => {
+    let cancelled = false;
+    sendToBackground<Extract<BackgroundReply, { type: 'bg:active-tab-state' }>>({
+      type: 'panel:check-active-tab',
+    })
+      .then((reply) => {
+        if (!cancelled) setOnX(reply.onX);
+      })
+      .catch(() => {
+        // Background unreachable — leave state unknown; show nothing.
+      });
+    const unsub = onNotice((notice) => {
+      if (isMessageOfType(notice, 'bg:active-tab-state')) setOnX(notice.onX);
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, []);
+  useEffect(() => {
+    if (onX) setOffXDismissed(false);
+  }, [onX]);
+
+  function openX(): void {
+    sendToBackground({ type: 'panel:open-x-tab' }).catch(() => {
+      // Couldn't reach the background; the overlay simply stays.
+    });
+  }
 
   // Save-result notice: hoist into the floating banner. Replaces the
   // previous in-Voice rendering so the banner is visible from any
@@ -162,6 +199,25 @@ function PanelShell() {
         {screen === 'compose' && <ComposeScreen onToast={fireToast} onOpenOptions={openOptions} />}
         {screen === 'voice' && <VoiceScreen onToast={fireToast} flashRow={flashRow} />}
       </div>
+      {onX === false && !offXDismissed && (
+        <div className="offx-overlay" role="status">
+          <div className="offx-card">
+            <div className="offx-title">You’ve left X</div>
+            <p className="help" style={{ margin: '4px 0 12px' }}>
+              Margin works alongside an x.com tab — capturing tweets and pulling in reply context
+              need you there.
+            </p>
+            <div className="offx-actions">
+              <button type="button" className="btn primary sm" onClick={openX}>
+                Open x.com
+              </button>
+              <button type="button" className="btn ghost sm" onClick={() => setOffXDismissed(true)}>
+                Compose anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <Toast toast={toast} />
     </div>
   );

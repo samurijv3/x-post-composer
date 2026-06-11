@@ -74,3 +74,9 @@ New setting = field + default in `types/settings.ts` (merge handles old installs
 ## 9. Panel-open overlay gating (cross-cutting)
 
 Panel mounts → `margin-panel` port + 20 s heartbeat (+ reconnect) → background `openPanelPorts` 0↔n transitions push `bg:panel-state` → content mirrors `panelOpen`, re-validating on `visibilitychange` + every 30 s while open (the lease). `applyOverlayState()` applies the single render decision — the pure `decideOverlayVisibility` (`src/lib/overlay`): nothing paints unless `panelOpen`; nothing paints while X has an `aria-modal` layer open (probed on the 200 ms rAF throttle); the lock highlight additionally requires reply-context mode and no SPA navigation since the lock was last affirmed (pathname compared per frame). Touch this slice only with `architecture.md`'s MV3 facts in hand.
+
+## 10. Off-X awareness (panel "go back to X" overlay)
+
+1. Background `index.ts`: `tabs.onActivated` + `tabs.onUpdated` (active tab, url/status changes only) → `pushActiveTabState()` → broadcast `bg:active-tab-state {onX}` — only while a panel port is open. `tabs.ts isActiveTabOnX` decides via `isXPageUrl` (`src/lib/url`); no "tabs" permission, so non-X URLs are invisible to us and read as `onX: false` by construction.
+2. Panel `App.tsx`: seeds with `panel:check-active-tab` on mount, then follows the notices. `onX === false` → translucent `.offx-overlay` veil over the panel with two actions: **Open x.com** (`panel:open-x-tab` → `focusOrOpenXTab` — focus an existing X tab, else open one) and **Compose anyway** (dismisses for this off-X stint; returning to X re-arms it).
+3. The options page never shows the overlay (it's `PanelShell`-only).

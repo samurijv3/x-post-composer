@@ -233,6 +233,40 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
 }
+
+/* "You've left X" — translucent veil over the panel while the active
+   tab is off x.com. The panel's content stays visible (dimmed) under
+   it; "Compose anyway" dismisses it for this off-X stint. */
+.offx-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 60; /* above the floating banner slot (40) */
+  background: color-mix(in oklab, var(--bg) 62%, transparent);
+  backdrop-filter: blur(2.5px);
+  -webkit-backdrop-filter: blur(2.5px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.offx-card {
+  margin: 72px var(--pad) 0;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px oklch(0 0 0 / 0.12);
+}
+[data-theme='dark'] .offx-card {
+  box-shadow: 0 8px 28px oklch(0 0 0 / 0.45);
+}
+.offx-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+.offx-actions {
+  display: flex;
+  gap: 8px;
+}
 .screen {
   display: flex;
   flex-direction: column;

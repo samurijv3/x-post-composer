@@ -1,0 +1,1 @@
+export { isXPageUrl } from './isXPageUrl';

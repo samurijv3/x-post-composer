@@ -28,7 +28,12 @@ import {
   handleManualAdd,
   replyContextFailureKind,
 } from './capture';
-import { pushToTabs, requestReplyContextFromActiveTab } from './tabs';
+import {
+  focusOrOpenXTab,
+  isActiveTabOnX,
+  pushToTabs,
+  requestReplyContextFromActiveTab,
+} from './tabs';
 
 /**
  * Set of currently-connected panel ports. The panel opens a port via
@@ -71,6 +76,26 @@ export default defineBackground(() => {
         void pushToTabs({ type: 'bg:panel-state', isOpen: false });
       }
     });
+  });
+
+  // Active-tab awareness for the panel's "go back to X" state. Both
+  // listeners need no permissions; URLs of non-X pages stay invisible
+  // to us (see isActiveTabOnX). Broadcasts only while a panel is open —
+  // nobody else listens, so tab churn with the panel closed costs
+  // nothing.
+  const pushActiveTabState = (): void => {
+    if (openPanelPorts.size === 0) return;
+    void (async () => {
+      await broadcastNotice({ type: 'bg:active-tab-state', onX: await isActiveTabOnX() });
+    })();
+  };
+  chrome.tabs.onActivated.addListener(pushActiveTabState);
+  chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+    // Only the active tab's navigations matter, and onUpdated fires for
+    // plenty that isn't navigation (favicon, title, audible…).
+    if (!tab.active) return;
+    if (changeInfo.url === undefined && changeInfo.status === undefined) return;
+    pushActiveTabState();
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -166,6 +191,16 @@ export default defineBackground(() => {
 
     if (isMessageOfType(message, 'panel:capture-reply-context')) {
       return await requestReplyContextFromActiveTab();
+    }
+
+    if (isMessageOfType(message, 'panel:check-active-tab')) {
+      return { type: 'bg:active-tab-state', onX: await isActiveTabOnX() };
+    }
+
+    if (isMessageOfType(message, 'panel:open-x-tab')) {
+      await focusOrOpenXTab();
+      // Focusing/creating an X tab makes it the active tab.
+      return { type: 'bg:active-tab-state', onX: true };
     }
 
     return undefined;
