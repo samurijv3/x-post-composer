@@ -40,6 +40,17 @@ export interface DraftContent {
   handEdited: boolean;
 }
 
+/**
+ * Timed-undo snapshot of a replaced/cleared draft. `bullets` is
+ * non-null only when the replacement also cleared the user's angle
+ * text (a new-context clear) — the undo restores both atomically; the
+ * shell reads it back at restore time.
+ */
+export interface ReplacementSnapshot {
+  content: DraftContent;
+  bullets: string | null;
+}
+
 export interface DraftLifecycleState {
   phase: DraftPhase;
   /** Non-null in active/committed. Also retained through `generating`
@@ -54,10 +65,10 @@ export interface DraftLifecycleState {
   pendingKind: 'generate' | 'refine' | null;
   /** One-level refine undo. */
   refineSnapshot: DraftContent | null;
-  /** Timed-undo snapshot of a replaced/cleared draft. In-panel state
-   *  only, deliberately not persisted — a panel close during the undo
-   *  window means the replacement stands. */
-  replaced: DraftContent | null;
+  /** Timed-undo snapshot. In-panel state only, deliberately not
+   *  persisted — a panel close during the undo window means the
+   *  replacement stands. */
+  replaced: ReplacementSnapshot | null;
 }
 
 export const INITIAL_DRAFT_LIFECYCLE: DraftLifecycleState = {
@@ -94,8 +105,10 @@ export type DraftEvent =
   /** The ~5 s window elapsed (shell timer). */
   | { type: 'replacement-expired' }
   /** A genuinely new reply context arrived (same-tweet re-deliveries
-   *  are not new — the shell decides via lib/replyContext identity). */
-  | { type: 'new-context' }
+   *  are not new — the shell decides via lib/replyContext identity).
+   *  Carries the angle text being cleared with the draft, so the
+   *  timed undo can restore both together. */
+  | { type: 'new-context'; bullets: string }
   /** Copy-to-X. Resolves the timed undo and the refine snapshot. */
   | { type: 'committed' }
   /** Explicit discard ("start over"). */
@@ -145,11 +158,12 @@ export function reduceDraftLifecycle(
         pendingSeq: null,
         pendingKind: null,
         // A generate landing over an existing draft is a REPLACEMENT —
-        // open the timed-undo window. A refine is not (one-level undo
-        // already holds the snapshot).
+        // open the timed-undo window (bullets untouched: a regenerate
+        // keeps the angle on screen, so there's nothing to restore).
+        // A refine is not a replacement (one-level undo holds it).
         replaced:
           state.pendingKind === 'generate' && state.content !== null
-            ? state.content
+            ? { content: state.content, bullets: null }
             : state.replaced,
       };
     }
@@ -204,8 +218,10 @@ export function reduceDraftLifecycle(
         ...state,
         // Restored drafts come back active (editable) even if they were
         // committed before being replaced — they're work-in-hand again.
+        // (The shell reads `replaced.bullets` before dispatching to
+        // restore the cleared angle text alongside.)
         phase: 'active',
-        content: state.replaced,
+        content: state.replaced.content,
         replaced: null,
       };
 
@@ -213,9 +229,10 @@ export function reduceDraftLifecycle(
       return state.replaced === null ? state : { ...state, replaced: null };
 
     case 'new-context':
-      // A genuinely new reply context clears the workbench (guarded by
-      // the timed undo) and invalidates any in-flight request — its
-      // result was for the old context.
+      // A genuinely new reply context clears the workbench — draft AND
+      // the angle text written for the old context (guarded together
+      // by the timed undo) — and invalidates any in-flight request,
+      // whose result was for the old context.
       if (state.content === null && state.phase !== 'generating') return state;
       return {
         phase: 'empty',
@@ -223,7 +240,10 @@ export function reduceDraftLifecycle(
         pendingSeq: null,
         pendingKind: null,
         refineSnapshot: null,
-        replaced: state.content ?? state.replaced,
+        replaced:
+          state.content !== null
+            ? { content: state.content, bullets: event.bullets }
+            : state.replaced,
       };
 
     case 'committed':

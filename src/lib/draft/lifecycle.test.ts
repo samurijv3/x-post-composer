@@ -111,7 +111,8 @@ describe('generation', () => {
       draft: modelDraft('new'),
     });
     expect(replaced.content?.text).toBe('new');
-    expect(replaced.replaced?.text).toBe('old'); // undo can bring it back
+    expect(replaced.replaced?.content.text).toBe('old'); // undo can bring it back
+    expect(replaced.replaced?.bullets).toBeNull(); // regenerate keeps the angle on screen
   });
 });
 
@@ -251,7 +252,7 @@ describe('timed undo (replacement scope)', () => {
       { type: 'generation-started', seq: 3 },
       { type: 'generation-succeeded', seq: 3, draft: modelDraft('v3') },
     );
-    expect(regenerated.replaced?.text).toBe('v2'); // timed undo live
+    expect(regenerated.replaced?.content.text).toBe('v2'); // timed undo live
     expect(regenerated.refineSnapshot).toBeNull(); // refine chain ended
   });
 });
@@ -260,10 +261,12 @@ describe('new context', () => {
   it('clears an active draft into the timed-undo window and empties the workbench', () => {
     const cleared = reduceDraftLifecycle(activeWith('reply to old tweet'), {
       type: 'new-context',
+      bullets: 'my angle for the old tweet',
     });
     expect(cleared.phase).toBe('empty');
     expect(cleared.content).toBeNull();
-    expect(cleared.replaced?.text).toBe('reply to old tweet');
+    expect(cleared.replaced?.content.text).toBe('reply to old tweet');
+    expect(cleared.replaced?.bullets).toBe('my angle for the old tweet'); // restored together by Undo
 
     const undone = reduceDraftLifecycle(cleared, { type: 'replacement-undone' });
     expect(undone.phase).toBe('active');
@@ -273,7 +276,7 @@ describe('new context', () => {
   it('invalidates an in-flight generation — its result was for the old context', () => {
     const state = run(
       { type: 'generation-started', seq: 1 },
-      { type: 'new-context' },
+      { type: 'new-context', bullets: '' },
       { type: 'generation-succeeded', seq: 1, draft: modelDraft('for the old context') },
     );
     expect(state.phase).toBe('empty');
@@ -281,7 +284,9 @@ describe('new context', () => {
   });
 
   it('is a no-op on an empty workbench', () => {
-    expect(run({ type: 'new-context' })).toEqual(INITIAL_DRAFT_LIFECYCLE);
+    expect(run({ type: 'new-context', bullets: 'typed in advance' })).toEqual(
+      INITIAL_DRAFT_LIFECYCLE,
+    );
   });
 });
 
@@ -313,7 +318,7 @@ describe('commit and discard', () => {
       { type: 'generation-succeeded', seq: 9, draft: modelDraft('next take') },
     );
     expect(replaced.content?.text).toBe('next take');
-    expect(replaced.replaced?.text).toBe('shipped');
+    expect(replaced.replaced?.content.text).toBe('shipped');
   });
 
   it('discard resets everything', () => {

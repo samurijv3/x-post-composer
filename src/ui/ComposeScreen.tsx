@@ -186,7 +186,14 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     (message: string) => {
       onToast(message, {
         label: 'Undo',
-        onClick: () => dispatchDraft({ type: 'replacement-undone' }),
+        onClick: () => {
+          // Read the snapshot BEFORE dispatching: when the replacement
+          // also cleared the angle text (a new-context clear), restore
+          // both together — they were cleared as one.
+          const snapshot = lifecycleRef.current.replaced;
+          dispatchDraft({ type: 'replacement-undone' });
+          if (snapshot !== null && snapshot.bullets !== null) setBullets(snapshot.bullets);
+        },
       });
     },
     [onToast],
@@ -207,9 +214,12 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     const lc = lifecycleRef.current;
     if (lc.content === null && lc.phase !== 'generating') return; // nothing to clear
     const hadDraft = lc.content !== null;
-    dispatchDraft({ type: 'new-context' });
+    // The angle text was written for the old context — it clears with
+    // the draft, and the timed undo restores them together.
+    dispatchDraft({ type: 'new-context', bullets });
+    setBullets('');
     if (hadDraft) fireReplacementToast('Draft cleared — new reply context');
-  }, [replyContext, fireReplacementToast]);
+  }, [replyContext, bullets, fireReplacementToast]);
 
   // ---- handlers ----
   async function toggleReplyContextMode(): Promise<void> {
@@ -355,14 +365,19 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   // Panel-scoped copy shortcut: ⇧⌘↵ / Ctrl+Shift+Enter. Chosen to pair
   // with ⌘↵ (generate / apply steer) and to avoid Chrome's own
   // bindings; plain ⌘C stays untouched for normal text copying.
+  // Panel-scoped is a hard constraint, not a choice: key events only
+  // reach this document while the panel has focus, and the clipboard
+  // can only be written from the focused document anyway. Capture
+  // phase so no inner handler can swallow it.
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {
       if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey) || !e.shiftKey) return;
       e.preventDefault();
+      e.stopPropagation();
       void copy();
     }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, { capture: true });
+    return () => window.removeEventListener('keydown', onKey, { capture: true });
   }, [copy]);
 
   function discard(): void {

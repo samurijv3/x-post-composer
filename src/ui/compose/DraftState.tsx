@@ -248,7 +248,7 @@ export function DraftState({
                 className="btn primary lg"
                 onClick={onCopy}
                 disabled={busy}
-                title="Copy the draft — ⇧⌘↵ (Ctrl+Shift+Enter)"
+                title="Copy the draft — ⇧⌘↵ / Ctrl+Shift+Enter while the panel is focused"
               >
                 {draft.copied ? (
                   <>
