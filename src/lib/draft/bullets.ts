@@ -1,30 +1,32 @@
 /**
- * Bullet-mode text transforms for the prompt box — real `•` bullets,
- * not typed asterisks. Pure string functions; the panel applies them
- * when the user toggles bullet mode (the per-keystroke Enter behavior
- * is a one-line `setRangeText` in the shell). A bulleted input is also
- * an explicit "fragments" signal for the intent framing — see
- * `GenerationRequest.bulletedInput`.
+ * Bullet handling for the prompt box — detected from how the user
+ * already types, never a mode toggle. A line opened with `- ` or `* `
+ * converts to a real `•` as it's typed (the shell intercepts the
+ * space keystroke; `normalizeTypedBullets` is the paste-time safety
+ * net), Enter continues the list, and the presence of any bullet line
+ * is the explicit "fragments" signal for the intent framing
+ * (`GenerationRequest.bulletedInput`).
  */
 
 export const BULLET_PREFIX = '• ';
 
-/** Prefix every non-empty line that doesn't already carry a bullet.
- *  Existing `-` / `*` markers are upgraded to the real glyph. */
-export function applyBulletPrefixes(text: string): string {
+/** Convert typed `- ` / `* ` line openers to the real glyph. Length-
+ *  preserving (one char swaps for one char) so caret positions survive
+ *  the controlled-input round trip. */
+export function normalizeTypedBullets(text: string): string {
   return text
     .split('\n')
-    .map((line) => {
-      const trimmed = line.trim();
-      if (trimmed === '') return line;
-      if (trimmed.startsWith('•')) return line;
-      const upgraded = trimmed.replace(/^[-*]\s*/, '');
-      return BULLET_PREFIX + upgraded;
-    })
+    .map((line) => line.replace(/^(\s*)[-*](\s)/, '$1•$2'))
     .join('\n');
 }
 
-/** Remove leading bullet glyphs from every line (toggle OFF). */
+/** True when any line is a bullet — the fragments signal. */
+export function hasBulletLines(text: string): boolean {
+  return /(^|\n)\s*•/.test(text);
+}
+
+/** Remove leading bullet glyphs from every line (display contexts —
+ *  e.g. the collapsed brief shows the first line without its glyph). */
 export function stripBulletPrefixes(text: string): string {
   return text
     .split('\n')

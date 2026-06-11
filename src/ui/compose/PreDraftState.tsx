@@ -41,25 +41,7 @@ export function PreDraftState({
       )}
 
       <label className="fld compose-input">
-        <span className="fld-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {hasContext ? 'Your angle' : 'What do you want to say?'}
-          <span className="head-spacer" />
-          <button
-            type="button"
-            className={`minitoggle ${brief.bulleted ? 'on' : 'off'}`}
-            title={
-              brief.bulleted
-                ? 'Bullet mode is ON — Enter starts the next bullet; bullets are read as loose thoughts to weave together'
-                : 'Bullet mode — write loose thoughts as real bullets'
-            }
-            onClick={(e) => {
-              e.preventDefault();
-              brief.setBulleted(!brief.bulleted);
-            }}
-          >
-            • bullets
-          </button>
-        </span>
+        <span className="fld-label">{hasContext ? 'Your angle' : 'What do you want to say?'}</span>
         <textarea
           rows={4}
           value={brief.bullets}
@@ -67,8 +49,8 @@ export function PreDraftState({
           onChange={(e) => brief.setBullets(e.target.value)}
           placeholder={
             hasContext
-              ? 'the point you want to make\nany detail to include'
-              : 'the topic\nyour angle\nany detail to include'
+              ? 'the point you want to make\nany detail to include\n(start a line with "- " for bullets)'
+              : 'the topic\nyour angle\nany detail to include\n(start a line with "- " for bullets)'
           }
         />
       </label>

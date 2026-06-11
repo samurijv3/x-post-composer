@@ -15,10 +15,11 @@ import { isMessageOfType, onNotice, sendToBackground, type BackgroundReply } fro
 import { weightedLength, X_HARD_LIMIT } from '../lib/counting';
 import { isSameTweet, mergeReplyContextSelection } from '../lib/replyContext';
 import {
-  applyBulletPrefixes,
   BULLET_PREFIX,
   emitDraftCommit,
+  hasBulletLines,
   INITIAL_DRAFT_LIFECYCLE,
+  normalizeTypedBullets,
   reduceDraftLifecycle,
   stripBulletPrefixes,
 } from '../lib/draft';
@@ -145,8 +146,6 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
 
   // ---- composition state ----
   const [bullets, setBullets] = useState<string>('');
-  // Bullet mode: per-session input affordance, not a setting.
-  const [bulleted, setBulleted] = useState<boolean>(false);
   // The draft lifecycle (empty → generating → active → committed) is a
   // pure reducer in lib/draft — every consequential transition,
   // including stale-request gating and both undo scopes, is decided
@@ -274,7 +273,8 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
       charCap,
       replyContext: hasContext ? replyContext : null,
       isRegenerate: opts.isRegenerate,
-      bulletedInput: bulleted,
+      // Derived, not a mode: any bullet line present = fragments signal.
+      bulletedInput: hasBulletLines(bullets),
     };
     try {
       const reply = await sendToBackground<
@@ -452,19 +452,39 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
       if (!busy && bullets.trim() !== '') void generate({ isRegenerate: false });
       return;
     }
-    // Bullet mode: plain Enter starts the next bullet. setRangeText
-    // keeps the caret native; state syncs from the DOM value.
-    if (bulleted && e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
-      e.preventDefault();
-      const el = e.currentTarget;
-      el.setRangeText('\n' + BULLET_PREFIX, el.selectionStart, el.selectionEnd, 'end');
-      setBullets(el.value);
+    const el = e.currentTarget;
+    // Typing a space right after a lone -/* at the start of a line is
+    // bullet intent — convert to the real glyph in place (setRangeText
+    // keeps the caret native; state syncs from the DOM value).
+    if (e.key === ' ' && !e.metaKey && !e.ctrlKey && el.selectionStart === el.selectionEnd) {
+      const caret = el.selectionStart;
+      const lineStart = el.value.lastIndexOf('\n', caret - 1) + 1;
+      const linePrefix = el.value.slice(lineStart, caret);
+      if (/^\s*[-*]$/.test(linePrefix)) {
+        e.preventDefault();
+        el.setRangeText(BULLET_PREFIX, lineStart + linePrefix.length - 1, caret, 'end');
+        setBullets(el.value);
+        return;
+      }
     }
-  }
-
-  function toggleBulleted(next: boolean): void {
-    setBulleted(next);
-    setBullets(next ? applyBulletPrefixes(bullets) : stripBulletPrefixes(bullets));
+    // Enter on a bullet line continues the list; Enter on an EMPTY
+    // bullet ends it (clears the dangling marker). Shift+Enter is the
+    // escape hatch for a plain newline inside a list.
+    if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+      const caret = el.selectionStart;
+      const lineStart = el.value.lastIndexOf('\n', caret - 1) + 1;
+      const line = el.value.slice(lineStart, caret);
+      const bullet = /^(\s*)\u2022\s?(.*)$/.exec(line);
+      if (bullet) {
+        e.preventDefault();
+        if ((bullet[2] ?? '').trim() === '') {
+          el.setRangeText('', lineStart, caret, 'end');
+        } else {
+          el.setRangeText('\n' + (bullet[1] ?? '') + BULLET_PREFIX, caret, el.selectionEnd, 'end');
+        }
+        setBullets(el.value);
+      }
+    }
   }
   function steerKey(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
@@ -490,12 +510,12 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   };
   const brief: BriefControls = {
     bullets,
-    setBullets,
+    // Paste-time safety net for typed markers; keystroke conversion
+    // happens in genKey via setRangeText.
+    setBullets: (v: string) => setBullets(normalizeTypedBullets(v)),
     charCap,
     setCharCap: handleCapToggle,
     softCapChars,
-    bulleted,
-    setBulleted: toggleBulleted,
     onGenKey: genKey,
   };
   const draftView: DraftView = {
