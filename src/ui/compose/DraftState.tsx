@@ -232,6 +232,22 @@ export function DraftState({
       <div className="draft">
         <div className="draft-head">
           <span className="eyebrow">Your draft</span>
+          {shipToVoice !== null && (
+            <label
+              className="voice-toggle"
+              title={
+                shipToVoice
+                  ? "Copying saves this draft to Voice as a 'shipped' example — click to keep this one out"
+                  : "This draft won't be saved to Voice on copy — click to include it"
+              }
+            >
+              <span className="switch">
+                <input type="checkbox" checked={shipToVoice} onChange={onToggleShipToVoice} />
+                <span className="track" />
+              </span>
+              <span>voice</span>
+            </label>
+          )}
           {draft.refined && !busy && <span className="badge reply">refined</span>}
           {draft.handEdited && !busy && (
             <span className="badge" title="You've edited this draft — your text is kept as-is">
@@ -244,20 +260,6 @@ export function DraftState({
             </span>
           )}
           <span className="head-spacer" />
-          {shipToVoice !== null && (
-            <button
-              type="button"
-              className={`minitoggle ${shipToVoice ? 'on' : 'off'}`}
-              title={
-                shipToVoice
-                  ? "Copying saves this draft to Voice as a 'shipped' example — click to keep this one out"
-                  : "This draft won't be saved to Voice on copy — click to include it"
-              }
-              onClick={onToggleShipToVoice}
-            >
-              →voice
-            </button>
-          )}
           <button
             type="button"
             className={`minitoggle ${brief.charCap ? 'on' : 'off'}`}

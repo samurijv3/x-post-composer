@@ -2328,3 +2328,15 @@ code {
   padding: 10px;
   border-top: 1px solid var(--hairline);
 }
+
+/* Per-draft save-to-Voice switch, living next to the draft eyebrow. */
+.voice-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-3);
+}
