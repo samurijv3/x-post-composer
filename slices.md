@@ -40,20 +40,22 @@ Trigger: Compose → ReplyContextBanner toggle → click a tweet.
 
 Trigger: Compose → bullets → Generate (or ⌘↵), or Regenerate.
 
-1. `ComposeScreen.generate()`: resets refine state, builds `GenerationRequest{mode: hasContext?'reply':'post', bullets, charCap, replyContext, isRegenerate}`, bumps `requestSeq` (latest-call-wins).
+1. `ComposeScreen.generate()`: resets refine state, builds `GenerationRequest{mode: hasContext?'reply':'post', bullets, charCap, replyContext, isRegenerate, bulletedInput}`, bumps `requestSeq` (latest-call-wins). Bullet mode (the `• bullets` minitoggle; pure transforms in `lib/draft/bullets`) writes real bullets and sets `bulletedInput` — an explicit fragments signal that overrides the intent-shape heuristic in `assembleInitialPrompt`.
 2. `panel:generate` → `generation.ts runGeneration`: key guard → `getAllItems` → `selectExamples(mode, ctx, library, {poolSize})` → `assembleInitialPrompt(request, settings, {voice: examples, aspirational: []})` → `{system, user}` → `runPipeline`.
 3. `runPipeline` (see the diagram in `architecture.md`): `callAnthropic {system, prompt: user}` (temperature: regenerate vs generate) → empty-text guard → `autoFix` → `checkExclusions` → if violations, ONE repair call (`summarizeViolations` → `buildRepairInstruction` → `assembleRefinePrompt`) → if `charCap && isOver280`, ONE tighten call (`TIGHTEN_INSTRUCTION` → `assembleRefinePrompt`) → `setLastPrompt` (labelled per-call records) → `GenerationResult{draft.posts[{text, characterCount}], appliedAutoFixes, residualViolations, wasRepaired}`.
 4. Panel `applyResult` dispatches into the draft lifecycle (slice 11): errors → `generation-failed` + `compose/ErrorCard`; success → `generation-succeeded` (stale seqs ignored by the reducer) → `compose/DraftState` renders the editable `DraftEditor` (highlight backdrop while violations remain), weighted count, over-cap warning. A generate landing over an existing draft opens the timed-undo window.
 
 A new pipeline stage goes in `runPipeline` with its pure logic in `src/lib/`; a new prompt input is a template slot + `assembleInitialPrompt` entry + tests in `assemble.test.ts`.
 
-## 6. Refine a draft (chips, more/less, undo)
+## 6. Refine a draft (chips, freeform, polish, refit, undo)
 
-1. Chip tap → `applyChip`: snapshots prev draft/violations for Undo, bumps the per-chip counter, sends `panel:refine {kind:{type:'chip', chipId, intensity}}`. More/less → `applySteer` (Apply button / ⌘↵) with `{type:'moreless', more, less}`.
-2. `generation.ts runRefine`: chip looked up in **current settings** (so live edits count) → `escalateChipInstruction(instruction, intensity)`; more/less → `composeMoreLessInstruction(more, less)`. Either way, one instruction string → `assembleRefinePrompt(settings, previousDraftText, instruction)` — the single refine template, system voice anchor included → same `runPipeline` (no resampling).
-3. Undo restores the one-level `refineSnapshot` (lifecycle reducer; survives hand edits). Regenerate (slice 5 with `isRegenerate`) ends the refine chain and replaces under the timed undo (slice 11).
+Every refinement is one `panel:refine` through the single refine template with its full voice anchor (Phase 1); none resample the example pool.
 
-New refine affordances: add a `RefineKind` variant in `types/generation.ts`, handle it in `runRefine`, keep any text-shaping in `lib/prompt/assemble.ts`.
+1. Entry points → `RefineKind`: **chip** tap (`applyChip` — snapshots for Undo, bumps the per-chip counter for escalating `intensity`), the **freeform box** (`applySteer` — typed feedback sent verbatim as the instruction), the **Polish** button (`{type:'polish'}` — code-supplied `POLISH_INSTRUCTION`: tighten phrasing, preserve meaning/stance/length), and the **≤280 toggle flipped ON over an over-limit active draft** (`{type:'refit'}` — `REFIT_INSTRUCTION`: content is the fixed point, only length changes; toast says "same draft, shorter"; flipping OFF or toggling pre-draft never touches text; an under-280 draft isn't refitted).
+2. `generation.ts runRefine`: chip looked up in **current settings** (live edits count) → `escalateChipInstruction`; freeform/polish/refit map to their instructions; inspector labels: `refine (chip: …)` / `(freeform)` / `(polish)` / `(refit to ≤280)` → `assembleRefinePrompt` → same `runPipeline`.
+3. Undo restores the one-level `refineSnapshot` (covers all four kinds; survives hand edits). Regenerate ends the refine chain and replaces under the timed undo (slice 11).
+
+New refine affordances: add a `RefineKind` variant in `types/generation.ts`, map it to an instruction in `runRefine`, keep any text-shaping pure in `src/lib`.
 
 ## 7. Inspect the last prompt
 

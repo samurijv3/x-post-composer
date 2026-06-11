@@ -133,7 +133,7 @@ _Contained, and they're what make the tool feel unfinished today — especially 
 
 ## Phase 3 — Workbench + Draft Lifecycle
 
-**◐ Session 1 of 2 shipped 2026-06-11** (`feat/draft-lifecycle`) — _the lifecycle spine (Core Concept C's state model, both undo scopes, commit + hook) and the keystone direct editing. Session 2 builds the remaining affordances: refit, polish pass, freeform box, Longer chip, bulleted input, colon rule. Decisions in the Build Decisions Log._
+**✅ Shipped 2026-06-11** — _session 1 (`feat/draft-lifecycle`): the lifecycle spine and direct editing; session 2 (`feat/workbench-affordances`): refit, polish pass, freeform box, Longer chip, bulleted input, colon rule. Rationale graduated to `design.md` → "Work the draft like clay" / "Refine"; decisions in the Build Decisions Log._
 
 _The biggest felt improvement. Dogfooding revealed the draft view is too passive — the user wants to work a draft like clay, not regenerate it. Builds Core Concept C._
 
@@ -337,3 +337,14 @@ Field-confirmed: a new-context clear left the old angle ("your angle") text in p
 ### 2026-06-11 — Phase 3 session 1 field pass, round 2: whole-workbench undo; the copy binding is Ctrl
 
 Two more field findings. (1) Undoing a new-context clear restored the draft and angle but left the NEW lock in place — the card showed the new tweet's author over a draft written for the old one. The replacement snapshot now carries the whole workbench (`{bullets, replyContext}`, present only for new-context clears), and one Undo restores draft + angle + the previous lock atomically — including restoring to no-lock when the original draft was a post. The lock restore echoes back through the lock subscription, so a one-shot suppression keeps the restoration from reading as yet another new context. (2) ⌘⇧↵ never reaches the panel's keydown on macOS Chrome (consumed upstream) while ⌃⇧↵ arrives fine — field falsified the assumed binding, so the shortcut is officially **Ctrl+Shift+Enter on every platform**, the button label now says ⌃⇧↵, and metaKey stays accepted opportunistically.
+
+### 2026-06-11 — Phase 3 session 2 (workbench affordances, shipped)
+
+The six remaining Phase 3 items, each one refine-shaped feature flowing through the single Phase 1 refine template. Judgment calls:
+
+- **Colon rule is narrow by construction, not by tuning**: 1–4 letter-only words before the colon (digits can never match → times/ratios safe), space+letter after on the same line (end-of-line lead-ins and `://` safe), no comma/colon in the trailing clause (inline enumerations safe). Known accepted false negative: "The result: faster ships, happier users" (comma in clause). Default OFF — even narrow, colon style is too personal to police unasked. No auto-fix: rewording is a judgment, so residue goes to repair / hand edit.
+- **Default-chip seeding is tracked, not inferred**: `seededChipIds` records which defaults an install has been OFFERED, so 'longer' seeds exactly once into existing installs (inserted after its surviving predecessor, 'shorter') and a deleted seed stays deleted forever. Installs predating the field are treated as having been offered the original three. The merge stays a pure read-path function — the seed list persists on the next natural settings write.
+- **Polish preserves length by instruction** ("tighten phrasing… do not change its meaning, stance, or overall length") — squeezing under 280 is the refit's job, and giving each pass one job keeps both predictable.
+- **Refit guards**: fires only over an ACTIVE draft that actually measures >280; flipping OFF is inert; pre-draft the toggle is just a setting; a committed draft is left alone (regenerate/edit reopens it). The refit passes its cap value into the request explicitly — the toggle flip and the refine share a tick, before React state re-renders. Distinct labels everywhere ("same draft, shorter") per the never-reads-as-start-over requirement.
+- **Freeform replaced more/less with zero compatibility shim**: RefineKind is in-flight only, so 'moreless' simply ceased to exist; `composeMoreLessInstruction` and its tests were deleted rather than deprecated. Inspector labels carry the new kinds verbatim.
+- **Bullet mode is a per-session input affordance, not a setting**, and its signal is explicit: `bulletedInput` on the request forces the fragments framing rather than letting `classifyIntentShape` re-derive it from text that happens to contain glyphs. Toggling upgrades typed `-`/`*` markers to real `•`; Enter inserts the next bullet via `setRangeText` so the caret stays native.
