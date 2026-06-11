@@ -10,7 +10,7 @@ import {
   type ThemePreference,
 } from '../storage';
 import { ComposeScreen } from './ComposeScreen';
-import { VoiceScreen } from './VoiceScreen';
+import { VoiceScreen, type FlashRow } from './VoiceScreen';
 import { OptionsPage } from './OptionsPage';
 import { SaveResultBanner, SAVE_META, type SaveResult } from './SaveResultBanner';
 import { ReplyContextErrorBanner, type ReplyContextError } from './ReplyContextErrorBanner';
@@ -48,10 +48,19 @@ function PanelShell() {
   // wins so the user never sees two stacked banners.
   const [replyContextError, setReplyContextError] = useState<ReplyContextError | null>(null);
   const [handle, setHandle] = useState<string>('');
-  // VoiceScreen reads this to flash a specific row (for the "duplicate ·
-  // Show me" affordance). Cleared after consumption.
-  const [flashRowId, setFlashRowId] = useState<string | null>(null);
+  // VoiceScreen reads this to flash a specific row: 'added' for a fresh
+  // save, 'dup' for the duplicate banner's "Show me" (which also
+  // scrolls the row into view). Cleared after the flash window.
+  const [flashRow, setFlashRow] = useState<FlashRow | null>(null);
+  const flashTimer = useRef<number | null>(null);
   const stampRef = useRef<number>(0);
+
+  const fireFlash = useCallback((id: string, kind: FlashRow['kind']) => {
+    setFlashRow({ id, kind });
+    if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
+    // Matches the 2.3s flash animations in styles.css.
+    flashTimer.current = window.setTimeout(() => setFlashRow(null), 2300);
+  }, []);
 
   const fireToast = useCallback((message: string, action?: ToastData['action']) => {
     setToast({ message, action, stamp: Date.now() });
@@ -82,8 +91,7 @@ function PanelShell() {
         // banner so the two never stack.
         setReplyContextError(null);
         if (notice.kind === 'success' && notice.itemId) {
-          setFlashRowId(notice.itemId);
-          window.setTimeout(() => setFlashRowId(null), 2300);
+          fireFlash(notice.itemId, 'added');
         }
         return;
       }
@@ -98,7 +106,7 @@ function PanelShell() {
       }
     });
     return () => unsub();
-  }, []);
+  }, [fireFlash]);
 
   // Auto-dismiss every floating banner after a short period. Success
   // clears faster ("got it, move on"); warnings/errors linger a bit
@@ -126,8 +134,7 @@ function PanelShell() {
 
   function showDup(id: string): void {
     setScreen('voice');
-    setFlashRowId(id);
-    window.setTimeout(() => setFlashRowId(null), 2300);
+    fireFlash(id, 'dup');
   }
 
   return (
@@ -153,7 +160,7 @@ function PanelShell() {
           </div>
         )}
         {screen === 'compose' && <ComposeScreen onToast={fireToast} onOpenOptions={openOptions} />}
-        {screen === 'voice' && <VoiceScreen onToast={fireToast} flashRowId={flashRowId} />}
+        {screen === 'voice' && <VoiceScreen onToast={fireToast} flashRow={flashRow} />}
       </div>
       <Toast toast={toast} />
     </div>

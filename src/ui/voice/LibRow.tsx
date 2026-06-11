@@ -15,6 +15,7 @@ interface LibRowProps {
 
 /** One saved example — clamped to 2 lines with Show more/less, inline edit. */
 export function LibRow({ item, open, highlight, onToggle, onRemove, onSave }: LibRowProps) {
+  const rowRef = useRef<HTMLLIElement | null>(null);
   const textRef = useRef<HTMLParagraphElement | null>(null);
   const [truncatable, setTruncatable] = useState<boolean>(false);
   const [editing, setEditing] = useState<boolean>(false);
@@ -25,6 +26,16 @@ export function LibRow({ item, open, highlight, onToggle, onRemove, onSave }: Li
     const el = textRef.current;
     if (el && !editing) setTruncatable(el.scrollHeight > el.clientHeight + 2);
   }, [editing, item.text]);
+
+  // "Show me" (the duplicate banner's CTA) explicitly asked to see THIS
+  // row — bring it into view before flashing, or an off-screen flash
+  // reads as "the button did nothing." Just-added flashes deliberately
+  // don't scroll: the user may be mid-scroll and didn't ask to jump.
+  useLayoutEffect(() => {
+    if (highlight === 'dup') {
+      rowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [highlight]);
 
   function save(): void {
     if (text.trim() === '') return;
@@ -42,7 +53,7 @@ export function LibRow({ item, open, highlight, onToggle, onRemove, onSave }: Li
   const displayName = item.authorDisplayName ?? item.authorHandle;
 
   return (
-    <li className={`lib-row ${hl} ${editing ? 'editing' : ''}`}>
+    <li ref={rowRef} className={`lib-row ${hl} ${editing ? 'editing' : ''}`}>
       {editing ? (
         <div className="lib-edit">
           <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} autoFocus />

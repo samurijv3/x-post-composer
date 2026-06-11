@@ -8,11 +8,16 @@ import { AddForm } from './voice/AddForm';
 import { CaptureBanner } from './voice/CaptureBanner';
 import { LibRow } from './voice/LibRow';
 
+/** Row App wants flashed: 'added' after a successful save, 'dup' when
+ *  the user clicks "Show me" on the duplicate banner (scrolls too). */
+export interface FlashRow {
+  id: string;
+  kind: 'added' | 'dup';
+}
+
 interface Props {
   onToast: (msg: string, action?: ToastData['action']) => void;
-  /** Row to flash. Set by App when a save succeeds (just-added) or
-   *  the user clicks "Show me" on a duplicate banner. */
-  flashRowId: string | null;
+  flashRow: FlashRow | null;
 }
 
 type Filter = 'all' | 'post' | 'reply';
@@ -21,12 +26,20 @@ type Filter = 'all' | 'post' | 'reply';
  * Voice — the saved-examples library. Owns the list state and storage
  * round-trips; the banner, rows, and add-form live in ./voice.
  */
-export function VoiceScreen({ onToast, flashRowId }: Props) {
+export function VoiceScreen({ onToast, flashRow }: Props) {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [handle, setHandle] = useState<string>('');
   const [filter, setFilter] = useState<Filter>('all');
   const [adding, setAdding] = useState<boolean>(false);
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
+
+  // "Show me" promised to show THE row — if a type filter would hide
+  // it, the flash would be invisible and the CTA would read as broken.
+  // Widen to All before the row renders. (Just-added flashes don't
+  // override the user's filter; they didn't ask to jump anywhere.)
+  useEffect(() => {
+    if (flashRow?.kind === 'dup') setFilter('all');
+  }, [flashRow]);
 
   const refresh = useCallback(async () => {
     try {
@@ -204,7 +217,7 @@ export function VoiceScreen({ onToast, flashRowId }: Props) {
               key={it.id}
               item={it}
               open={openIds.has(it.id)}
-              highlight={flashRowId === it.id ? 'added' : null}
+              highlight={flashRow?.id === it.id ? flashRow.kind : null}
               onToggle={() => toggleRow(it.id)}
               onRemove={() => void remove(it)}
               onSave={(patch) => void patchItem(it.id, patch)}

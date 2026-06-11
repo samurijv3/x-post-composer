@@ -12,7 +12,7 @@ Trigger: Voice screen → CaptureBanner toggle on → user clicks one of their t
 4. `isTweetTruncated` gate → `extractTweet(article)` (`extract.ts`) → `RawCapture` or a failure tag.
 5. `sendOneWay({type:'content:captured-tweet', payload})` (failures: `content:capture-failed` + reason).
 6. Background `capture.ts handleCapturedTweet`: empty/mismatched handle → `bg:save-result kind:'not-mine'`; else `classifyType` (lib/voice) → `LibraryItem` (id = statusId ?? uuid, `embedding: null`) → `addItem`; duplicate id (`ConstraintError`) → `kind:'duplicate'`; success → `kind: hasMedia ? 'text-media' : 'success'` + `bg:library-changed`. Failure reasons map via `failureReasonToSaveResultKind` (only `no-tweet-under-cursor` is silent).
-7. Panel `App.tsx onNotice` → floating `SaveResultBanner`; success also flashes the new row (`flashRowId` → `voice/LibRow`). `VoiceScreen` refreshes on `bg:library-changed`.
+7. Panel `App.tsx onNotice` → floating `SaveResultBanner`; success also flashes the new row (`flashRow {id, kind:'added'}` → `voice/LibRow`). A duplicate's **Show me** CTA switches to Voice, widens the type filter to All if it would hide the row, scrolls the row into view, and flashes it (`kind:'dup'` → `flash-dup` style). `VoiceScreen` refreshes on `bg:library-changed`.
 
 New capture-quality logic (e.g. screening hints) slots into step 6, as pure predicates from `lib/screening` called in `capture.ts`.
 
