@@ -11,6 +11,7 @@ export {
   GENERATION_PRECEDENCE,
   REFINE_PRECEDENCE,
   INTENT_FRAMING,
+  POLISH_INSTRUCTION,
   TIGHTEN_INSTRUCTION,
   buildRepairInstruction,
   formatExamples,

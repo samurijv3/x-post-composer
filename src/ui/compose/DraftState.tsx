@@ -10,6 +10,7 @@ import {
   IcCopy,
   IcEdit,
   IcRefresh,
+  IcSparkle,
   IcReply,
   IcTrash,
   IcUndo,
@@ -64,6 +65,7 @@ interface DraftStateProps {
   error: ErrorKind | null;
   onEditDraft: (text: string) => void;
   onRegenerate: () => void;
+  onPolish: () => void;
   onUndo: () => void;
   onCopy: () => void;
   onDiscard: () => void;
@@ -84,6 +86,7 @@ export function DraftState({
   error,
   onEditDraft,
   onRegenerate,
+  onPolish,
   onUndo,
   onCopy,
   onDiscard,
@@ -300,6 +303,16 @@ export function DraftState({
                     <IcCopy /> Copy to X <span className="kbd kbd-on">⌃⇧↵</span>
                   </>
                 )}
+              </button>
+              <button
+                type="button"
+                className="btn lg"
+                title="Polish — one tightening pass, voice and meaning preserved"
+                aria-label="Polish the draft"
+                onClick={onPolish}
+                disabled={busy}
+              >
+                <IcSparkle />
               </button>
               <button
                 type="button"

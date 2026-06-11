@@ -319,6 +319,13 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     await runRefine({ type: 'freeform', instruction: steerText });
   }
 
+  async function applyPolish(): Promise<void> {
+    if (busy || content === null) return;
+    // One refine invocation with the code-supplied polish instruction;
+    // the one-level refine undo covers it like any other refine.
+    await runRefine({ type: 'polish' });
+  }
+
   async function runRefine(kind: RefineRequest['kind']): Promise<void> {
     const myId = ++requestSeq.current;
     // Refine reshapes the CURRENT text — hand edits included. Only the
@@ -499,6 +506,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
           error={error}
           onEditDraft={editDraft}
           onRegenerate={() => void generate({ isRegenerate: true })}
+          onPolish={() => void applyPolish()}
           onUndo={undo}
           onCopy={() => void copy()}
           onDiscard={discard}

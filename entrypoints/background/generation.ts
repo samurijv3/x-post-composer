@@ -31,6 +31,7 @@ import {
   assembleRefinePrompt,
   buildRepairInstruction,
   escalateChipInstruction,
+  POLISH_INSTRUCTION,
   summarizeViolations,
   TIGHTEN_INSTRUCTION,
   type RenderedPrompt,
@@ -139,7 +140,7 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
       kind.intensity > 1
         ? `refine (chip: ${chip.label}, press ${String(kind.intensity)})`
         : `refine (chip: ${chip.label})`;
-  } else {
+  } else if (kind.type === 'freeform') {
     instruction = kind.instruction.trim();
     if (instruction === '') {
       return {
@@ -149,6 +150,9 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
       };
     }
     initialLabel = 'refine (freeform)';
+  } else {
+    instruction = POLISH_INSTRUCTION;
+    initialLabel = 'refine (polish)';
   }
 
   return runPipeline({

@@ -181,6 +181,13 @@ export const INTENT_FRAMING: Record<IntentShape, string> = {
     "The user's notes below are a direction to develop and tighten, not literal text to publish.",
 };
 
+/** Instruction behind the panel's Polish button — one code-supplied
+ *  tightening/refinement pass through the refine template, with the
+ *  usual pipeline backstops. Deliberately length-preserving: tightening
+ *  to ≤280 is the refit's job, not polish's. */
+export const POLISH_INSTRUCTION =
+  'Give the draft one final polish: tighten loose phrasing, smooth the rhythm, and cut filler. Do not change its meaning, its stance, or its overall length.';
+
 /** Instruction the pipeline feeds the refine template's {{instruction}}
  *  slot for the (at most one) tighten pass. Code-supplied: tighten is a
  *  pipeline backstop, not a user-authored ask. */
