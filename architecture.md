@@ -60,21 +60,22 @@ user bullets + charCap ─────────────── panel:gener
                                                                 │
 IndexedDB corpus ──getAllItems──▶ selectExamples(mode, ctx, lib, {poolSize})   [lib/sampling]
                                                                 │
-settings templates ──assembleInitialPrompt──▶ rendered prompt   [lib/prompt/assemble]
+settings templates ──assembleInitialPrompt(request, settings,    [lib/prompt/assemble]
+                     {voice, aspirational})──▶ {system, user}
                                                                 │
-splitPrompt at ===USER=== ──▶ callAnthropic {system?, prompt}   [api/anthropic]
+callAnthropic { system, prompt: user }                          [api/anthropic]
                                                                 │
 draft text ──▶ autoFix (em dash→comma, curly→straight)          [lib/exclusion]
            ──▶ checkExclusions ──violations?──▶ ONE repair call ──▶ autoFix+check again
            ──▶ charCap && isOver280? ──▶ ONE tighten call        [lib/counting]
                                                                 │
-setLastPrompt (session) ◀──┘                                    │
+setLastPrompt (session, per-call records) ◀──┘                  │
 GenerationResult { draft.posts[0], appliedAutoFixes, residualViolations, wasRepaired }
                                                                 │
 panel: renderWithHighlights(draft, residual) ──▶ user edits/refines ──▶ Copy → clipboard
 ```
 
-Hard property: **≤ 3 Anthropic calls per generate/refine invocation** (initial + optional repair + optional tighten). Refine is the same pipeline minus sampling — it reshapes `previousDraftText` from the panel.
+Hard property: **≤ 3 Anthropic calls per generate/refine invocation** (initial + optional repair + optional tighten). Refine is the same pipeline minus sampling — it reshapes `previousDraftText` from the panel. Every call in the pipeline — chip/more-less refine, repair, tighten — renders through `assembleRefinePrompt` (the one refine template) and so carries the same system voice anchor (role + precedence + style guide + exclusions) as generation; repair and tighten get code-supplied instructions (`buildRepairInstruction`, `TIGHTEN_INSTRUCTION`).
 
 ## Messaging
 
@@ -104,7 +105,7 @@ Single source of truth: `src/messaging/contracts.ts` — five discriminated unio
 | `chrome.storage.session` | `apiKey:v1` (when mode = `session`)                   | the key                                          | until full browser quit |
 |                          | `activeCaptureMode:v1`                                | `'none' \| 'library' \| 'reply-context'`         | session                 |
 |                          | `replyContextLock:v1`                                 | `ReplyContext`                                   | session                 |
-|                          | `lastPrompt:v1`                                       | last prompt chain + response                     | session                 |
+|                          | `lastPrompt:v2`                                       | per-call prompt records (`calls[]`) + response   | session                 |
 |                          | `autoReplyCapture:v1`                                 | one-shot shortcut stamp (consumed on read)       | seconds                 |
 | IndexedDB                | db `x-post-composer`, store `items`, `DB_VERSION = 2` | `LibraryItem` rows, keyPath `id`, index `byType` | persistent              |
 
@@ -112,7 +113,7 @@ Single source of truth: `src/messaging/contracts.ts` — five discriminated unio
 
 **IndexedDB migration path** (`src/storage/corpus.ts`): the upgrade handler is a sequence of `if (oldVersion < N)` blocks — v1 created the store+index, v2 backfilled `authorDisplayName`/`authorAvatarUrl` via cursor. Rule: bump `DB_VERSION`, **append** a new block, never edit an old one, add a migration test that seeds the old shape (pattern in `corpus.test.ts`). `EXPORT_SCHEMA_VERSION` tracks the row shape for export JSON and bumps with any row-shape migration.
 
-`getSettings()` merges stored values over `DEFAULT_SETTINGS` per-field (nested merges for `temperature`/`structuralRules`; per-template merge restores blanked bodies) — so adding a settings field needs no migration, just a default. `setSettings` is read-merge-write with a documented single-writer-per-field assumption.
+`getSettings()` merges stored values over `DEFAULT_SETTINGS` per-field (nested merges for `temperature`/`structuralRules`; per-template merge resets legacy single-body or blanked templates to the current defaults — the v1→v2 template migration, see roadmap.md Build Decisions Log) — so adding a settings field needs no migration, just a default. `setSettings` is read-merge-write with a documented single-writer-per-field assumption.
 
 ## Security boundary (the key)
 

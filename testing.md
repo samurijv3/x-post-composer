@@ -2,7 +2,7 @@
 
 Normative rule: CLAUDE.md §5 — every load-bearing piece of deterministic logic has a behavioral test; **no coverage-percentage gate, no filler tests**. This file is the how.
 
-Current state: **225 tests, 17 files**, all green via `npm run test`.
+Current state: **255 tests, 17 files**, all green via `npm run test`.
 
 ## Stack and config
 
@@ -17,7 +17,7 @@ Current state: **225 tests, 17 files**, all green via `npm run test`.
 | Area                                                           | Files                                                    | Why it's load-bearing                                                                                                                                                |
 | -------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Exclusion engine (detectors, banlist matcher, auto-fix, check) | `src/lib/exclusion/*.test.ts` (4)                        | Decides what gets flagged/rewritten in every draft                                                                                                                   |
-| Prompt engine + defaults + assembly                            | `src/lib/prompt/{template,defaults,assemble}.test.ts`    | Decides the exact text sent to Anthropic; pins template invariants (single source, marker placement, zero slot drift)                                                |
+| Prompt engine + defaults + assembly                            | `src/lib/prompt/{template,defaults,assemble}.test.ts`    | Decides the exact text sent to Anthropic; pins template invariants (single source, the system/user role boundary — per-call slots never in system — zero slot drift) |
 | Sampling                                                       | `src/lib/sampling/selectExamples.test.ts`                | The §8 seam — filter/cap/shuffle semantics with injected RNG                                                                                                         |
 | Counting                                                       | `src/lib/counting/twitter.test.ts`                       | The 280 gate must agree with X (URL = 23, emoji weights)                                                                                                             |
 | Voice                                                          | `src/lib/voice/{validateAuthor,classifyType}.test.ts`    | The capture hard-filter and post/reply classification                                                                                                                |

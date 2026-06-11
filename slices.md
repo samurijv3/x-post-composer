@@ -41,8 +41,8 @@ Trigger: Compose → ReplyContextBanner toggle → click a tweet.
 Trigger: Compose → bullets → Generate (or ⌘↵), or Regenerate.
 
 1. `ComposeScreen.generate()`: resets refine state, builds `GenerationRequest{mode: hasContext?'reply':'post', bullets, charCap, replyContext, isRegenerate}`, bumps `requestSeq` (latest-call-wins).
-2. `panel:generate` → `generation.ts runGeneration`: key guard → `getAllItems` → `selectExamples(mode, ctx, library, {poolSize})` → `assembleInitialPrompt` → `runPipeline`.
-3. `runPipeline` (see the diagram in `architecture.md`): `splitPrompt` → `callAnthropic` (temperature: regenerate vs generate) → empty-text guard → `autoFix` → `checkExclusions` → if violations, ONE repair call (`summarizeViolations` → repair template) → if `charCap && isOver280`, ONE tighten call → `setLastPrompt` (prompt chain + repair labels) → `GenerationResult{draft.posts[{text, characterCount}], appliedAutoFixes, residualViolations, wasRepaired}`.
+2. `panel:generate` → `generation.ts runGeneration`: key guard → `getAllItems` → `selectExamples(mode, ctx, library, {poolSize})` → `assembleInitialPrompt(request, settings, {voice: examples, aspirational: []})` → `{system, user}` → `runPipeline`.
+3. `runPipeline` (see the diagram in `architecture.md`): `callAnthropic {system, prompt: user}` (temperature: regenerate vs generate) → empty-text guard → `autoFix` → `checkExclusions` → if violations, ONE repair call (`summarizeViolations` → `buildRepairInstruction` → `assembleRefinePrompt`) → if `charCap && isOver280`, ONE tighten call (`TIGHTEN_INSTRUCTION` → `assembleRefinePrompt`) → `setLastPrompt` (labelled per-call records) → `GenerationResult{draft.posts[{text, characterCount}], appliedAutoFixes, residualViolations, wasRepaired}`.
 4. Panel `applyResult`: error kind → `compose/ErrorCard` copy; success → draft state; `compose/DraftState` renders `renderWithHighlights(text, residualViolations)`, weighted count, over-cap warning.
 
 A new pipeline stage goes in `runPipeline` with its pure logic in `src/lib/`; a new prompt input is a template slot + `assembleInitialPrompt` entry + tests in `assemble.test.ts`.
@@ -50,14 +50,14 @@ A new pipeline stage goes in `runPipeline` with its pure logic in `src/lib/`; a 
 ## 6. Refine a draft (chips, more/less, undo)
 
 1. Chip tap → `applyChip`: snapshots prev draft/violations for Undo, bumps the per-chip counter, sends `panel:refine {kind:{type:'chip', chipId, intensity}}`. More/less → `applySteer` (Apply button / ⌘↵) with `{type:'moreless', more, less}`.
-2. `generation.ts runRefine`: chip looked up in **current settings** (so live edits count), `escalateChipInstruction(instruction, intensity)`, rendered through `chipRefine`/`moreLessRefine` templates with `previousDraftText` → same `runPipeline` (no resampling).
+2. `generation.ts runRefine`: chip looked up in **current settings** (so live edits count) → `escalateChipInstruction(instruction, intensity)`; more/less → `composeMoreLessInstruction(more, less)`. Either way, one instruction string → `assembleRefinePrompt(settings, previousDraftText, instruction)` — the single refine template, system voice anchor included → same `runPipeline` (no resampling).
 3. Undo restores the snapshot (one level). Regenerate (slice 5 with `isRegenerate`) clears chip counts and steering.
 
 New refine affordances: add a `RefineKind` variant in `types/generation.ts`, handle it in `runRefine`, keep any text-shaping in `lib/prompt/assemble.ts`.
 
 ## 7. Inspect the last prompt
 
-`runPipeline` → `setLastPrompt` (session) → `LastPromptInspector` (bottom of DraftState) subscribes, splits with lib `splitPrompt`, renders System/User/Response with copy buttons + repair labels. Anything the pipeline sends must remain visible here — transparency is load-bearing (`design.md`).
+`runPipeline` → `setLastPrompt` (session, `lastPrompt:v2` — structured `calls: {label, system, user}[]`) → `LastPromptInspector` (bottom of DraftState) subscribes and renders every call in the chain — label, System block, User block per call, final Response last — with copy buttons. No string splitting: the stored fields are exactly what was sent. Anything the pipeline sends must remain visible here — transparency is load-bearing (`design.md`).
 
 ## 8. Edit settings
 
@@ -65,7 +65,7 @@ All in the options page (`OptionsPage.tsx` → sections); the panel only reads.
 
 - **Account**: handle (blur-save → capture filter). Key: write-only field — Save persists mode (+ key if pasted; blank keeps), Clear removes both areas, Verify → `panel:verify-key` → `runVerifyKey` (checks the SAVED key; button disabled while the input is dirty). Model id shown read-only.
 - **Output rules**: structural toggles / pool slider / temperatures save immediately; banlist on blur. Consumed at generation time by `buildExclusionInstructions`, `selectExamples`, `checkExclusions`, `autoFix`.
-- **Prompts**: `TemplateRow` (body on blur; slot badges via `extractSlotNames`; marker warning; reset to `DEFAULT_PROMPT_TEMPLATES[key]`); `ChipEditor` (text on blur, structure immediately).
+- **Prompts**: `TemplateRow` (System/User bodies, each saved on blur; slot badges across both via `extractSlotNames`; reset to `DEFAULT_PROMPT_TEMPLATES[key]`); `ChipEditor` (text on blur, structure immediately).
 - **Data**: export JSON (`EXPORT_SCHEMA_VERSION` + items), clear-all (single transaction, two-step confirm).
 - **Theme**: toggle in both surfaces → `themePreference:v1` → `bindDocumentTheme` sets `<html data-theme>` everywhere.
 

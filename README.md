@@ -4,7 +4,7 @@ _In the margin of X._
 
 A Chrome extension scratch pad for composing X.com posts and replies in your own voice. You bring your own Anthropic API key. The extension reads the tweet you're replying to, samples your saved writing for voice, and drafts something that sounds like you — which you copy into X and finish by hand.
 
-It is an **honest LLM wrapper for a specific job**: visible prompts, editable templates, exclusion rules you control, deterministic counting, and clipboard-only output. The whole thing is ~8,000 lines of TypeScript (plus ~1,800 lines of tests) and is meant to be read end-to-end.
+It is an **honest LLM wrapper for a specific job**: visible prompts, editable templates, exclusion rules you control, deterministic counting, and clipboard-only output. The whole thing is ~8,000 lines of TypeScript (plus ~2,100 lines of tests) and is meant to be read end-to-end.
 
 This repo is public, MIT-licensed, and ships no telemetry of any kind.
 
@@ -103,7 +103,7 @@ The draft appears with an X-weighted character counter. Reshape it without reshu
 - **More / less** steering fields: describe what you want more and less of (140 chars each), then **Apply** (⌘↵).
 - **Regenerate**: fresh samples + higher temperature. Use when a draft "didn't land" and you want a different angle.
 - **Undo**: one level back.
-- **Inspect last prompt** (bottom of Compose): the exact System/User text sent to Anthropic and the raw response, copyable.
+- **Inspect last prompt** (bottom of Compose): every Anthropic call in the last invocation — generate/refine plus any repair or tighten pass — as the exact System/User text sent, with the raw response, all copyable.
 
 ### Copy out
 
@@ -153,7 +153,7 @@ src/
 
 ### Tests
 
-225 tests across 17 files cover every load-bearing piece of deterministic logic: exclusion detectors (em-dash, smart quotes, staccato boundary 2-vs-3 + word-count edges), the do-not-say whole-word matcher, mechanical auto-fix, twitter-text weighted counting, the prompt engine (slot rendering/validation, system/user split, default-template consistency), prompt assembly (slot population, violation summaries, chip escalation), `selectExamples`, screening predicates, `validateAuthor`, `classifyType`, the settings merge + template migration, the Anthropic client (header/body shape, full error-mapping table, key never echoed — all against a stubbed `fetch`), the IndexedDB corpus incl. the v1→v2 migration, and the X-markup extraction layer via DOM fixtures (so when X drifts, the failing test names the assumption that died).
+255 tests across 17 files cover every load-bearing piece of deterministic logic: exclusion detectors (em-dash, smart quotes, staccato boundary 2-vs-3 + word-count edges), the do-not-say whole-word matcher, mechanical auto-fix, twitter-text weighted counting, the prompt engine (slot rendering/validation, the system/user role boundary, default-template consistency), prompt assembly (slot population, intent-shape framing, refine voice anchor, violation summaries, chip escalation), `selectExamples`, screening predicates, `validateAuthor`, `classifyType`, the settings merge + template migration, the Anthropic client (header/body shape, full error-mapping table, key never echoed — all against a stubbed `fetch`), the IndexedDB corpus incl. the v1→v2 migration, and the X-markup extraction layer via DOM fixtures (so when X drifts, the failing test names the assumption that died).
 
 Per CLAUDE.md §5 there is no coverage-percentage gate. Behavior that matters is tested; UI glue and `chrome.*` wrappers aren't filler-tested.
 
