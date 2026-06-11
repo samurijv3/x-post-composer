@@ -29,6 +29,7 @@ import {
 import {
   assembleInitialPrompt,
   assembleRefinePrompt,
+  buildCharConstraintInstruction,
   buildRepairInstruction,
   escalateChipInstruction,
   POLISH_INSTRUCTION,
@@ -157,6 +158,19 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
   } else {
     instruction = REFIT_INSTRUCTION;
     initialLabel = 'refine (refit to \u2264280)';
+  }
+
+  // The cap is a constraint; the instruction is a direction \u2014
+  // constraints win. With the cap on, every refine carries the 280
+  // line explicitly so the model aims AT the headroom ("Longer" means
+  // longer-but-under-280) instead of overshooting into the tighten
+  // backstop, which would silently crush the result back. The refit's
+  // own instruction already states the limit.
+  if (request.charCap && kind.type !== 'refit') {
+    instruction = `${instruction}\n\n${buildCharConstraintInstruction({
+      charCap: true,
+      softCapChars: settings.softCapChars,
+    })}`;
   }
 
   return runPipeline({
