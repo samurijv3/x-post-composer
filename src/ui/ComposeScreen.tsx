@@ -182,17 +182,29 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     return () => window.clearTimeout(t);
   }, [lifecycle.replaced]);
 
+  // Set when the timed undo is about to restore a previous lock: the
+  // restore write echoes back through the lock subscription, and the
+  // new-context effect must not read its own restoration as yet
+  // another "new context" (which would re-clear the just-restored
+  // draft). Consumed on first match.
+  const suppressNewContextRef = useRef<ReplyContext | null>(null);
+
   const fireReplacementToast = useCallback(
     (message: string) => {
       onToast(message, {
         label: 'Undo',
         onClick: () => {
-          // Read the snapshot BEFORE dispatching: when the replacement
-          // also cleared the angle text (a new-context clear), restore
-          // both together — they were cleared as one.
+          // Read the snapshot BEFORE dispatching: a new-context clear
+          // took the whole workbench (draft + angle + the previous
+          // lock), so one Undo restores the whole workbench.
           const snapshot = lifecycleRef.current.replaced;
           dispatchDraft({ type: 'replacement-undone' });
-          if (snapshot !== null && snapshot.bullets !== null) setBullets(snapshot.bullets);
+          if (snapshot?.workbench) {
+            setBullets(snapshot.workbench.bullets);
+            const restoreLock = snapshot.workbench.replyContext;
+            if (restoreLock !== null) suppressNewContextRef.current = restoreLock;
+            void setReplyContextLock(restoreLock);
+          }
         },
       });
     },
@@ -210,13 +222,21 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     prevLockRef.current = replyContext;
     if (prev === undefined) return; // initial subscription fire
     if (replyContext === null) return; // cleared ≠ new
+    // The timed undo restoring the previous lock echoes back through
+    // this subscription — that restoration is not a new context.
+    const suppressed = suppressNewContextRef.current;
+    if (suppressed !== null && isSameTweet(suppressed, replyContext)) {
+      suppressNewContextRef.current = null;
+      return;
+    }
     if (prev !== null && isSameTweet(prev, replyContext)) return; // enrichment
     const lc = lifecycleRef.current;
     if (lc.content === null && lc.phase !== 'generating') return; // nothing to clear
     const hadDraft = lc.content !== null;
-    // The angle text was written for the old context — it clears with
-    // the draft, and the timed undo restores them together.
-    dispatchDraft({ type: 'new-context', bullets });
+    // The whole workbench was built against the old context — draft,
+    // angle text, and the lock itself clear as one, and the timed undo
+    // restores them as one.
+    dispatchDraft({ type: 'new-context', bullets, previousContext: prev });
     setBullets('');
     if (hadDraft) fireReplacementToast('Draft cleared — new reply context');
   }, [replyContext, bullets, fireReplacementToast]);
@@ -362,13 +382,15 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     }
   }, [onToast]);
 
-  // Panel-scoped copy shortcut: ⇧⌘↵ / Ctrl+Shift+Enter. Chosen to pair
-  // with ⌘↵ (generate / apply steer) and to avoid Chrome's own
-  // bindings; plain ⌘C stays untouched for normal text copying.
-  // Panel-scoped is a hard constraint, not a choice: key events only
-  // reach this document while the panel has focus, and the clipboard
-  // can only be written from the focused document anyway. Capture
-  // phase so no inner handler can swallow it.
+  // Panel-scoped copy shortcut: Ctrl+Shift+Enter. Field-verified on
+  // macOS Chrome: ⌘⇧↵ never reaches the panel's keydown (consumed
+  // upstream), while ⌃⇧↵ arrives fine — so Ctrl is the binding on
+  // every platform and the UI says so; metaKey stays accepted
+  // opportunistically for platforms that do deliver it. Panel-scoped
+  // is a hard constraint, not a choice: key events only reach this
+  // document while the panel has focus, and the clipboard can only be
+  // written from the focused document anyway. Capture phase so no
+  // inner handler can swallow it.
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {
       if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey) || !e.shiftKey) return;

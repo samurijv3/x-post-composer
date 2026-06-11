@@ -248,7 +248,7 @@ export function DraftState({
                 className="btn primary lg"
                 onClick={onCopy}
                 disabled={busy}
-                title="Copy the draft — ⇧⌘↵ / Ctrl+Shift+Enter while the panel is focused"
+                title="Copy the draft — Ctrl+Shift+Enter while the panel is focused"
               >
                 {draft.copied ? (
                   <>
@@ -256,7 +256,7 @@ export function DraftState({
                   </>
                 ) : (
                   <>
-                    <IcCopy /> Copy to X <span className="kbd kbd-on">⇧⌘↵</span>
+                    <IcCopy /> Copy to X <span className="kbd kbd-on">⌃⇧↵</span>
                   </>
                 )}
               </button>

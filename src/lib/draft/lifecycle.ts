@@ -28,6 +28,7 @@
  * event half).
  */
 import type { Span } from '../exclusion';
+import type { ReplyContext } from '../../types';
 
 export type DraftPhase = 'empty' | 'generating' | 'active' | 'committed';
 
@@ -41,14 +42,18 @@ export interface DraftContent {
 }
 
 /**
- * Timed-undo snapshot of a replaced/cleared draft. `bullets` is
- * non-null only when the replacement also cleared the user's angle
- * text (a new-context clear) — the undo restores both atomically; the
- * shell reads it back at restore time.
+ * Timed-undo snapshot of a replaced/cleared draft. `workbench` is
+ * present only when the replacement also cleared the surrounding
+ * workbench (a new-context clear): the angle text and the PREVIOUS
+ * reply-context lock — possibly null, meaning the draft was a post —
+ * so one Undo restores the whole working state exactly as it was. The
+ * shell reads it back at restore time (the lock lives in storage, not
+ * here). A regenerate replaces only the draft, so its snapshot carries
+ * no workbench.
  */
 export interface ReplacementSnapshot {
   content: DraftContent;
-  bullets: string | null;
+  workbench: { bullets: string; replyContext: ReplyContext | null } | null;
 }
 
 export interface DraftLifecycleState {
@@ -106,9 +111,9 @@ export type DraftEvent =
   | { type: 'replacement-expired' }
   /** A genuinely new reply context arrived (same-tweet re-deliveries
    *  are not new — the shell decides via lib/replyContext identity).
-   *  Carries the angle text being cleared with the draft, so the
-   *  timed undo can restore both together. */
-  | { type: 'new-context'; bullets: string }
+   *  Carries the cleared workbench — the angle text and the previous
+   *  lock — so the timed undo restores everything together. */
+  | { type: 'new-context'; bullets: string; previousContext: ReplyContext | null }
   /** Copy-to-X. Resolves the timed undo and the refine snapshot. */
   | { type: 'committed' }
   /** Explicit discard ("start over"). */
@@ -158,12 +163,13 @@ export function reduceDraftLifecycle(
         pendingSeq: null,
         pendingKind: null,
         // A generate landing over an existing draft is a REPLACEMENT —
-        // open the timed-undo window (bullets untouched: a regenerate
-        // keeps the angle on screen, so there's nothing to restore).
-        // A refine is not a replacement (one-level undo holds it).
+        // open the timed-undo window (no workbench payload: a
+        // regenerate keeps the angle and lock on screen, so there is
+        // nothing beyond the draft to restore). A refine is not a
+        // replacement (one-level undo holds it).
         replaced:
           state.pendingKind === 'generate' && state.content !== null
-            ? { content: state.content, bullets: null }
+            ? { content: state.content, workbench: null }
             : state.replaced,
       };
     }
@@ -242,7 +248,10 @@ export function reduceDraftLifecycle(
         refineSnapshot: null,
         replaced:
           state.content !== null
-            ? { content: state.content, bullets: event.bullets }
+            ? {
+                content: state.content,
+                workbench: { bullets: event.bullets, replyContext: event.previousContext },
+              }
             : state.replaced,
       };
 

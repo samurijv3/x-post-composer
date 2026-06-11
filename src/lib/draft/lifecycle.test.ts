@@ -112,7 +112,7 @@ describe('generation', () => {
     });
     expect(replaced.content?.text).toBe('new');
     expect(replaced.replaced?.content.text).toBe('old'); // undo can bring it back
-    expect(replaced.replaced?.bullets).toBeNull(); // regenerate keeps the angle on screen
+    expect(replaced.replaced?.workbench).toBeNull(); // regenerate keeps angle + lock on screen
   });
 });
 
@@ -259,14 +259,27 @@ describe('timed undo (replacement scope)', () => {
 
 describe('new context', () => {
   it('clears an active draft into the timed-undo window and empties the workbench', () => {
+    const oldContext = {
+      targetText: 'the old tweet',
+      targetAuthorHandle: 'alice',
+      targetAuthorDisplayName: null,
+      targetAuthorAvatarUrl: null,
+      targetTimestamp: null,
+      targetStatusId: '1',
+      grandparentText: null,
+      hadUnreadableMedia: false,
+    };
     const cleared = reduceDraftLifecycle(activeWith('reply to old tweet'), {
       type: 'new-context',
       bullets: 'my angle for the old tweet',
+      previousContext: oldContext,
     });
     expect(cleared.phase).toBe('empty');
     expect(cleared.content).toBeNull();
     expect(cleared.replaced?.content.text).toBe('reply to old tweet');
-    expect(cleared.replaced?.bullets).toBe('my angle for the old tweet'); // restored together by Undo
+    // One Undo restores the whole workbench: draft, angle, and lock.
+    expect(cleared.replaced?.workbench?.bullets).toBe('my angle for the old tweet');
+    expect(cleared.replaced?.workbench?.replyContext).toBe(oldContext);
 
     const undone = reduceDraftLifecycle(cleared, { type: 'replacement-undone' });
     expect(undone.phase).toBe('active');
@@ -276,7 +289,7 @@ describe('new context', () => {
   it('invalidates an in-flight generation — its result was for the old context', () => {
     const state = run(
       { type: 'generation-started', seq: 1 },
-      { type: 'new-context', bullets: '' },
+      { type: 'new-context', bullets: '', previousContext: null },
       { type: 'generation-succeeded', seq: 1, draft: modelDraft('for the old context') },
     );
     expect(state.phase).toBe('empty');
@@ -284,9 +297,9 @@ describe('new context', () => {
   });
 
   it('is a no-op on an empty workbench', () => {
-    expect(run({ type: 'new-context', bullets: 'typed in advance' })).toEqual(
-      INITIAL_DRAFT_LIFECYCLE,
-    );
+    expect(
+      run({ type: 'new-context', bullets: 'typed in advance', previousContext: null }),
+    ).toEqual(INITIAL_DRAFT_LIFECYCLE);
   });
 });
 
