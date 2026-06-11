@@ -118,12 +118,32 @@ export function findGrandparentArticle(article: Element): Element | null {
   return prevCell.querySelector('article[data-testid="tweet"]');
 }
 
+/**
+ * Find the timeline article for a status id, skipping copies rendered
+ * inside X's layered dialogs (the reply pop-up re-renders the tweet
+ * being replied to; locking onto that copy would pin our highlight to
+ * the modal). The composer-anchored extraction deliberately looks
+ * INSIDE dialogs — this function deliberately doesn't.
+ */
 export function findArticleByStatusId(statusId: string): Element | null {
   const articles = document.querySelectorAll('article[data-testid="tweet"]');
   for (const a of Array.from(articles)) {
+    if (a.closest('[role="dialog"], [aria-modal="true"]')) continue;
     if (readStatusId(a) === statusId) return a;
   }
   return null;
+}
+
+/**
+ * True while X has a modal layer open (reply dialog, compose box,
+ * image lightbox). Anchors on `aria-modal="true"` — the standards-level
+ * attribute X sets on true modals; hover cards and dropdown menus don't
+ * carry it, so they don't blink the overlays. If X drops the attribute,
+ * this returns false and the overlay behaves as before — degrade
+ * gracefully, never worse.
+ */
+export function isXModalOpen(): boolean {
+  return document.querySelector('[aria-modal="true"]') !== null;
 }
 
 export function detectReplyByDomStructure(article: Element): boolean {

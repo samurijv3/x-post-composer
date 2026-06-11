@@ -21,17 +21,23 @@
  *   - A reply-context lock (`ReplyContext | null`) drives the locked
  *     highlight overlay; both pieces of state live in the background's
  *     chrome.storage.session and are mirrored here via messaging.
+ *   - X's own UI state feeds the same decision: an open modal layer
+ *     (`aria-modal`) hides every overlay, and SPA navigation suppresses
+ *     the lock highlight until the user re-engages (CLAUDE.md §6). The
+ *     policy itself is pure and tested — `lib/overlay`.
  */
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { sendOneWay } from '../../src/messaging';
 import type { ReplyContext } from '../../src/types';
 import type { ActiveCaptureMode } from '../../src/storage/captureMode';
+import { decideOverlayVisibility } from '../../src/lib/overlay';
 import {
   extractReplyContextFromArticle,
   extractReplyContextFromComposer,
   extractTweet,
   findArticleByStatusId,
   isTweetTruncated,
+  isXModalOpen,
 } from './extract';
 import { createOverlaySystem } from './overlay';
 
@@ -73,11 +79,17 @@ export default defineContentScript({
     // overlay visibility: we never paint anything on x.com unless the
     // user is actively in our UI.
     let panelOpen = false;
-
-    // (No pathname tracking — the lock is preserved across navigation
-    // so the captured ReplyContext remains usable for generation. The
-    // on-page highlight naturally disappears when findArticleByStatusId
-    // returns null on a page that doesn't render the locked tweet.)
+    // X's own UI state, mirrored into the render decision. Modal state
+    // is re-scanned on the same throttle as the lock article; the
+    // pathname is compared every frame (a property read — free).
+    let xModalOpen = false;
+    let currentPath = window.location.pathname;
+    // §6: the on-page highlight disappears on SPA navigation. The lock
+    // itself is preserved in storage so the captured ReplyContext stays
+    // usable for generation (the panel card remains); the highlight
+    // returns on the next user gesture — a new selection or re-engaging
+    // reply-context mode.
+    let navigatedSinceLock = false;
 
     // ---------------------------------------------------------------
     // Overlay system
@@ -90,32 +102,27 @@ export default defineContentScript({
     });
 
     function applyOverlayState(): void {
-      // Suppress every overlay whenever the panel isn't actually open.
-      // The user can have a capture mode toggled on and the panel
-      // closed (state lives in storage), but visually nothing should
-      // appear on x.com without the user being in our UI.
-      if (!panelOpen) {
-        overlay.setLock(null);
-        overlay.setPreview(null);
-        return;
-      }
+      // The policy lives in lib (decideOverlayVisibility, tested);
+      // this shell only supplies inputs and applies the verdict.
+      const lockStatusId = replyContextLock?.targetStatusId ?? null;
+      const verdict = decideOverlayVisibility({
+        panelOpen,
+        captureMode,
+        xModalOpen,
+        navigatedSinceLock,
+        hasLockTarget: lockStatusId !== null,
+        hoveringTweet: hoveredArticle !== null,
+      });
 
-      // The lock highlight only renders when reply-context mode is on.
-      // The lock itself stays in storage (so the panel can still use
-      // the captured context for generation) but the on-page indicator
-      // is mode-gated per the user's spec: "turn off capture mode →
-      // highlight disappears."
       const lockArticle =
-        captureMode === 'reply-context' && replyContextLock && replyContextLock.targetStatusId
-          ? findArticleByStatusId(replyContextLock.targetStatusId)
-          : null;
+        verdict.showLock && lockStatusId !== null ? findArticleByStatusId(lockStatusId) : null;
       overlay.setLock(lockArticle);
 
       // Preview is suppressed when hovering the locked article so we
       // don't paint two overlays on the same tweet.
-      const showPreview =
-        captureMode !== 'none' && hoveredArticle !== null && hoveredArticle !== lockArticle;
-      overlay.setPreview(showPreview ? hoveredArticle : null);
+      overlay.setPreview(
+        verdict.showPreview && hoveredArticle !== lockArticle ? hoveredArticle : null,
+      );
     }
 
     // ---------------------------------------------------------------
@@ -185,12 +192,21 @@ export default defineContentScript({
       if (!isAlive()) return false;
 
       if (isCaptureModeState(message)) {
+        // Re-engaging reply-context mode is a fresh user gesture — it
+        // lifts the §6 navigation suppression so the highlight can
+        // re-attach on the page the user is now on.
+        if (message.mode === 'reply-context' && captureMode !== 'reply-context') {
+          navigatedSinceLock = false;
+        }
         captureMode = message.mode;
         applyOverlayState();
         return false;
       }
 
       if (isReplyContextLockState(message)) {
+        // A new lock (the user clicked a tweet, possibly in another
+        // tab) re-affirms the highlight; navigation suppression resets.
+        if (message.lock !== null) navigatedSinceLock = false;
         replyContextLock = message.lock;
         applyOverlayState();
         return false;
@@ -366,30 +382,55 @@ export default defineContentScript({
     // rAF caps work at ~60fps and skips when the tab is hidden.
     // ---------------------------------------------------------------
 
-    // Re-finding the lock article is O(articles on page) DOM queries —
-    // too expensive to run per frame on someone else's site. The cached
-    // element going stale (X's virtual scroller unmounting it) is
-    // detected instantly via isConnected; a ~200ms periodic re-scan
-    // covers the article reappearing after navigation or a remount.
-    // When the lock is set but the article isn't on this page,
-    // findArticleByStatusId returns null and the highlight hides; the
-    // lock storage is preserved so generation can still use it.
-    const LOCK_RESCAN_MS = 200;
-    let lastLockScan = 0;
+    // DOM scans (the lock re-find, the modal probe) are queries on
+    // someone else's site — too expensive to run per frame. The cached
+    // lock element going stale (X's virtual scroller unmounting it) is
+    // detected instantly via isConnected; a ~200ms periodic scan covers
+    // everything else. The pathname compare IS per-frame — it's a
+    // property read, and §6's disappear-on-navigation should not lag.
+    const STATE_RESCAN_MS = 200;
+    let lastStateScan = 0;
     let rafId = window.requestAnimationFrame(function tick(now) {
       try {
-        if (
-          captureMode === 'reply-context' &&
-          replyContextLock &&
-          replyContextLock.targetStatusId
-        ) {
+        // SPA navigation (X is a single-page app — pushState, no page
+        // load). §6: the on-page highlight disappears; lock storage and
+        // the panel card are untouched.
+        if (window.location.pathname !== currentPath) {
+          currentPath = window.location.pathname;
+          if (!navigatedSinceLock) {
+            navigatedSinceLock = true;
+            applyOverlayState();
+          }
+        }
+
+        // Anything painted (or eligible to paint)? Keep X's modal state
+        // and the lock article fresh on the shared throttle.
+        if (panelOpen && captureMode !== 'none') {
           const current = overlay.getLockTarget();
           const targetLost = current !== null && !current.isConnected;
-          if (targetLost || now - lastLockScan >= LOCK_RESCAN_MS) {
-            lastLockScan = now;
-            const fresh = findArticleByStatusId(replyContextLock.targetStatusId);
-            if (fresh !== current) {
-              overlay.setLock(fresh);
+          if (targetLost || now - lastStateScan >= STATE_RESCAN_MS) {
+            lastStateScan = now;
+
+            const modalNow = isXModalOpen();
+            if (modalNow !== xModalOpen) {
+              xModalOpen = modalNow;
+              applyOverlayState();
+            }
+
+            // Re-find the lock article only while it may paint. When
+            // the locked tweet isn't on this page, the find returns
+            // null and the highlight hides; storage is preserved so
+            // generation can still use the context.
+            if (
+              !xModalOpen &&
+              !navigatedSinceLock &&
+              captureMode === 'reply-context' &&
+              replyContextLock?.targetStatusId
+            ) {
+              const fresh = findArticleByStatusId(replyContextLock.targetStatusId);
+              if (fresh !== current) {
+                overlay.setLock(fresh);
+              }
             }
           }
         }

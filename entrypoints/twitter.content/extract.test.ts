@@ -9,6 +9,7 @@ import {
   findGrandparentArticle,
   hasMedia,
   isTweetTruncated,
+  isXModalOpen,
   readAuthorHandle,
   readAvatarUrl,
   readDisplayName,
@@ -280,6 +281,41 @@ describe('findArticleByStatusId', () => {
     document.body.append(cell(a), cell(b));
     expect(findArticleByStatusId('2')).toBe(b);
     expect(findArticleByStatusId('404')).toBeNull();
+  });
+
+  it('skips copies rendered inside X dialogs (the reply modal re-renders the target)', () => {
+    // X's reply pop-up renders a copy of the tweet being replied to
+    // inside a [role="dialog"] layer; the lock must stay on the
+    // timeline copy, never snap to the modal's.
+    const dialog = fromHTML('<div role="dialog" aria-modal="true"></div>');
+    dialog.appendChild(tweetArticle({ statusId: '7' }));
+    const timeline = tweetArticle({ statusId: '7' });
+    document.body.append(dialog, cell(timeline));
+    expect(findArticleByStatusId('7')).toBe(timeline);
+  });
+
+  it('returns null when the only match lives inside a dialog', () => {
+    const dialog = fromHTML('<div role="dialog"></div>');
+    dialog.appendChild(tweetArticle({ statusId: '8' }));
+    document.body.append(dialog);
+    expect(findArticleByStatusId('8')).toBeNull();
+  });
+});
+
+describe('isXModalOpen', () => {
+  it('is true while an aria-modal layer is open', () => {
+    document.body.append(fromHTML('<div role="dialog" aria-modal="true"></div>'));
+    expect(isXModalOpen()).toBe(true);
+  });
+
+  it('ignores non-modal dialogs (hover cards, menus carry no aria-modal)', () => {
+    document.body.append(fromHTML('<div role="dialog"></div>'));
+    expect(isXModalOpen()).toBe(false);
+  });
+
+  it('is false on a plain timeline', () => {
+    document.body.append(cell(tweetArticle()));
+    expect(isXModalOpen()).toBe(false);
   });
 });
 
