@@ -22,9 +22,11 @@
  *     highlight overlay; both pieces of state live in the background's
  *     chrome.storage.session and are mirrored here via messaging.
  *   - X's own UI state feeds the same decision: an open modal layer
- *     (`aria-modal`) hides every overlay, and SPA navigation suppresses
- *     the lock highlight until the user re-engages (CLAUDE.md §6). The
- *     policy itself is pure and tested — `lib/overlay`.
+ *     (`aria-modal`) hides every overlay, and the lock highlight paints
+ *     only while the tab is on the path where the lock was affirmed
+ *     (CLAUDE.md §6 — it hides on SPA navigation and returns with the
+ *     path, surviving X's URL-addressable modals). The policy itself is
+ *     pure and tested — `lib/overlay`.
  */
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { sendOneWay } from '../../src/messaging';
@@ -84,12 +86,21 @@ export default defineContentScript({
     // pathname is compared every frame (a property read — free).
     let xModalOpen = false;
     let currentPath = window.location.pathname;
-    // §6: the on-page highlight disappears on SPA navigation. The lock
+    // The path where the lock was last affirmed in THIS tab (selection
+    // push, mode re-engage, or the initial load fetch). The highlight
+    // paints only while the tab is on that path — §6's
+    // disappear-on-navigation, derived from the current path rather
+    // than a sticky "navigation happened" flag because X's modals are
+    // URL-addressable (Reply pushes /compose/post and pops back on
+    // close; a sticky flag killed the highlight permanently after any
+    // modal round-trip — found in the Phase 2 field pass). The lock
     // itself is preserved in storage so the captured ReplyContext stays
-    // usable for generation (the panel card remains); the highlight
-    // returns on the next user gesture — a new selection or re-engaging
-    // reply-context mode.
-    let navigatedSinceLock = false;
+    // usable for generation; the panel card remains throughout.
+    let lockAffirmedPath: string | null = null;
+
+    function awayFromLockPath(): boolean {
+      return lockAffirmedPath !== null && lockAffirmedPath !== window.location.pathname;
+    }
 
     // ---------------------------------------------------------------
     // Overlay system
@@ -106,6 +117,7 @@ export default defineContentScript({
         // send-failed case the panel card still shows the lock and its
         // trashcan remains the recovery path.
         replyContextLock = null;
+        lockAffirmedPath = null;
         applyOverlayState();
         if (!isAlive()) return;
         sendOneWay({ type: 'content:dismiss-reply-context' });
@@ -120,7 +132,7 @@ export default defineContentScript({
         panelOpen,
         captureMode,
         xModalOpen,
-        navigatedSinceLock,
+        awayFromLockPath: awayFromLockPath(),
         hasLockTarget: lockStatusId !== null,
         hoveringTweet: hoveredArticle !== null,
       });
@@ -181,6 +193,9 @@ export default defineContentScript({
         .then((reply: unknown) => {
           if (isReplyContextLockState(reply)) {
             replyContextLock = reply.lock;
+            // A fresh page load lands wherever the lock is relevant —
+            // affirm here so the highlight can paint on this page.
+            lockAffirmedPath = reply.lock === null ? null : window.location.pathname;
             applyOverlayState();
           }
         })
@@ -204,10 +219,10 @@ export default defineContentScript({
 
       if (isCaptureModeState(message)) {
         // Re-engaging reply-context mode is a fresh user gesture — it
-        // lifts the §6 navigation suppression so the highlight can
-        // re-attach on the page the user is now on.
+        // re-affirms the lock on the page the user is now on, lifting
+        // any navigation suppression.
         if (message.mode === 'reply-context' && captureMode !== 'reply-context') {
-          navigatedSinceLock = false;
+          if (replyContextLock !== null) lockAffirmedPath = window.location.pathname;
         }
         captureMode = message.mode;
         applyOverlayState();
@@ -216,8 +231,8 @@ export default defineContentScript({
 
       if (isReplyContextLockState(message)) {
         // A new lock (the user clicked a tweet, possibly in another
-        // tab) re-affirms the highlight; navigation suppression resets.
-        if (message.lock !== null) navigatedSinceLock = false;
+        // tab) re-affirms the highlight for THIS tab's current page.
+        lockAffirmedPath = message.lock === null ? null : window.location.pathname;
         replyContextLock = message.lock;
         applyOverlayState();
         return false;
@@ -404,14 +419,12 @@ export default defineContentScript({
     let rafId = window.requestAnimationFrame(function tick(now) {
       try {
         // SPA navigation (X is a single-page app — pushState, no page
-        // load). §6: the on-page highlight disappears; lock storage and
-        // the panel card are untouched.
+        // load). §6: the highlight disappears off the affirmation path
+        // and returns on it (modal URL round-trips included); lock
+        // storage and the panel card are untouched either way.
         if (window.location.pathname !== currentPath) {
           currentPath = window.location.pathname;
-          if (!navigatedSinceLock) {
-            navigatedSinceLock = true;
-            applyOverlayState();
-          }
+          applyOverlayState();
         }
 
         // Anything painted (or eligible to paint)? Keep X's modal state
@@ -434,7 +447,7 @@ export default defineContentScript({
             // generation can still use the context.
             if (
               !xModalOpen &&
-              !navigatedSinceLock &&
+              !awayFromLockPath() &&
               captureMode === 'reply-context' &&
               replyContextLock?.targetStatusId
             ) {

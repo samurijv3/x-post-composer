@@ -11,9 +11,13 @@
  *     composer, lightbox). The timeline under the scrim is inert, so an
  *     informational highlight there is pure noise floating over X's UI.
  *   - The lock highlight additionally requires reply-context mode, a
- *     lock with a status id, and no SPA navigation since the lock was
- *     last affirmed (§6: overlays disappear on SPA navigation; the lock
- *     itself persists in storage so the panel card stays usable).
+ *     lock with a status id, and the tab being ON the path where the
+ *     lock was last affirmed (§6: overlays disappear on SPA navigation;
+ *     the lock itself persists in storage so the panel card stays
+ *     usable, and returning to the affirmation path restores the
+ *     highlight — X's modals are URL-addressable, so a sticky
+ *     "navigation happened" flag would let a Reply-modal round-trip
+ *     kill the highlight permanently).
  *   - The hover preview requires any active capture mode.
  */
 export interface OverlayStateInputs {
@@ -22,8 +26,9 @@ export interface OverlayStateInputs {
   captureMode: 'none' | 'library' | 'reply-context';
   /** X currently has an `[aria-modal="true"]` layer open. */
   xModalOpen: boolean;
-  /** The pathname changed after the lock was last set / mode re-engaged. */
-  navigatedSinceLock: boolean;
+  /** The tab is currently away from the path where the lock was last
+   *  affirmed (selection, mode re-engage, or initial load). */
+  awayFromLockPath: boolean;
   /** A reply-context lock with a targetStatusId exists. */
   hasLockTarget: boolean;
   /** A tweet article is currently hovered. */
@@ -42,7 +47,7 @@ export function decideOverlayVisibility(state: OverlayStateInputs): OverlayVisib
   }
   return {
     showLock:
-      state.captureMode === 'reply-context' && state.hasLockTarget && !state.navigatedSinceLock,
+      state.captureMode === 'reply-context' && state.hasLockTarget && !state.awayFromLockPath,
     showPreview: state.captureMode !== 'none' && state.hoveringTweet,
   };
 }

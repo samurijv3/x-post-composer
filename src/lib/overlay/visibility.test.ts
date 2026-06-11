@@ -6,7 +6,7 @@ function inputs(overrides: Partial<OverlayStateInputs> = {}): OverlayStateInputs
     panelOpen: true,
     captureMode: 'reply-context',
     xModalOpen: false,
-    navigatedSinceLock: false,
+    awayFromLockPath: false,
     hasLockTarget: true,
     hoveringTweet: false,
     ...overrides,
@@ -37,10 +37,18 @@ describe('decideOverlayVisibility', () => {
     expect(decideOverlayVisibility(inputs({ hasLockTarget: false })).showLock).toBe(false);
   });
 
-  it('suppresses the lock highlight after SPA navigation (§6) without touching preview', () => {
-    const v = decideOverlayVisibility(inputs({ navigatedSinceLock: true, hoveringTweet: true }));
+  it('suppresses the lock highlight while away from the lock path (§6) without touching preview', () => {
+    const v = decideOverlayVisibility(inputs({ awayFromLockPath: true, hoveringTweet: true }));
     expect(v.showLock).toBe(false);
     expect(v.showPreview).toBe(true);
+  });
+
+  it('restores the lock highlight on returning to the lock path (modal URL round-trips)', () => {
+    // X's Reply modal pushes /compose/post and pops back on close — the
+    // away flag must be derived from the current path, so this verdict
+    // flips back to visible when the path returns.
+    expect(decideOverlayVisibility(inputs({ awayFromLockPath: true })).showLock).toBe(false);
+    expect(decideOverlayVisibility(inputs({ awayFromLockPath: false })).showLock).toBe(true);
   });
 
   it('shows the hover preview in either capture mode', () => {
