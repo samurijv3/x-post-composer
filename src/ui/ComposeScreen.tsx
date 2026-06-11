@@ -326,7 +326,20 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     await runRefine({ type: 'polish' });
   }
 
-  async function runRefine(kind: RefineRequest['kind']): Promise<void> {
+  function handleCapToggle(next: boolean): void {
+    setCharCap(next);
+    // Flipping OFF never touches the text; pre-generation behavior is
+    // unchanged (no draft → the toggle is just a setting).
+    if (!next || busy) return;
+    const lc = lifecycleRef.current;
+    if (lc.phase !== 'active' || lc.content === null) return;
+    if (weightedLength(lc.content.text) <= X_HARD_LIMIT) return; // already fits
+    // REFIT, never regenerate: the draft's content is the fixed point.
+    onToast('Refitting to \u2264280 \u2014 same draft, shorter');
+    void runRefine({ type: 'refit' }, true);
+  }
+
+  async function runRefine(kind: RefineRequest['kind'], capOverride?: boolean): Promise<void> {
     const myId = ++requestSeq.current;
     // Refine reshapes the CURRENT text — hand edits included. Only the
     // model's output gets re-checked; the user's words went in as-is.
@@ -335,7 +348,9 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     const request: RefineRequest = {
       mode: hasContext ? 'reply' : 'post',
       previousDraftText,
-      charCap,
+      // The refit fires in the same tick as the toggle flip, before the
+      // charCap state has re-rendered — the caller passes the new value.
+      charCap: capOverride ?? charCap,
       kind,
     };
     try {
@@ -453,7 +468,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     bullets,
     setBullets,
     charCap,
-    setCharCap,
+    setCharCap: handleCapToggle,
     softCapChars,
     onGenKey: genKey,
   };

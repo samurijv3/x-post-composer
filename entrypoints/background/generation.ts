@@ -32,6 +32,7 @@ import {
   buildRepairInstruction,
   escalateChipInstruction,
   POLISH_INSTRUCTION,
+  REFIT_INSTRUCTION,
   summarizeViolations,
   TIGHTEN_INSTRUCTION,
   type RenderedPrompt,
@@ -150,9 +151,12 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
       };
     }
     initialLabel = 'refine (freeform)';
-  } else {
+  } else if (kind.type === 'polish') {
     instruction = POLISH_INSTRUCTION;
     initialLabel = 'refine (polish)';
+  } else {
+    instruction = REFIT_INSTRUCTION;
+    initialLabel = 'refine (refit to \u2264280)';
   }
 
   return runPipeline({

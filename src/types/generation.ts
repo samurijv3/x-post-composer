@@ -83,7 +83,10 @@ export type RefineKind =
   /** Typed feedback from the freeform box — the instruction verbatim. */
   | { type: 'freeform'; instruction: string }
   /** The Polish button — code-supplied instruction (POLISH_INSTRUCTION). */
-  | { type: 'polish' };
+  | { type: 'polish' }
+  /** The ≤280 toggle flipped ON over an over-limit draft — a refit,
+   *  never a regenerate (REFIT_INSTRUCTION). */
+  | { type: 'refit' };
 
 export interface GenerationResultOk {
   ok: true;

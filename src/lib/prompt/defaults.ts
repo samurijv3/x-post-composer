@@ -188,6 +188,12 @@ export const INTENT_FRAMING: Record<IntentShape, string> = {
 export const POLISH_INSTRUCTION =
   'Give the draft one final polish: tighten loose phrasing, smooth the rhythm, and cut filler. Do not change its meaning, its stance, or its overall length.';
 
+/** Instruction behind flipping the ≤280 toggle ON over an existing
+ *  draft — a REFIT, never a regenerate: the draft's content is the
+ *  fixed point; only its length changes. Code-supplied. */
+export const REFIT_INSTRUCTION =
+  'The draft must now fit the 280-character X limit. Refit it: keep its content, voice, and intent exactly; change only what the length requires.';
+
 /** Instruction the pipeline feeds the refine template's {{instruction}}
  *  slot for the (at most one) tighten pass. Code-supplied: tighten is a
  *  pipeline backstop, not a user-authored ask. */

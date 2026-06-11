@@ -12,6 +12,7 @@ export {
   REFINE_PRECEDENCE,
   INTENT_FRAMING,
   POLISH_INSTRUCTION,
+  REFIT_INSTRUCTION,
   TIGHTEN_INSTRUCTION,
   buildRepairInstruction,
   formatExamples,

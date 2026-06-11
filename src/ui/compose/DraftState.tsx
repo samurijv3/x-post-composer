@@ -238,7 +238,9 @@ export function DraftState({
             title={
               brief.charCap
                 ? '≤280 cap is ON — click to switch to uncapped'
-                : 'Uncapped — click to enforce ≤280'
+                : draft.over
+                  ? 'Uncapped — click to REFIT this draft to ≤280 (content preserved, never regenerated)'
+                  : 'Uncapped — click to enforce ≤280'
             }
             onClick={() => brief.setCharCap(!brief.charCap)}
           >
