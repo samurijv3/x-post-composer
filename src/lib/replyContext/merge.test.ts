@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ReplyContext } from '../../types';
-import { mergeReplyContextSelection } from './merge';
+import { isTruncatedRenderingOf, mergeReplyContextSelection } from './merge';
 
 function ctx(overrides: Partial<ReplyContext> = {}): ReplyContext {
   return {
@@ -76,6 +76,22 @@ describe('mergeReplyContextSelection', () => {
     );
     expect(merged.targetAuthorAvatarUrl).toBe('https://pbs.twimg.com/fresh.jpg');
     expect(merged.grandparentText).toBe('thread opener');
+  });
+
+  it('recognizes a truncated rendering as a prefix of the full text', () => {
+    const full = 'a long tweet that keeps going well past the collapse point';
+    expect(isTruncatedRenderingOf(full, 'a long tweet that keeps going…')).toBe(true);
+    expect(isTruncatedRenderingOf(full, 'a long tweet that keeps going...')).toBe(true);
+    expect(isTruncatedRenderingOf(full, 'a  long\ntweet that keeps going')).toBe(true);
+  });
+
+  it('rejects non-prefixes, equal text, and empty partials as truncated renderings', () => {
+    const full = 'a long tweet that keeps going';
+    expect(isTruncatedRenderingOf(full, 'a different opening…')).toBe(false);
+    // Equal text is exact identity, not a truncation — callers handle it.
+    expect(isTruncatedRenderingOf(full, full)).toBe(false);
+    expect(isTruncatedRenderingOf(full, '…')).toBe(false);
+    expect(isTruncatedRenderingOf(full, '')).toBe(false);
   });
 
   it('media-unreadability sticks if either reading saw it', () => {

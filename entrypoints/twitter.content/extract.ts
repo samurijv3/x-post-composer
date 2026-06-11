@@ -10,7 +10,7 @@
  */
 import type { RawCapture } from '../../src/types/capture';
 import type { ReplyContext } from '../../src/types';
-import { normalizeTweetText } from '../../src/lib/replyContext';
+import { isTruncatedRenderingOf, normalizeTweetText } from '../../src/lib/replyContext';
 
 export function extractTweet(
   article: Element,
@@ -148,7 +148,10 @@ export function findArticleByStatusId(
  * the identity fallback for copies that carry no /status/ link (X's
  * modal renderings). Text is normalized the same way the same-tweet
  * merge normalizes it (`normalizeTweetText`, lib/replyContext), so
- * "the lock's tweet" means the same thing in both places. More
+ * "the lock's tweet" means the same thing in both places. A candidate
+ * that visibly carries X's "Show more" affordance also matches when
+ * its text is a truncated prefix of the wanted text — the modal
+ * re-collapses long tweets the user already expanded to capture. More
  * expensive than the id search (reads each article's visible text) —
  * callers try the id first.
  */
@@ -163,7 +166,12 @@ export function findArticleByTweetText(
     if (!articleInLayer(a, scope)) continue;
     const textRoot = a.querySelector('[data-testid="tweetText"]');
     if (!textRoot) continue;
-    if (normalizeTweetText(readVisibleText(textRoot)) === wanted) return a;
+    const visible = readVisibleText(textRoot);
+    if (normalizeTweetText(visible) === wanted) return a;
+    // Truncation-gated prefix identity: only an article that is
+    // actually cut off may match by prefix — a genuinely short tweet
+    // must never prefix-steal the highlight.
+    if (isTweetTruncated(a) && isTruncatedRenderingOf(text, visible)) return a;
   }
   return null;
 }

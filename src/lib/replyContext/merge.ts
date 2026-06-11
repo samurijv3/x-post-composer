@@ -20,6 +20,24 @@ export function normalizeTweetText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * True when `partial` reads as a truncated rendering of `full` — the
+ * visible prefix X shows before a "Show more" link, any trailing
+ * ellipsis removed, both sides whitespace-normalized. Used by the
+ * overlay's article finder so a lock captured from the EXPANDED tweet
+ * still recognizes a re-truncated copy (X's modal renders long tweets
+ * collapsed again). Callers must separately confirm the candidate is
+ * actually truncated — a plain short tweet must never prefix-match.
+ */
+export function isTruncatedRenderingOf(full: string, partial: string): boolean {
+  const fullNorm = normalizeTweetText(full);
+  const partialNorm = normalizeTweetText(partial)
+    .replace(/(?:…|\.{3})$/, '')
+    .trimEnd();
+  if (partialNorm === '') return false;
+  return fullNorm.length > partialNorm.length && fullNorm.startsWith(partialNorm);
+}
+
 /** Status ids decide when both sides have one; otherwise fall back to
  *  normalized text (the corpus dedupe rule, Core Concept A). */
 function isSameTweet(a: ReplyContext, b: ReplyContext): boolean {

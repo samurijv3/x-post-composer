@@ -78,9 +78,9 @@ Consult this before touching or adding code: what exists, its contract, where it
 
 ### lib/replyContext (`merge.ts`)
 
-| Export                                           | Contract                                                                                                                                                                                                                         | Tested in                                                                           |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `mergeReplyContextSelection(existing, incoming)` | Same tweet (status-id equality, else normalized text) → field-wise merge: fresh reading wins, existing fills gaps, media flag ORs. Different tweet / no lock → incoming. Stops X's metadata-poor modal copies degrading the lock | `merge.test.ts` ; `normalizeTweetText` exported as the one text-identity normalizer |
+| Export                                           | Contract                                                                                                                                                                                                                         | Tested in                                                                                                                                         |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mergeReplyContextSelection(existing, incoming)` | Same tweet (status-id equality, else normalized text) → field-wise merge: fresh reading wins, existing fills gaps, media flag ORs. Different tweet / no lock → incoming. Stops X's metadata-poor modal copies degrading the lock | `merge.test.ts` ; `normalizeTweetText` exported as the one text-identity normalizer ; `isTruncatedRenderingOf` (truncation-gated prefix identity) |
 
 ### lib/overlay (`visibility.ts`)
 

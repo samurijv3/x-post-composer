@@ -349,6 +349,29 @@ describe('findArticleByTweetText', () => {
     document.body.append(cell(tweetArticle({ text: 'something else' })));
     expect(findArticleByTweetText('the locked tweet')).toBeNull();
   });
+
+  it('matches a re-truncated copy of an expanded lock (Show more present)', () => {
+    // The user expanded the long tweet to capture it; X's modal renders
+    // it collapsed again. The truncated prefix + the Show more
+    // affordance together identify it.
+    const dialog = fromHTML('<div role="dialog" aria-modal="true"></div>');
+    const truncatedCopy = tweetArticle({
+      text: 'a long tweet that keeps going…',
+      truncated: true,
+    });
+    dialog.appendChild(truncatedCopy);
+    document.body.append(dialog);
+    expect(
+      findArticleByTweetText('a long tweet that keeps going well past the collapse point', 'modal'),
+    ).toBe(truncatedCopy);
+  });
+
+  it('never prefix-matches an article without the Show more affordance', () => {
+    // A genuinely short tweet that happens to be a prefix of the lock
+    // text must not steal the highlight.
+    document.body.append(cell(tweetArticle({ text: 'a long tweet' })));
+    expect(findArticleByTweetText('a long tweet that keeps going')).toBeNull();
+  });
 });
 
 describe('isXModalOpen', () => {
