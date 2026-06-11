@@ -343,7 +343,11 @@ export default defineContentScript({
 
     document.addEventListener('mouseover', (event) => {
       // No mode active or panel closed → no preview, no work to do.
-      if (captureMode === 'none' || !panelOpen) return;
+      // The isAlive probe also matters here: an orphaned script
+      // (extension reloaded under this page) must not keep painting
+      // previews its dead click handler can never act on — probing
+      // flips extensionAlive, and the rAF loop tears everything down.
+      if (captureMode === 'none' || !panelOpen || !isAlive()) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       const article = target.closest('article[data-testid="tweet"]');
@@ -489,6 +493,19 @@ export default defineContentScript({
     let lastStateScan = 0;
     let rafId = window.requestAnimationFrame(function tick(now) {
       try {
+        // Orphaned script (the extension was reloaded under this
+        // page): messaging is dead, so a half-alive UI — hovers
+        // painting, clicks inert — is the worst presentation. Take
+        // every overlay down and stop for good; a page reload brings
+        // the fresh script (§6: overlays disappear on teardown). The
+        // flag flips on any isAlive() probe (hover, click, panel-state
+        // refresh).
+        if (!extensionAlive) {
+          window.clearInterval(panelLease);
+          overlay.destroy();
+          return; // deliberately do not re-arm the loop
+        }
+
         // SPA navigation (X is a single-page app — pushState, no page
         // load). §6: the highlight disappears off the affirmation path
         // and returns on it (modal URL round-trips included); lock
