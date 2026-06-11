@@ -43,7 +43,7 @@ Trigger: Compose → bullets → Generate (or ⌘↵), or Regenerate.
 1. `ComposeScreen.generate()`: resets refine state, builds `GenerationRequest{mode: hasContext?'reply':'post', bullets, charCap, replyContext, isRegenerate}`, bumps `requestSeq` (latest-call-wins).
 2. `panel:generate` → `generation.ts runGeneration`: key guard → `getAllItems` → `selectExamples(mode, ctx, library, {poolSize})` → `assembleInitialPrompt(request, settings, {voice: examples, aspirational: []})` → `{system, user}` → `runPipeline`.
 3. `runPipeline` (see the diagram in `architecture.md`): `callAnthropic {system, prompt: user}` (temperature: regenerate vs generate) → empty-text guard → `autoFix` → `checkExclusions` → if violations, ONE repair call (`summarizeViolations` → `buildRepairInstruction` → `assembleRefinePrompt`) → if `charCap && isOver280`, ONE tighten call (`TIGHTEN_INSTRUCTION` → `assembleRefinePrompt`) → `setLastPrompt` (labelled per-call records) → `GenerationResult{draft.posts[{text, characterCount}], appliedAutoFixes, residualViolations, wasRepaired}`.
-4. Panel `applyResult`: error kind → `compose/ErrorCard` copy; success → draft state; `compose/DraftState` renders `renderWithHighlights(text, residualViolations)`, weighted count, over-cap warning.
+4. Panel `applyResult` dispatches into the draft lifecycle (slice 11): errors → `generation-failed` + `compose/ErrorCard`; success → `generation-succeeded` (stale seqs ignored by the reducer) → `compose/DraftState` renders the editable `DraftEditor` (highlight backdrop while violations remain), weighted count, over-cap warning. A generate landing over an existing draft opens the timed-undo window.
 
 A new pipeline stage goes in `runPipeline` with its pure logic in `src/lib/`; a new prompt input is a template slot + `assembleInitialPrompt` entry + tests in `assemble.test.ts`.
 
@@ -51,7 +51,7 @@ A new pipeline stage goes in `runPipeline` with its pure logic in `src/lib/`; a 
 
 1. Chip tap → `applyChip`: snapshots prev draft/violations for Undo, bumps the per-chip counter, sends `panel:refine {kind:{type:'chip', chipId, intensity}}`. More/less → `applySteer` (Apply button / ⌘↵) with `{type:'moreless', more, less}`.
 2. `generation.ts runRefine`: chip looked up in **current settings** (so live edits count) → `escalateChipInstruction(instruction, intensity)`; more/less → `composeMoreLessInstruction(more, less)`. Either way, one instruction string → `assembleRefinePrompt(settings, previousDraftText, instruction)` — the single refine template, system voice anchor included → same `runPipeline` (no resampling).
-3. Undo restores the snapshot (one level). Regenerate (slice 5 with `isRegenerate`) clears chip counts and steering.
+3. Undo restores the one-level `refineSnapshot` (lifecycle reducer; survives hand edits). Regenerate (slice 5 with `isRegenerate`) ends the refine chain and replaces under the timed undo (slice 11).
 
 New refine affordances: add a `RefineKind` variant in `types/generation.ts`, handle it in `runRefine`, keep any text-shaping in `lib/prompt/assemble.ts`.
 
@@ -80,3 +80,14 @@ Panel mounts → `margin-panel` port + 20 s heartbeat (+ reconnect) → backgrou
 1. Background `index.ts`: `tabs.onActivated` + `tabs.onUpdated` (active tab, url/status changes only) → `pushActiveTabState()` → broadcast `bg:active-tab-state {onX}` — only while a panel port is open. `tabs.ts isActiveTabOnX` decides via `isXPageUrl` (`src/lib/url`); no "tabs" permission, so non-X URLs are invisible to us and read as `onX: false` by construction.
 2. Panel `App.tsx`: seeds with `panel:check-active-tab` on mount, then follows the notices. `onX === false` → translucent `.offx-overlay` veil over the panel with two actions: **Open x.com** (`panel:open-x-tab` → `focusOrOpenXTab` — focus an existing X tab, else open one) and **Compose anyway** (dismisses for this off-X stint; returning to X re-arms it).
 3. The options page never shows the overlay (it's `PanelShell`-only).
+
+## 11. The draft lifecycle (direct editing, two undo scopes, commit)
+
+The state machine is `lib/draft` `reduceDraftLifecycle` (pure, tested): **empty → generating → active → committed**. `ComposeScreen` composes it via `useReducer` and only dispatches events; the reducer is the single authority on transitions, including the stale-request gate (only the newest `seq` may land — a slow earlier generation can never flip a newer draft back).
+
+1. **Direct editing**: the draft renders in `compose/DraftEditor` — a real textarea (type/delete/paste in place; pasting a finished draft to refine it IS the dump-a-draft mode). While residual violations exist, a metrics-identical backdrop paints highlight marks behind the glyphs. The first hand edit dispatches `hand-edited`: violations clear for good, the content is marked `handEdited`, and **nothing ever re-checks user text** (hand edits bypass exclusions; only later model output carries fresh violations). Hand edits ride into refines (`previousDraftText` is the current text) and through commit.
+2. **Two undo scopes, coexisting**: the **timed undo** (~5 s, `replaced` snapshot + the panel's single timer → `replacement-expired`) guards REPLACEMENT — a generate landing over an existing draft, or a new context clearing one; the toast offers Undo, never a modal; touching the new draft (hand edit / refine) adopts it. The **one-level refine undo** (`refineSnapshot`) is unchanged from before and survives hand edits. The timed snapshot is in-panel state only — a panel close during the window means the replacement stands.
+3. **New context** = a lock arriving for a different tweet than the immediately-previous lock (same-tweet re-deliveries are enrichments; clearing the lock is not new context). It empties the workbench (timed undo), and invalidates any in-flight generation — its result was for the old context.
+4. **Commit**: Copy to X (button or ⇧⌘↵ / Ctrl+Shift+Enter, panel-scoped) copies the exact current text, flips the lifecycle to `committed` (resolving both undo scopes), and fires the SEPARATE corpus event — `lib/draft` `emitDraftCommit` — which nothing consumes in v1; Phase 4's shipped-tweet loop subscribes via `onDraftCommit`. Lifecycle "done" and corpus "done" are deliberately distinct facts. Editing a committed draft re-opens it (`active`); the `copied` badge drops.
+
+Next-session affordances (refit, polish pass, freeform box, Longer chip, bulleted input) slot in as new events/dispatch sites on this reducer — keep its seams.
