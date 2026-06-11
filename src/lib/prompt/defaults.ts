@@ -118,6 +118,24 @@ PREVIOUS DRAFT
   },
 };
 
+/** The two shapes the user's intent notes can take, as judged by
+ *  `classifyIntentShape` (lib/prompt/assemble). Keys of `INTENT_FRAMING`. */
+export type IntentShape = 'fragments' | 'prose';
+
+/**
+ * Framing line that precedes the user's notes inside the intent block,
+ * chosen per-call by `classifyIntentShape`. Code-supplied rather than a
+ * user-editable slot so the heuristic and its wording live in one tested
+ * place — the editable template carries the {{intentFraming}} slot, this
+ * record carries what fills it.
+ */
+export const INTENT_FRAMING: Record<IntentShape, string> = {
+  fragments:
+    "The user's notes below are loose thoughts, not literal text to publish. Find the throughline and weave them into one piece.",
+  prose:
+    "The user's notes below are a direction to develop and tighten, not literal text to publish.",
+};
+
 /** Format a list of library items as a numbered block for the
  *  {{examples}} slot. Cold-start (empty list) returns a one-line note
  *  so the surrounding template still reads naturally. */

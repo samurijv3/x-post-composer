@@ -11,6 +11,7 @@ import {
   buildExclusionInstructions,
   buildParentSection,
   formatExamples,
+  type IntentShape,
 } from './defaults';
 import { renderTemplate } from './template';
 
@@ -45,6 +46,26 @@ export function assembleInitialPrompt(
     slots.parentSection = buildParentSection(ctx?.grandparentText ?? null);
   }
   return renderTemplate(template, slots);
+}
+
+/**
+ * Classify the shape of the user's intent notes so the prompt can frame
+ * them correctly (`INTENT_FRAMING`): scattered fragments get "find the
+ * throughline and weave them", a written-out direction gets "develop and
+ * tighten". Fragments = two or more non-empty lines, or a single line
+ * that starts with a list marker (-, *, •). Everything else — including
+ * empty input — reads as prose. Deliberately this simple: a wrong guess
+ * costs one framing sentence, not the draft.
+ */
+export function classifyIntentShape(bullets: string): IntentShape {
+  const lines = bullets
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length >= 2) return 'fragments';
+  const onlyLine = lines[0];
+  if (onlyLine !== undefined && /^[-*•]/.test(onlyLine)) return 'fragments';
+  return 'prose';
 }
 
 /**
@@ -100,4 +121,19 @@ export function escalateChipInstruction(instruction: string, intensity: number):
     return `${instruction}\n\nThis is the third press of the same chip. The user has now asked for this direction three times. Apply the instruction dramatically — the result should be unmistakably more in this direction than the previous draft.`;
   }
   return `${instruction}\n\nThis is press #${String(intensity)} of the same chip. The user has repeatedly asked for this direction. Apply MAXIMUM intensity — don't be subtle. The result should be a clear, undeniable step in this direction beyond what the previous draft showed.`;
+}
+
+/**
+ * Compose the panel's more/less steering fields into the single
+ * instruction string the unified refine template expects. Either side
+ * may be blank (one line comes back); both blank returns '' — callers
+ * guard against sending an empty refine, this function just composes.
+ */
+export function composeMoreLessInstruction(more: string, less: string): string {
+  const lines: string[] = [];
+  const moreTrimmed = more.trim();
+  const lessTrimmed = less.trim();
+  if (moreTrimmed !== '') lines.push(`More of: ${moreTrimmed}`);
+  if (lessTrimmed !== '') lines.push(`Less of: ${lessTrimmed}`);
+  return lines.join('\n');
 }

@@ -9,9 +9,17 @@ export {
 } from './template';
 export {
   DEFAULT_PROMPT_TEMPLATES,
+  INTENT_FRAMING,
   formatExamples,
   buildExclusionInstructions,
   buildCharConstraintInstruction,
   buildParentSection,
+  type IntentShape,
 } from './defaults';
-export { assembleInitialPrompt, summarizeViolations, escalateChipInstruction } from './assemble';
+export {
+  assembleInitialPrompt,
+  classifyIntentShape,
+  composeMoreLessInstruction,
+  summarizeViolations,
+  escalateChipInstruction,
+} from './assemble';

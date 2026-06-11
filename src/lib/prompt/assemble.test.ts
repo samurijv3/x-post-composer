@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, type GenerationRequest, type LibraryItem } from '../../types';
 import type { Span } from '../exclusion';
-import { assembleInitialPrompt, escalateChipInstruction, summarizeViolations } from './assemble';
+import {
+  assembleInitialPrompt,
+  classifyIntentShape,
+  composeMoreLessInstruction,
+  escalateChipInstruction,
+  summarizeViolations,
+} from './assemble';
 
 function item(text: string, type: LibraryItem['type'] = 'post'): LibraryItem {
   return {
@@ -54,6 +60,63 @@ describe('escalateChipInstruction', () => {
     expect(escalateChipInstruction('x', 4)).toContain('press #4');
     expect(escalateChipInstruction('x', 7)).toContain('press #7');
     expect(escalateChipInstruction('x', 4)).toContain('MAXIMUM intensity');
+  });
+});
+
+describe('classifyIntentShape', () => {
+  it('classifies two or more non-empty lines as fragments', () => {
+    expect(classifyIntentShape('ship it\nno excuses')).toBe('fragments');
+    expect(classifyIntentShape('one\ntwo\nthree')).toBe('fragments');
+  });
+
+  it('ignores blank lines when counting', () => {
+    expect(classifyIntentShape('ship it\n\n\nno excuses')).toBe('fragments');
+    expect(classifyIntentShape('just the one thought\n\n   \n')).toBe('prose');
+  });
+
+  it('classifies a single line starting with a list marker as fragments', () => {
+    expect(classifyIntentShape('- the api is the product')).toBe('fragments');
+    expect(classifyIntentShape('* shorter cycles win')).toBe('fragments');
+    expect(classifyIntentShape('• keep the human in the loop')).toBe('fragments');
+  });
+
+  it('classifies a single plain line as prose, even with multiple sentences', () => {
+    expect(classifyIntentShape('I think the real lesson here is that shipping beats polish.')).toBe(
+      'prose',
+    );
+    expect(classifyIntentShape('Shipping beats polish. Every time. No exceptions.')).toBe('prose');
+  });
+
+  it('treats leading whitespace before a marker as still a marker', () => {
+    expect(classifyIntentShape('   - indented bullet')).toBe('fragments');
+  });
+
+  it('treats empty and whitespace-only input as prose', () => {
+    expect(classifyIntentShape('')).toBe('prose');
+    expect(classifyIntentShape('   \n  ')).toBe('prose');
+  });
+});
+
+describe('composeMoreLessInstruction', () => {
+  it('composes both sides into two labelled lines', () => {
+    expect(composeMoreLessInstruction('warmth', 'hedging')).toBe(
+      'More of: warmth\nLess of: hedging',
+    );
+  });
+
+  it('returns a single line when only one side is filled', () => {
+    expect(composeMoreLessInstruction('specifics', '')).toBe('More of: specifics');
+    expect(composeMoreLessInstruction('  ', 'jargon')).toBe('Less of: jargon');
+  });
+
+  it('trims each side', () => {
+    expect(composeMoreLessInstruction('  bite  ', '  filler  ')).toBe(
+      'More of: bite\nLess of: filler',
+    );
+  });
+
+  it('returns an empty string when both sides are blank', () => {
+    expect(composeMoreLessInstruction('', '   ')).toBe('');
   });
 });
 
