@@ -1,6 +1,6 @@
 # design.md — what Margin is and why
 
-Product intent and the reasoning behind decisions. For system structure see `architecture.md`; for rules see `CLAUDE.md` and `conventions.md`. This file explains _why_ the code is shaped the way it is, so future changes don't accidentally argue with settled decisions.
+Product intent and the reasoning behind decisions **as built**. Forward-looking intent — where the product is going, in what order, and why — lives in `roadmap.md` (including its append-only Build Decisions Log); this file explains _why the code that exists is shaped the way it is_, so future changes don't accidentally argue with settled decisions. For system structure see `architecture.md`; for rules see `CLAUDE.md` and `conventions.md`. The two files must not duplicate: when a roadmap phase ships, its rationale graduates from `roadmap.md` into here.
 
 ## What it is, who it's for
 
@@ -44,20 +44,11 @@ When a design choice trades polish against transparency, transparency wins.
 - **No multi-account, no team features.** One handle, one voice, one key.
 - **No fake security.** No baked-in encryption of the key (reversible on a public repo); honest posture + spend-cap guidance instead.
 
-A feature request that violates one of these is declined, not deferred.
+A feature request that violates one of these is declined, not deferred. The complementary _strategic_ rejections — future directions considered and ruled out (multi-platform, a managed paid tier, agentic reply queues, automatic behavioral learning) — are recorded with their reasoning in `roadmap.md` → "What We're Deliberately Not Building", and carry the same force.
 
-## Deferred features and their rationale
+## Deferred features
 
-These are wanted-but-later, with the code seams already in place (`CLAUDE.md` §8 lists the seams; don't collapse them):
-
-| Deferred                     | Why deferred                                                                                              | The seam waiting for it                                                                                                                               |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bulk archive import          | v1 proves the voice loop with hand-picked examples first; import needs screening UX                       | `src/lib/screening/` (tested, dormant), `EXPORT_SCHEMA_VERSION` on exports                                                                            |
-| Thread mode                  | Single-post drafting had to feel right first                                                              | `Draft = { posts: PostDraft[] }` — always length 1 today; never assume a draft is one string                                                          |
-| Semantic retrieval           | Shuffled manual picks are good enough until the library is large                                          | `selectExamples(mode, context, library, opts)` is the single swap point; `LibraryItem.embedding` (null) and the `byType` index reserved in the schema |
-| Model picker                 | One verified-current default beats an untested dropdown                                                   | `settings.model` (shown read-only in Account); picker must gate `temperature` by model family — Opus 4.7+ reject sampling params                      |
-| Image / quote-tweet reads    | Text-only capture keeps v1's privacy story simple                                                         | `hadUnreadableMedia` flag surfaces the limitation to the user                                                                                         |
-| Auto-expand truncated tweets | X gates "Show more" behind `event.isTrusted`; the only workaround (`chrome.debugger`) is disproportionate | Truncation is detected and the user is asked to expand                                                                                                |
+What's deferred, why, and in what order is owned by **`roadmap.md`** — the phased plan, sequencing rationale, and the append-only Build Decisions Log live there; nothing in this file should restate it. The as-built side of that plan is the set of seams already in the code: the four `CLAUDE.md` §8 seams plus the documented dormant pieces (listed in `conventions.md` rule 2, with contracts in `components.md`). Don't collapse a seam because its phase hasn't started.
 
 ## Voice & copy
 
