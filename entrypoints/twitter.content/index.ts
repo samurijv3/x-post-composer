@@ -96,6 +96,17 @@ export default defineContentScript({
     // ---------------------------------------------------------------
     const overlay = createOverlaySystem({
       onDismiss: () => {
+        // Optimistic local clear FIRST, so the × feels identical to the
+        // panel card's trashcan (which clears via its own subscription
+        // instantly) instead of waiting three async hops for the push —
+        // and so the highlight still dies when this script has been
+        // orphaned by an extension reload (a zombie highlight with a
+        // dead × was the worst failure mode). The authoritative null
+        // arrives back as a lock-state push; in the rare alive-but-
+        // send-failed case the panel card still shows the lock and its
+        // trashcan remains the recovery path.
+        replyContextLock = null;
+        applyOverlayState();
         if (!isAlive()) return;
         sendOneWay({ type: 'content:dismiss-reply-context' });
       },
