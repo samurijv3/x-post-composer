@@ -119,16 +119,29 @@ export function findGrandparentArticle(article: Element): Element | null {
 }
 
 /**
- * Find the timeline article for a status id, skipping copies rendered
- * inside X's layered dialogs (the reply pop-up re-renders the tweet
- * being replied to; locking onto that copy would pin our highlight to
- * the modal). The composer-anchored extraction deliberately looks
- * INSIDE dialogs — this function deliberately doesn't.
+ * Find the article for a status id within ONE layer of the page.
+ *
+ * `scope: 'page'` (the default) skips copies rendered inside X's
+ * layered dialogs — the reply pop-up re-renders the tweet being
+ * replied to, and locking onto that copy would pin our highlight to
+ * the modal. `scope: 'modal'` searches ONLY inside the open
+ * `aria-modal` layer, for when the user is deliberately working with
+ * the modal's content (selecting the tweet shown in the reply dialog
+ * or lightbox). One layer or the other, never both — the caller picks
+ * based on whether X has a modal up.
  */
-export function findArticleByStatusId(statusId: string): Element | null {
+export function findArticleByStatusId(
+  statusId: string,
+  scope: 'page' | 'modal' = 'page',
+): Element | null {
   const articles = document.querySelectorAll('article[data-testid="tweet"]');
   for (const a of Array.from(articles)) {
-    if (a.closest('[role="dialog"], [aria-modal="true"]')) continue;
+    const inModal = a.closest('[aria-modal="true"]') !== null;
+    if (scope === 'modal') {
+      if (!inModal) continue;
+    } else if (inModal || a.closest('[role="dialog"]')) {
+      continue;
+    }
     if (readStatusId(a) === statusId) return a;
   }
   return null;

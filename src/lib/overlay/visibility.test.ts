@@ -9,6 +9,7 @@ function inputs(overrides: Partial<OverlayStateInputs> = {}): OverlayStateInputs
     awayFromLockPath: false,
     hasLockTarget: true,
     hoveringTweet: false,
+    hoveredInModal: false,
     ...overrides,
   };
 }
@@ -19,9 +20,27 @@ describe('decideOverlayVisibility', () => {
     expect(v).toEqual({ showLock: false, showPreview: false });
   });
 
-  it('paints nothing while X has a modal layer open', () => {
-    const v = decideOverlayVisibility(inputs({ xModalOpen: true, hoveringTweet: true }));
-    expect(v).toEqual({ showLock: false, showPreview: false });
+  it('while a modal is open, the preview follows only modal-resident tweets', () => {
+    // Hovering the timeline under the scrim: nothing. Hovering the
+    // tweet inside the reply dialog / lightbox: normal preview.
+    expect(
+      decideOverlayVisibility(inputs({ xModalOpen: true, hoveringTweet: true })).showPreview,
+    ).toBe(false);
+    expect(
+      decideOverlayVisibility(
+        inputs({ xModalOpen: true, hoveringTweet: true, hoveredInModal: true }),
+      ).showPreview,
+    ).toBe(true);
+  });
+
+  it('while a modal is open, the lock may paint (modal-scoped) and skips the path check', () => {
+    // The shell scopes the article search to the modal layer, so
+    // showLock=true with a timeline-only tweet still paints nothing.
+    // The modal's own pathname (/compose/post) is noise, not
+    // navigation — hence the away flag is ignored.
+    expect(
+      decideOverlayVisibility(inputs({ xModalOpen: true, awayFromLockPath: true })).showLock,
+    ).toBe(true);
   });
 
   it('shows the lock highlight in reply-context mode with a lock target', () => {

@@ -21,12 +21,13 @@
  *   - A reply-context lock (`ReplyContext | null`) drives the locked
  *     highlight overlay; both pieces of state live in the background's
  *     chrome.storage.session and are mirrored here via messaging.
- *   - X's own UI state feeds the same decision: an open modal layer
- *     (`aria-modal`) hides every overlay, and the lock highlight paints
- *     only while the tab is on the path where the lock was affirmed
- *     (CLAUDE.md §6 — it hides on SPA navigation and returns with the
- *     path, surviving X's URL-addressable modals). The policy itself is
- *     pure and tested — `lib/overlay`.
+ *   - X's own UI state feeds the same decision: while a modal layer
+ *     (`aria-modal`) is open, overlays paint only on the modal's own
+ *     content (never over the scrim); with no modal, the lock highlight
+ *     paints only while the tab is on the path where the lock was
+ *     affirmed (CLAUDE.md §6 — it hides on SPA navigation and returns
+ *     with the path, surviving X's URL-addressable modals). The policy
+ *     itself is pure and tested — `lib/overlay`.
  */
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { sendOneWay } from '../../src/messaging';
@@ -135,10 +136,17 @@ export default defineContentScript({
         awayFromLockPath: awayFromLockPath(),
         hasLockTarget: lockStatusId !== null,
         hoveringTweet: hoveredArticle !== null,
+        hoveredInModal:
+          hoveredArticle !== null && hoveredArticle.closest('[aria-modal="true"]') !== null,
       });
 
+      // Modal open → search only the modal's layer (its copy is the one
+      // the user is working with); otherwise page scope, which skips
+      // dialog-resident copies.
       const lockArticle =
-        verdict.showLock && lockStatusId !== null ? findArticleByStatusId(lockStatusId) : null;
+        verdict.showLock && lockStatusId !== null
+          ? findArticleByStatusId(lockStatusId, xModalOpen ? 'modal' : 'page')
+          : null;
       overlay.setLock(lockArticle);
 
       // Preview is suppressed when hovering the locked article so we
@@ -441,17 +449,20 @@ export default defineContentScript({
               applyOverlayState();
             }
 
-            // Re-find the lock article only while it may paint. When
-            // the locked tweet isn't on this page, the find returns
-            // null and the highlight hides; storage is preserved so
-            // generation can still use the context.
+            // Re-find the lock article only while it may paint (modal
+            // open → modal scope; otherwise page scope + path rule).
+            // When the locked tweet isn't in the searched layer, the
+            // find returns null and the highlight hides; storage is
+            // preserved so generation can still use the context.
             if (
-              !xModalOpen &&
-              !awayFromLockPath() &&
+              (xModalOpen || !awayFromLockPath()) &&
               captureMode === 'reply-context' &&
               replyContextLock?.targetStatusId
             ) {
-              const fresh = findArticleByStatusId(replyContextLock.targetStatusId);
+              const fresh = findArticleByStatusId(
+                replyContextLock.targetStatusId,
+                xModalOpen ? 'modal' : 'page',
+              );
               if (fresh !== current) {
                 overlay.setLock(fresh);
               }

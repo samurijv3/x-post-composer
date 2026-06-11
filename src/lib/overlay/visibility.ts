@@ -7,18 +7,22 @@
  * Policy (CLAUDE.md §6 + design.md):
  *   - Nothing paints unless a panel is open — x.com stays untouched
  *     whenever the user isn't in our UI.
- *   - Nothing paints while X has a modal layer up (reply dialog,
- *     composer, lightbox). The timeline under the scrim is inert, so an
- *     informational highlight there is pure noise floating over X's UI.
- *   - The lock highlight additionally requires reply-context mode, a
+ *   - While X has a modal layer up (reply dialog, composer, lightbox),
+ *     overlays may paint only on the MODAL's own content — never over
+ *     the inert timeline under the scrim. The modal is its own context:
+ *     the lock paints there when its tweet is rendered inside it (the
+ *     shell scopes the article search to the modal layer), and the
+ *     path check is skipped (X's modals are URL-addressable, so the
+ *     modal's pathname is noise, not navigation).
+ *   - With no modal, the lock highlight requires reply-context mode, a
  *     lock with a status id, and the tab being ON the path where the
  *     lock was last affirmed (§6: overlays disappear on SPA navigation;
  *     the lock itself persists in storage so the panel card stays
  *     usable, and returning to the affirmation path restores the
- *     highlight — X's modals are URL-addressable, so a sticky
- *     "navigation happened" flag would let a Reply-modal round-trip
- *     kill the highlight permanently).
- *   - The hover preview requires any active capture mode.
+ *     highlight — a sticky "navigation happened" flag would let a
+ *     Reply-modal URL round-trip kill the highlight permanently).
+ *   - The hover preview requires any active capture mode, and while a
+ *     modal is open it follows only modal-resident tweets.
  */
 export interface OverlayStateInputs {
   /** At least one side-panel port is open. */
@@ -33,6 +37,8 @@ export interface OverlayStateInputs {
   hasLockTarget: boolean;
   /** A tweet article is currently hovered. */
   hoveringTweet: boolean;
+  /** The hovered article lives inside the open modal layer. */
+  hoveredInModal: boolean;
 }
 
 export interface OverlayVisibility {
@@ -42,12 +48,20 @@ export interface OverlayVisibility {
 
 /** Decide which overlays may paint. See the policy in the header. */
 export function decideOverlayVisibility(state: OverlayStateInputs): OverlayVisibility {
-  if (!state.panelOpen || state.xModalOpen) {
+  if (!state.panelOpen) {
     return { showLock: false, showPreview: false };
   }
   return {
+    // Modal open: the lock may paint (the shell searches only the modal
+    // layer, so a timeline-only tweet simply isn't found) and the path
+    // check is skipped. No modal: page scope + the §6 path rule.
     showLock:
-      state.captureMode === 'reply-context' && state.hasLockTarget && !state.awayFromLockPath,
-    showPreview: state.captureMode !== 'none' && state.hoveringTweet,
+      state.captureMode === 'reply-context' &&
+      state.hasLockTarget &&
+      (state.xModalOpen || !state.awayFromLockPath),
+    showPreview:
+      state.captureMode !== 'none' &&
+      state.hoveringTweet &&
+      (!state.xModalOpen || state.hoveredInModal),
   };
 }

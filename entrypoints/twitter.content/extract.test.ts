@@ -283,7 +283,7 @@ describe('findArticleByStatusId', () => {
     expect(findArticleByStatusId('404')).toBeNull();
   });
 
-  it('skips copies rendered inside X dialogs (the reply modal re-renders the target)', () => {
+  it('page scope skips copies rendered inside X dialogs (the reply modal re-renders the target)', () => {
     // X's reply pop-up renders a copy of the tweet being replied to
     // inside a [role="dialog"] layer; the lock must stay on the
     // timeline copy, never snap to the modal's.
@@ -294,11 +294,28 @@ describe('findArticleByStatusId', () => {
     expect(findArticleByStatusId('7')).toBe(timeline);
   });
 
-  it('returns null when the only match lives inside a dialog', () => {
+  it('page scope returns null when the only match lives inside a dialog', () => {
     const dialog = fromHTML('<div role="dialog"></div>');
     dialog.appendChild(tweetArticle({ statusId: '8' }));
     document.body.append(dialog);
     expect(findArticleByStatusId('8')).toBeNull();
+  });
+
+  it('modal scope finds only the aria-modal copy, never the timeline one', () => {
+    // The mirror case: while the user works INSIDE the reply dialog /
+    // lightbox, the lock belongs to the modal's copy.
+    const dialog = fromHTML('<div role="dialog" aria-modal="true"></div>');
+    const modalCopy = tweetArticle({ statusId: '9' });
+    dialog.appendChild(modalCopy);
+    const timeline = tweetArticle({ statusId: '9' });
+    document.body.append(cell(timeline), dialog);
+    expect(findArticleByStatusId('9', 'modal')).toBe(modalCopy);
+    expect(findArticleByStatusId('9', 'modal')).not.toBe(timeline);
+  });
+
+  it('modal scope returns null when the tweet only exists on the page', () => {
+    document.body.append(cell(tweetArticle({ statusId: '10' })));
+    expect(findArticleByStatusId('10', 'modal')).toBeNull();
   });
 });
 
