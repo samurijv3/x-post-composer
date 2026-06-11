@@ -12,7 +12,7 @@ It is **a tool for one user's own writing** — not a growth tool, not an engage
 
 Margin is deliberately the opposite of a marketplace tool that hides a thin prompt behind a slick UI:
 
-- **Every prompt is visible and editable** (options → Prompts). The Compose screen's "Inspect last prompt" shows the exact System/User text sent and the raw response.
+- **Every prompt is visible and editable** (options → Prompts). The Compose screen's "Inspect last prompt" shows every call in the last invocation — the exact System and User text of each, labelled by purpose (generate / refine / repair / tighten) — plus the raw response.
 - **The UI never overstates what's happening.** If a mechanism doesn't apply in practice (e.g. prompt caching below the per-model minimum), the copy says so. Honest claims beat impressive ones.
 - **The repo is the product's trust story.** Public, MIT, small enough to read end-to-end, with `SECURITY-AUDIT.md` as the standing, re-runnable verification. We do not fake at-rest key encryption, because on a public repo it would be reversible theater; instead the README tells users to set a spend cap.
 
@@ -31,6 +31,20 @@ When a design choice trades polish against transparency, transparency wins.
 **AI-ism control, prevention first.** The prompt itself instructs the model what to avoid (em dashes, smart quotes, staccato runs, the do-not-say banlist), so most drafts come back clean. What slips through is handled deterministically: mechanical auto-fix for the safely-fixable (em dash → comma, curly → straight), then **at most one** repair re-prompt for the rest, then **at most one** tighten re-prompt if the ≤280 cap is on and the draft still measures over. Residue that survives is highlighted for hand-editing, never silently looped on. The hard ceiling is **three API calls per generation** — cost-bounded by construction.
 
 **Counting.** X's official weighted counting (`twitter-text`) for the 280 gate, because `.length` disagrees with what X shows the user. The uncapped "soft cap" is a prompt instruction only — deliberately no deterministic gate, since it's our own guideline, not X's rule.
+
+## Prompt architecture (as built)
+
+_Shipped 2026-06-11 as roadmap Phase 1 ("prompt-assembly-v2"); the build-time judgment calls are dated entries in `roadmap.md` → Build Decisions Log._
+
+Everything is text to the model at send time — what makes a model _use_ context well is structure, labeling, and explicit priority, not delivery mechanism. The shape that follows from that:
+
+- **Two-body templates, real message roles.** Every template is an explicit `{system, user}` pair mapping one-to-one onto the API's roles. The boundary is decided by one test: _does this block change between two consecutive calls?_ Invariant (role definition, the output-ONLY rule, the precedence preamble, style guide, exclusions) → system. Varying (example blocks, reply context, length constraint, intent / draft + instruction) → user. A clean boundary also keeps the system block **cacheable later** — deliberately not implemented now (below the per-model minimum it would be theater; see the honesty note in `src/api/anthropic.ts`), but per-call content leaking into system would forfeit the option.
+- **XML-style tags delimit every block** (`<style_guide>`, `<exclusions>`, `<voice_examples>`, …). Models respect explicit open/close boundaries far more reliably than ALL-CAPS headers, and the benefit scales as prompts grow.
+- **A precedence preamble, fixed in code, ranks the blocks**: exclusions are hard constraints → style guide is authoritative → aspirational examples are the bar → voice examples are range → reply context is _to react to, never imitate_ → intent is what to develop. It's code-supplied (filled into a `{{precedence}}` slot) rather than editable prose because the pipeline relies on the authority order — but it stays fully visible in the inspector, and removing the slot from a template is still the user's right.
+- **Two example blocks, not three.** `<aspirational_examples>` ("the user at their best — the bar") and `<voice_examples>` ("match tone and rhythm, never topics"). Curated-vs-archive origin is a sampling-weight decision, not a labeling one — the model never learns a sampled example's source. The aspirational block ships present-but-empty (it collapses); the Star tier (roadmap Phase 5) populates it.
+- **Every refinement carries a voice anchor.** Chips, more/less, exclusion repair, and tighten all render through one `refine` template whose system body carries the same role + precedence + style guide + exclusions as generation — only `{{instruction}}` differs (panel-supplied for chips/steering, code-supplied for repair/tighten). This fixed the v1 quality leak where refine passes carried only draft + instruction and drifted toward generic with each press; carrying exclusions also stops refinements reintroducing banned patterns.
+- **Intent framing varies by input shape.** A small heuristic (`classifyIntentShape`) reads the bullets: scattered fragments get _"find the throughline and weave them"_; flowing prose gets _"a direction to develop and tighten."_ One template, one variable framing line — deliberately not two sub-templates, and deliberately a crude heuristic: a wrong guess costs one sentence.
+- **The honest migration:** v1's single-body templates had no faithful mapping onto the new shape, so customised v1 bodies **reset** to the new defaults rather than being preserved-but-broken. Worse for the user's edits, better than silently sending malformed prompts.
 
 **Settings.** The panel is for composing; everything configurable lives in the full-page options (Account, Output rules, Prompts, Data). The API key field is **write-only**: the UI knows whether a key is set, never the value — replacing means pasting a new one, removing is an explicit Clear. Output rules and prompt edits apply on blur; the key uses an explicit Save because it's a secret.
 
