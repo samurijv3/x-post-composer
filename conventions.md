@@ -30,21 +30,23 @@ Checkable rules for working in this repo. CLAUDE.md is the constitution (it wins
 
 - Implement what was asked. Mid-task discoveries get **recorded** (a line in `AUDIT.md`-style notes or the relevant doc), and fixed only when low-risk and clearly correct — say that you did.
 - Declining is allowed: if a finding/request turns out wrong or riskier to change than keep, leave the code and write down why.
-- A feature that violates a `design.md` non-goal is declined, not negotiated into the codebase.
+- A feature that violates a `design.md` non-goal or a `roadmap.md` "Deliberately Not Building" item is declined, not negotiated into the codebase.
 
 ## Doc maintenance — part of "done"
 
 The doc set is ground truth only while it's maintained. **A change isn't done until the docs that describe the changed thing are updated in the same commit series.**
 
-| You changed…                                                      | Update                                                          |
-| ----------------------------------------------------------------- | --------------------------------------------------------------- |
-| Product behavior, a flow, a non-goal, a deferred feature          | `design.md` (+ `README.md` if user-visible)                     |
-| Surfaces, data flow, messaging, storage schema, security boundary | `architecture.md` (+ `SECURITY-AUDIT.md` re-run if §6-adjacent) |
-| Any module added/removed/re-contracted                            | `components.md` (its registry row)                              |
-| A flow's path through the system; a new feature slice             | `slices.md`                                                     |
-| Test patterns, what's tested/untested, counts that docs cite      | `testing.md`                                                    |
-| A rule itself                                                     | this file, and `CLAUDE.md` if constitutional                    |
-| Invariants, seams, the stack, must-test list                      | `CLAUDE.md` — keep it authoritative; never silently diverge     |
+| You changed…                                                                                                        | Update                                                                                              |
+| ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Product behavior, a flow, a non-goal                                                                                | `design.md` (+ `README.md` if user-visible)                                                         |
+| Forward-looking scope/sequencing; settled a "decide at build" question; made any recordable judgment call mid-build | `roadmap.md` — its Build Decisions Log is **append-only**: add a dated entry, never edit an old one |
+| Shipped a roadmap phase                                                                                             | `roadmap.md` (mark it) + graduate its rationale into `design.md`                                    |
+| Surfaces, data flow, messaging, storage schema, security boundary                                                   | `architecture.md` (+ `SECURITY-AUDIT.md` re-run if §6-adjacent)                                     |
+| Any module added/removed/re-contracted                                                                              | `components.md` (its registry row)                                                                  |
+| A flow's path through the system; a new feature slice                                                               | `slices.md`                                                                                         |
+| Test patterns, what's tested/untested, counts that docs cite                                                        | `testing.md`                                                                                        |
+| A rule itself                                                                                                       | this file, and `CLAUDE.md` if constitutional                                                        |
+| Invariants, seams, the stack, must-test list                                                                        | `CLAUDE.md` — keep it authoritative; never silently diverge                                         |
 
 Staleness detectors a reviewer (or model) can run: file paths named in docs must exist; counts cited in `testing.md`/`README.md` match `npm run test` output; `SECURITY-AUDIT.md` paths resolve.
 

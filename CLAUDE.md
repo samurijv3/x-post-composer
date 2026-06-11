@@ -131,18 +131,19 @@ v1 omits three features, but the code must be shaped now so they bolt on without
 
 ## 9. Companion docs — read before working
 
-This file is the constitution; six companion docs describe the repo **as it actually exists**. They are ground truth — derived from the code, kept current as part of "done".
+This file is the constitution; the companion docs are ground truth, kept current as part of "done". Six describe the repo **as it actually exists** (derived from the code); `roadmap.md` is the one forward-looking doc — canonical for where the product is going, same update discipline.
 
-| Doc               | What it holds                                                                      | Read it when…                                                  |
-| ----------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `design.md`       | Product intent, decision rationale, hard non-goals, deferred features              | judging whether a change fits the product                      |
-| `architecture.md` | Surfaces, brain/shell, data flow, messaging, storage, security boundary, MV3 facts | changing structure, messages, storage, or anything §6-adjacent |
-| `components.md`   | Registry of every module: contract + where it's tested                             | **before touching or adding any code**                         |
-| `slices.md`       | Each feature traced end to end                                                     | working on a flow, or slotting in a feature                    |
-| `testing.md`      | What's tested and why, the patterns, how to add tests                              | writing or judging tests                                       |
-| `conventions.md`  | Enforceable code/git/doc rules + the doc-update matrix                             | always — it defines "done"                                     |
+| Doc               | What it holds                                                                      | Read it when…                                                                      |
+| ----------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `design.md`       | As-built product intent, decision rationale, hard non-goals                        | judging whether a change fits the product                                          |
+| `roadmap.md`      | Forward-looking phases, the not-building list, the append-only Build Decisions Log | planning or building any feature work, and when settling a judgment call mid-build |
+| `architecture.md` | Surfaces, brain/shell, data flow, messaging, storage, security boundary, MV3 facts | changing structure, messages, storage, or anything §6-adjacent                     |
+| `components.md`   | Registry of every module: contract + where it's tested                             | **before touching or adding any code**                                             |
+| `slices.md`       | Each feature traced end to end                                                     | working on a flow, or slotting in a feature                                        |
+| `testing.md`      | What's tested and why, the patterns, how to add tests                              | writing or judging tests                                                           |
+| `conventions.md`  | Enforceable code/git/doc rules + the doc-update matrix                             | always — it defines "done"                                                         |
 
-Session start: this file → `conventions.md` → the slice(s) you'll touch in `slices.md` → the modules' rows in `components.md`. Don't re-derive what the docs already state; don't trust memory over them.
+Session start: this file → `conventions.md` → (feature work) the phase in `roadmap.md` incl. its Build Decisions Log → the slice(s) you'll touch in `slices.md` → the modules' rows in `components.md`. Don't re-derive what the docs already state; don't trust memory over them.
 
 ## 10. Working agreement
 
