@@ -38,7 +38,8 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
     id: capture.statusId ?? crypto.randomUUID(),
     text: capture.text,
     type: itemType,
-    source: 'capture',
+    // A one-click capture is a handpick — Core Concept A 'manual'.
+    source: 'manual',
     authorHandle: settings.handle.replace(/^@/, '').trim(),
     authorDisplayName: capture.authorDisplayName,
     authorAvatarUrl: capture.authorAvatarUrl,

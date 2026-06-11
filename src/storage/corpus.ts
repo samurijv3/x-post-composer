@@ -11,11 +11,15 @@
  *   v2: adds `authorDisplayName` and `authorAvatarUrl` (both string | null)
  *       to LibraryItem for X-native rendering. The upgrade backfills both
  *       fields to null on existing rows so all reads see the v2 shape.
+ *   v3: collapses the source taxonomy to Core Concept A — 'capture'
+ *       becomes 'manual' (both are handpicks), 'import' becomes
+ *       'archive'; 'shipped' is introduced for the Phase 4 corpus loop
+ *       (no existing rows carry it, so no backfill for it).
  */
 import type { LibraryItem } from '../types';
 
 export const DB_NAME = 'x-post-composer';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 /**
  * Version stamped into library-export JSON. Tracks the LibraryItem ROW
  * shape, which is defined by the DB schema version — bump alongside
@@ -33,8 +37,10 @@ let cachedDb: IDBDatabase | null = null;
 
 /**
  * Open (or upgrade) the corpus database. Subsequent calls reuse the
- * connection. Each schema bump should add a new `if (oldVersion < N)`
- * block to the upgrade handler — never edit an existing one.
+ * connection. Each schema bump adds a new migration-pass FUNCTION and
+ * registers it for `oldVersion < N` — never edit an existing pass.
+ * Passes are scheduled sequentially (see the comment in the upgrade
+ * handler for why concurrency corrupts rows).
  */
 export function openCorpus(): Promise<IDBDatabase> {
   if (cachedDb) return Promise.resolve(cachedDb);
@@ -47,32 +53,26 @@ export function openCorpus(): Promise<IDBDatabase> {
         const store = db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
         store.createIndex(INDEX_BY_TYPE, 'type', { unique: false });
       }
-      if (oldVersion < 2) {
-        // Backfill v2 fields on rows captured before display name and
-        // avatar URL existed. Runs inside the versionchange transaction
-        // so it completes before any read sees the new schema.
-        const tx = request.transaction;
-        if (tx) {
-          const store = tx.objectStore(STORE_ITEMS);
-          const cursorReq = store.openCursor();
-          cursorReq.onsuccess = () => {
-            const cursor = cursorReq.result;
-            if (!cursor) return;
-            const row = cursor.value as Partial<LibraryItem>;
-            let changed = false;
-            if (row.authorDisplayName === undefined) {
-              row.authorDisplayName = null;
-              changed = true;
-            }
-            if (row.authorAvatarUrl === undefined) {
-              row.authorAvatarUrl = null;
-              changed = true;
-            }
-            if (changed) cursor.update(row);
-            cursor.continue();
-          };
-        }
-      }
+      // Row-rewriting passes run SEQUENTIALLY, one per schema version,
+      // each keeping its original logic verbatim in its own function.
+      // They cannot run concurrently: two open cursors interleave row
+      // by row, and `cursor.update` writes the FULL row that cursor
+      // read — the later pass's stale read silently erases the earlier
+      // pass's fields (found when v3 joined v2 on v1 databases). All
+      // passes still complete inside the versionchange transaction, so
+      // no read ever sees a half-migrated store.
+      const tx = request.transaction;
+      if (!tx) return;
+      const passes: MigrationPass[] = [];
+      if (oldVersion < 2) passes.push(backfillDisplayFieldsV2);
+      if (oldVersion < 3) passes.push(collapseSourceTaxonomyV3);
+      let passIndex = 0;
+      const runNextPass = (): void => {
+        const pass = passes[passIndex++];
+        if (!pass) return;
+        pass(tx.objectStore(STORE_ITEMS), runNextPass);
+      };
+      runNextPass();
     };
     request.onsuccess = () => {
       cachedDb = request.result;
@@ -80,6 +80,57 @@ export function openCorpus(): Promise<IDBDatabase> {
     };
     request.onerror = () => reject(request.error ?? new Error('IndexedDB open failed'));
   });
+}
+
+type MigrationPass = (store: IDBObjectStore, done: () => void) => void;
+
+/** v2 pass: backfill `authorDisplayName` / `authorAvatarUrl` as null on
+ *  rows captured before X-native rendering existed. */
+function backfillDisplayFieldsV2(store: IDBObjectStore, done: () => void): void {
+  const cursorReq = store.openCursor();
+  cursorReq.onsuccess = () => {
+    const cursor = cursorReq.result;
+    if (!cursor) {
+      done();
+      return;
+    }
+    const row = cursor.value as Partial<LibraryItem>;
+    let changed = false;
+    if (row.authorDisplayName === undefined) {
+      row.authorDisplayName = null;
+      changed = true;
+    }
+    if (row.authorAvatarUrl === undefined) {
+      row.authorAvatarUrl = null;
+      changed = true;
+    }
+    if (changed) cursor.update(row);
+    cursor.continue();
+  };
+}
+
+/** v3 pass: source-taxonomy collapse (roadmap Core Concept A) —
+ *  'capture' and 'manual' merge into 'manual' (both are handpicks);
+ *  'import' is renamed 'archive'. 'shipped' is new, so nothing
+ *  migrates onto it. */
+function collapseSourceTaxonomyV3(store: IDBObjectStore, done: () => void): void {
+  const cursorReq = store.openCursor();
+  cursorReq.onsuccess = () => {
+    const cursor = cursorReq.result;
+    if (!cursor) {
+      done();
+      return;
+    }
+    const row = cursor.value as { source?: string };
+    if (row.source === 'capture') {
+      row.source = 'manual';
+      cursor.update(row);
+    } else if (row.source === 'import') {
+      row.source = 'archive';
+      cursor.update(row);
+    }
+    cursor.continue();
+  };
 }
 
 /** For tests: drop the cached connection so a fresh `indexedDB` is observed. */

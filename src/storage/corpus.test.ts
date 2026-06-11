@@ -119,5 +119,52 @@ describe('corpus store', () => {
     expect(items).toHaveLength(1);
     expect(items[0]?.authorDisplayName).toBeNull();
     expect(items[0]?.authorAvatarUrl).toBeNull();
+    // The same upgrade chain also runs v3: the v1 'capture' source
+    // arrives as 'manual'.
+    expect(items[0]?.source).toBe('manual');
+  });
+
+  it("v2→v3 migration collapses sources: 'capture'→'manual', 'import'→'archive'", async () => {
+    // Seed a v2 database directly (v2 rows carry the display fields),
+    // one row per legacy source value plus an already-correct one.
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 2);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        const store = db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
+        store.createIndex('byType', 'type', { unique: false });
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction(STORE_ITEMS, 'readwrite');
+        const base = {
+          text: 'pre-migration',
+          type: 'post',
+          authorHandle: 'me',
+          authorDisplayName: null,
+          authorAvatarUrl: null,
+          timestamp: '2025-01-01T00:00:00Z',
+          engagement: null,
+          embedding: null,
+          createdAt: 1,
+        };
+        tx.objectStore(STORE_ITEMS).add({ ...base, id: 'was-capture', source: 'capture' });
+        tx.objectStore(STORE_ITEMS).add({ ...base, id: 'was-import', source: 'import' });
+        tx.objectStore(STORE_ITEMS).add({ ...base, id: 'was-manual', source: 'manual' });
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error ?? new Error('seed transaction failed'));
+      };
+      req.onerror = () => reject(req.error ?? new Error('seed open failed'));
+    });
+    _resetCorpusCache();
+
+    const items = await getAllItems();
+    const bySource = new Map(items.map((i) => [i.id, i.source]));
+    expect(bySource.get('was-capture')).toBe('manual');
+    expect(bySource.get('was-import')).toBe('archive');
+    expect(bySource.get('was-manual')).toBe('manual');
   });
 });
