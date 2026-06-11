@@ -20,7 +20,7 @@ interface Props {
   flashRow: FlashRow | null;
 }
 
-type Filter = 'all' | 'post' | 'reply';
+type Filter = 'all' | 'post' | 'reply' | 'starred';
 
 /**
  * Voice — the saved-examples library. Owns the list state and storage
@@ -65,7 +65,18 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
   // The visible count IS the control: it nudges toward a small canon
   // (Core Concept A) — deliberately no ranking or bulk tools.
   const starred = items.filter((i) => i.favorite).length;
-  const visible = filter === 'all' ? items : items.filter((i) => i.type === filter);
+  const visible =
+    filter === 'all'
+      ? items
+      : filter === 'starred'
+        ? items.filter((i) => i.favorite)
+        : items.filter((i) => i.type === filter);
+
+  // The starred pill disappears when the last star is removed — don't
+  // leave the filter stuck on a state with no control to escape it.
+  useEffect(() => {
+    if (filter === 'starred' && starred === 0) setFilter('all');
+  }, [filter, starred]);
 
   async function remove(item: LibraryItem): Promise<void> {
     await deleteItem(item.id);
@@ -143,12 +154,6 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
           <span className="eyebrow">Saved examples</span>
           <p className="help" style={{ marginTop: 2 }}>
             The writing your drafts learn from. Edit or retype anytime.
-            {starred > 0 && (
-              <span title="Starred items are guaranteed in every prompt — keep the set small">
-                {' '}
-                ★ {starred} starred
-              </span>
-            )}
           </p>
         </div>
         {/* Only show + when the form is closed. While open, the
@@ -197,6 +202,16 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
           >
             Replies {replies}
           </button>
+          {starred > 0 && (
+            <button
+              type="button"
+              className={`pill ${filter === 'starred' ? 'active' : ''}`}
+              title="Starred items are guaranteed in every prompt — keep the set small"
+              onClick={() => setFilter('starred')}
+            >
+              ★ {starred}
+            </button>
+          )}
         </div>
         {visible.length > 0 && (
           <button type="button" className="btn ghost sm" onClick={toggleAll}>
@@ -215,8 +230,12 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
         ) : (
           <div className="empty">
             <IcVoice className="ei" />
-            No {filter === 'post' ? 'posts' : 'replies'} saved yet — switch to <strong>All</strong>{' '}
-            to see the rest.
+            No {filter === 'post'
+              ? 'posts'
+              : filter === 'reply'
+                ? 'replies'
+                : 'starred examples'}{' '}
+            saved yet — switch to <strong>All</strong> to see the rest.
           </div>
         )
       ) : (

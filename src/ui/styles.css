@@ -1269,6 +1269,9 @@ code {
   cursor: pointer;
   padding: 5px 0 0;
   margin: 0;
+  /* The column flexbox would stretch the button full-width and center
+     its label — shrink to content so it sits flush left. */
+  align-self: flex-start;
 }
 .lib-more:hover {
   text-decoration: underline;
@@ -1276,11 +1279,16 @@ code {
 .lib-actions {
   display: flex;
   gap: 2px;
+}
+/* Hover-reveal per BUTTON (not the container) so a starred star can
+   stay face up — it's state the user set, not just an action. */
+.lib-actions .icon-btn {
   opacity: 0;
   transition: opacity 0.12s;
 }
-.lib-row:hover .lib-actions,
-.lib-row:focus-within .lib-actions {
+.lib-row:hover .lib-actions .icon-btn,
+.lib-row:focus-within .lib-actions .icon-btn,
+.lib-actions .star-btn.starred {
   opacity: 1;
 }
 .lib-edit {
