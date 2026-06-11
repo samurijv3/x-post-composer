@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { PromptTemplate, PromptTemplateKey } from '../../../types';
-import { extractSlotNames, SYSTEM_USER_MARKER, validateTemplate } from '../../../lib/prompt';
+import { extractSlotNames, validateTemplate } from '../../../lib/prompt';
 import { weightedLength } from '../../../lib/counting';
 import { IcCheck, IcChevR, IcWarn } from '../../icons';
 
 const TEMPLATE_LABELS: Record<PromptTemplateKey, string> = {
   reply: 'Reply',
   post: 'Post',
-  chipRefine: 'Chip refine',
-  moreLessRefine: 'More / less refine',
-  repair: 'Repair',
-  tighten: 'Tighten',
+  refine: 'Refine',
 };
 
 interface TemplateRowProps {
@@ -23,7 +20,11 @@ interface TemplateRowProps {
   onReset: () => void;
 }
 
-/** One collapsible template editor with slot badges and drift warnings. */
+/**
+ * One collapsible template editor — a System body and a User body, each
+ * its own textarea mapping one-to-one onto the message roles sent to
+ * Anthropic — with slot badges and drift warnings across both bodies.
+ */
 export function TemplateRow({
   templateKey,
   template,
@@ -33,36 +34,33 @@ export function TemplateRow({
   onSave,
   onReset,
 }: TemplateRowProps) {
-  const [body, setBody] = useState<string>(template.body);
+  const [system, setSystem] = useState<string>(template.system);
+  const [user, setUser] = useState<string>(template.user);
   useEffect(() => {
-    setBody(template.body);
-  }, [template.body]);
-  const edited = body !== template.body || template.body !== defaultTemplate.body;
-  const live: PromptTemplate = { ...template, body };
+    setSystem(template.system);
+    setUser(template.user);
+  }, [template.system, template.user]);
+  const dirty = system !== template.system || user !== template.user;
+  const savedEdited =
+    template.system !== defaultTemplate.system || template.user !== defaultTemplate.user;
+  const live: PromptTemplate = { ...template, system, user };
   // The same parser the engine uses — a local regex here once disagreed
   // with it on whitespace ({{ name }}) and showed false "missing slot"
   // badges for templates that rendered fine.
   const v = validateTemplate(live);
-  const present = new Set(extractSlotNames(body));
+  const present = new Set([...extractSlotNames(system), ...extractSlotNames(user)]);
   const missing = v.declaredButUnused;
-  // Generation templates use the `===USER===` marker to split the
-  // prompt into a system message + a per-call user message.
-  // If a user removes it, the prompt still works (sent as a single
-  // user message) but loses the system framing — flag it so they're
-  // not surprised.
-  const isGenerationTemplate = templateKey === 'reply' || templateKey === 'post';
-  const markerMissing = isGenerationTemplate && !body.includes(SYSTEM_USER_MARKER);
 
   function save(): void {
-    if (body === template.body) return;
-    onSave({ ...template, body });
+    if (!dirty) return;
+    onSave({ ...template, system, user });
   }
 
   return (
     <div className={`collapse ${open ? 'open' : ''}`}>
       <button type="button" className="collapse-head" onClick={onToggle}>
         <span>{TEMPLATE_LABELS[templateKey]}</span>
-        {body !== defaultTemplate.body && (
+        {(dirty || savedEdited) && (
           <span className="badge warn" style={{ marginLeft: 6 }}>
             edited
           </span>
@@ -72,19 +70,27 @@ export function TemplateRow({
             missing slot
           </span>
         )}
-        {markerMissing && (
-          <span className="badge warn" style={{ marginLeft: 6 }}>
-            no system/user split
-          </span>
-        )}
         <IcChevR className="chev" />
       </button>
       {open && (
         <div className="collapse-body">
+          <span className="slot-label" style={{ display: 'block', marginBottom: 4 }}>
+            System — stable framing, sent as the system message
+          </span>
           <textarea
-            rows={9}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
+            rows={8}
+            value={system}
+            onChange={(e) => setSystem(e.target.value)}
+            onBlur={save}
+            spellCheck={false}
+          />
+          <span className="slot-label" style={{ display: 'block', margin: '10px 0 4px' }}>
+            User — per-call content, sent as the user message
+          </span>
+          <textarea
+            rows={8}
+            value={user}
+            onChange={(e) => setUser(e.target.value)}
             onBlur={save}
             spellCheck={false}
           />
@@ -109,17 +115,14 @@ export function TemplateRow({
               strings).
             </p>
           )}
-          {markerMissing && (
-            <p className="help" style={{ color: 'var(--warn)' }}>
-              <strong>Heads up:</strong> the <code>===USER===</code> marker is missing. The whole
-              template will be sent as a single user message with no system framing. Add{' '}
-              <code>===USER===</code> on its own line to separate the stable instructions (above)
-              from the per-call inputs (below).
-            </p>
-          )}
           <div className="field-row">
-            <span className="tmpl-meta">{weightedLength(body)} chars</span>
-            <button type="button" className="btn sm ghost" disabled={!edited} onClick={onReset}>
+            <span className="tmpl-meta">{weightedLength(system) + weightedLength(user)} chars</span>
+            <button
+              type="button"
+              className="btn sm ghost"
+              disabled={!dirty && !savedEdited}
+              onClick={onReset}
+            >
               Reset to default
             </button>
           </div>

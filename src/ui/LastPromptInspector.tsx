@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react';
 import { getLastPrompt, subscribeLastPrompt, type LastPromptRecord } from '../storage';
 import { weightedLength } from '../lib/counting';
-import { splitPrompt } from '../lib/prompt';
 import { IcCheck, IcCopy, IcSearch } from './icons';
 
 /**
- * Live view of the most recent Anthropic call — System block + User
- * block + Response block, each in monospace with a Copy button.
- * Reads `chrome.storage.session.lastPrompt:v1` and subscribes for
- * live updates so it reflects refines as they fire.
+ * Live view of the most recent pipeline invocation — every Anthropic
+ * call in order (generate/refine, then the optional repair and tighten
+ * passes), each as a labelled System + User pair, with the final
+ * Response last. Reads `chrome.storage.session.lastPrompt:v2` and
+ * subscribes for live updates so it reflects refines as they fire.
  *
- * The prompt stored is the rendered template (potentially containing
- * the `===USER===` marker). It is split with the same `splitPrompt`
- * the orchestrator uses, so the blocks shown match what was actually
- * sent to Anthropic byte for byte.
+ * The record is written by the pipeline at send time, so the blocks
+ * shown match what was actually sent to Anthropic byte for byte —
+ * transparency is load-bearing (design.md).
  */
 export function LastPromptInspector() {
   const [open, setOpen] = useState<boolean>(false);
@@ -26,14 +25,42 @@ export function LastPromptInspector() {
     return () => unsub();
   }, []);
 
-  async function copy(label: string, text: string): Promise<void> {
+  async function copy(key: string, text: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(label);
+      setCopied(key);
       window.setTimeout(() => setCopied(null), 1400);
     } catch {
       // ignore
     }
+  }
+
+  function block(key: string, label: string, text: string, isResponse = false) {
+    return (
+      <div key={key} className={`insp-block ${isResponse ? 'is-response' : ''}`}>
+        <div className="insp-head">
+          <span className="insp-label">{label}</span>
+          <span className="insp-count">{text === '' ? '0' : weightedLength(text)} chars</span>
+          <button
+            type="button"
+            className="insp-copy"
+            onClick={() => void copy(key, text)}
+            disabled={text === ''}
+          >
+            {copied === key ? (
+              <>
+                <IcCheck /> Copied
+              </>
+            ) : (
+              <>
+                <IcCopy /> Copy
+              </>
+            )}
+          </button>
+        </div>
+        <pre className="insp-pre">{text === '' ? '(empty)' : text}</pre>
+      </div>
+    );
   }
 
   return (
@@ -57,16 +84,10 @@ export function LastPromptInspector() {
           </p>
         ) : (
           (() => {
-            const { system, user } = splitPrompt(record.prompt);
             const ageMs = Date.now() - record.timestamp;
             const minutes = Math.floor(ageMs / 60000);
             const seconds = Math.floor(ageMs / 1000);
             const when = minutes > 0 ? `${minutes} min ago` : `${seconds} sec ago`;
-            const blocks = [
-              { label: 'System', text: system, response: false as const },
-              { label: 'User', text: user, response: false as const },
-              { label: 'Response', text: record.response, response: true as const },
-            ];
             return (
               <div className="inspector" style={{ marginTop: 12, paddingTop: 0, borderTop: 0 }}>
                 <div className="insp-meta">
@@ -74,40 +95,24 @@ export function LastPromptInspector() {
                     {record.mode}
                   </span>
                   {record.wasRepaired && <span className="badge warn">repaired</span>}
-                  <span className="help">sent {when}</span>
+                  <span className="help">
+                    {record.calls.length === 1 ? '1 call' : `${record.calls.length} calls`} · sent{' '}
+                    {when}
+                  </span>
                 </div>
-                {record.wasRepaired && record.repairContext && (
-                  <p className="help">
-                    Repair targeted: {record.repairContext.replace(/\n/g, ' · ')}
-                  </p>
-                )}
-                {blocks.map((b) => (
-                  <div key={b.label} className={`insp-block ${b.response ? 'is-response' : ''}`}>
-                    <div className="insp-head">
-                      <span className="insp-label">{b.label}</span>
-                      <span className="insp-count">
-                        {b.text === '' ? '0' : weightedLength(b.text)} chars
-                      </span>
-                      <button
-                        type="button"
-                        className="insp-copy"
-                        onClick={() => void copy(b.label, b.text)}
-                        disabled={b.text === ''}
-                      >
-                        {copied === b.label ? (
-                          <>
-                            <IcCheck /> Copied
-                          </>
-                        ) : (
-                          <>
-                            <IcCopy /> Copy
-                          </>
-                        )}
-                      </button>
-                    </div>
-                    <pre className="insp-pre">{b.text === '' ? '(empty)' : b.text}</pre>
+                {record.calls.map((call, i) => (
+                  <div key={`call-${String(i)}`}>
+                    <span className="eyebrow" style={{ display: 'block', margin: '10px 0 4px' }}>
+                      Call {i + 1} — {call.label}
+                    </span>
+                    {block(`${String(i)}:system`, 'System', call.system)}
+                    {block(`${String(i)}:user`, 'User', call.user)}
                   </div>
                 ))}
+                <span className="eyebrow" style={{ display: 'block', margin: '10px 0 4px' }}>
+                  Final response
+                </span>
+                {block('response', 'Response', record.response, true)}
               </div>
             );
           })()

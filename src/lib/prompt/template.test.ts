@@ -1,42 +1,60 @@
 import { describe, expect, it } from 'vitest';
-import {
-  extractSlotNames,
-  renderTemplate,
-  splitPrompt,
-  SYSTEM_USER_MARKER,
-  validateTemplate,
-} from './template';
+import { extractSlotNames, fillSlots, renderTemplate, validateTemplate } from './template';
 import type { PromptTemplate } from '../../types';
 
-function tpl(body: string, slots: string[] = []): PromptTemplate {
-  return { name: 'test', body, slots };
+function tpl(system: string, user: string, slots: string[] = []): PromptTemplate {
+  return { name: 'test', system, user, slots };
 }
 
-describe('renderTemplate', () => {
+describe('fillSlots', () => {
   it('substitutes a single slot', () => {
-    expect(renderTemplate(tpl('Hello, {{name}}!'), { name: 'world' })).toBe('Hello, world!');
+    expect(fillSlots('Hello, {{name}}!', { name: 'world' })).toBe('Hello, world!');
   });
 
   it('substitutes multiple slots in order', () => {
-    expect(renderTemplate(tpl('{{a}} and {{b}}'), { a: 'eggs', b: 'bacon' })).toBe(
-      'eggs and bacon',
-    );
+    expect(fillSlots('{{a}} and {{b}}', { a: 'eggs', b: 'bacon' })).toBe('eggs and bacon');
   });
 
   it('tolerates whitespace inside the braces', () => {
-    expect(renderTemplate(tpl('{{ name }}'), { name: 'sam' })).toBe('sam');
+    expect(fillSlots('{{ name }}', { name: 'sam' })).toBe('sam');
   });
 
   it('renders the same slot multiple times', () => {
-    expect(renderTemplate(tpl('{{x}} {{x}}'), { x: 'go' })).toBe('go go');
+    expect(fillSlots('{{x}} {{x}}', { x: 'go' })).toBe('go go');
   });
 
   it('renders unknown slots as empty string', () => {
-    expect(renderTemplate(tpl('[{{missing}}]'), {})).toBe('[]');
+    expect(fillSlots('[{{missing}}]', {})).toBe('[]');
   });
 
   it('leaves text with no slots untouched', () => {
-    expect(renderTemplate(tpl('just text'), { unused: 'x' })).toBe('just text');
+    expect(fillSlots('just text', { unused: 'x' })).toBe('just text');
+  });
+});
+
+describe('renderTemplate', () => {
+  it('renders both bodies with the same values', () => {
+    const out = renderTemplate(tpl('sys: {{voice}}', 'user: {{voice}} {{ask}}'), {
+      voice: 'dry',
+      ask: 'reply',
+    });
+    expect(out.system).toBe('sys: dry');
+    expect(out.user).toBe('user: dry reply');
+  });
+
+  it('trims each rendered body so collapsed sections leave no stray edges', () => {
+    const out = renderTemplate(tpl('{{lead}}stable text\n', '\n{{optional}}\ncontent\n'), {
+      lead: '',
+      optional: '',
+    });
+    expect(out.system).toBe('stable text');
+    expect(out.user).toBe('content');
+  });
+
+  it('returns an empty system when the system body is empty', () => {
+    const out = renderTemplate(tpl('', 'hello {{x}}'), { x: 'there' });
+    expect(out.system).toBe('');
+    expect(out.user).toBe('hello there');
   });
 });
 
@@ -51,61 +69,34 @@ describe('extractSlotNames', () => {
 });
 
 describe('validateTemplate', () => {
-  it('reports no drift when declared slots match body slots exactly', () => {
-    const t = tpl('{{a}} {{b}}', ['a', 'b']);
+  it('reports no drift when declared slots match the slots used across both bodies', () => {
+    const t = tpl('{{a}}', '{{b}}', ['a', 'b']);
     const v = validateTemplate(t);
     expect(v.declaredButUnused).toEqual([]);
     expect(v.usedButUndeclared).toEqual([]);
   });
 
-  it('reports declaredButUnused when a slot was removed from the body', () => {
-    const t = tpl('{{a}}', ['a', 'b']);
+  it('counts a slot as used no matter which body references it', () => {
+    const systemOnly = tpl('{{a}}', 'plain', ['a']);
+    expect(validateTemplate(systemOnly).declaredButUnused).toEqual([]);
+    const userOnly = tpl('plain', '{{a}}', ['a']);
+    expect(validateTemplate(userOnly).declaredButUnused).toEqual([]);
+  });
+
+  it('reports declaredButUnused when a slot was removed from both bodies', () => {
+    const t = tpl('{{a}}', 'plain', ['a', 'b']);
     expect(validateTemplate(t).declaredButUnused).toEqual(['b']);
   });
 
-  it('reports usedButUndeclared when the body invents a slot', () => {
-    const t = tpl('{{a}} {{surprise}}', ['a']);
-    expect(validateTemplate(t).usedButUndeclared).toEqual(['surprise']);
+  it('reports usedButUndeclared when either body invents a slot', () => {
+    const t = tpl('{{a}} {{surprise}}', '{{alsoNew}}', ['a']);
+    expect(validateTemplate(t).usedButUndeclared).toEqual(['surprise', 'alsoNew']);
   });
 
   it('reports both kinds of drift at once', () => {
-    const t = tpl('{{a}} {{c}}', ['a', 'b']);
+    const t = tpl('{{a}}', '{{c}}', ['a', 'b']);
     const v = validateTemplate(t);
     expect(v.declaredButUnused).toEqual(['b']);
     expect(v.usedButUndeclared).toEqual(['c']);
-  });
-});
-
-describe('splitPrompt', () => {
-  it('returns the whole prompt as user when no marker is present', () => {
-    const result = splitPrompt('hello world');
-    expect(result.system).toBe('');
-    expect(result.user).toBe('hello world');
-  });
-
-  it('splits at the marker, trimming whitespace from each side', () => {
-    const body = `you are an assistant.\n\n${SYSTEM_USER_MARKER}\n\nthe user wants to say hi.`;
-    const result = splitPrompt(body);
-    expect(result.system).toBe('you are an assistant.');
-    expect(result.user).toBe('the user wants to say hi.');
-  });
-
-  it('uses the FIRST marker if multiple are present', () => {
-    const body = `A\n${SYSTEM_USER_MARKER}\nB\n${SYSTEM_USER_MARKER}\nC`;
-    const result = splitPrompt(body);
-    expect(result.system).toBe('A');
-    expect(result.user).toBe(`B\n${SYSTEM_USER_MARKER}\nC`);
-  });
-
-  it('returns empty system when the marker is at the very start', () => {
-    const result = splitPrompt(`${SYSTEM_USER_MARKER}\nuser content`);
-    expect(result.system).toBe('');
-    expect(result.user).toBe('user content');
-  });
-
-  it('returns empty user when the marker is at the very end', () => {
-    const result = splitPrompt(`system content\n${SYSTEM_USER_MARKER}`);
-    expect(result.system).toBe('system content');
-    expect(result.user).toBe('');
   });
 });

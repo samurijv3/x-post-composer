@@ -7,45 +7,89 @@
 import type { GenerationRequest, LibraryItem, Settings } from '../../types';
 import type { Span } from '../exclusion';
 import {
+  buildAspirationalBlock,
   buildCharConstraintInstruction,
   buildExclusionInstructions,
-  buildParentSection,
+  buildThreadContextBlock,
   formatExamples,
+  GENERATION_PRECEDENCE,
+  INTENT_FRAMING,
+  REFINE_PRECEDENCE,
   type IntentShape,
 } from './defaults';
-import { renderTemplate } from './template';
+import { renderTemplate, type RenderedPrompt } from './template';
+
+/**
+ * The example pools the initial prompt draws from, behind the
+ * `selectExamples` seam. `aspirational` is deliberately empty in v1
+ * (its block collapses); favorites feed it in roadmap Phase 5. The
+ * model never learns which pool an example came from beyond the block
+ * it appears in.
+ */
+export interface ExamplePools {
+  voice: LibraryItem[];
+  aspirational: LibraryItem[];
+}
 
 /**
  * Build the initial generation prompt for a post or reply request by
- * filling the mode's template slots from settings + sampled examples.
- * Empty style guide / bullets render as explicit placeholder lines so
- * the template never reads as broken.
+ * filling the mode's template slots from settings + sampled pools.
+ * Returns the system/user pair the orchestrator sends as separate
+ * message roles. Empty style guide / bullets render as explicit
+ * placeholder lines so the template never reads as broken.
  */
 export function assembleInitialPrompt(
   request: GenerationRequest,
   settings: Settings,
-  examples: LibraryItem[],
-): string {
+  pools: ExamplePools,
+): RenderedPrompt {
   const template = settings.promptTemplates[request.mode];
   const slots: Record<string, string> = {
+    precedence: GENERATION_PRECEDENCE,
     styleGuide:
       settings.styleGuide.trim() === ''
         ? '(no style guide set — infer voice from the examples)'
         : settings.styleGuide.trim(),
     exclusions: buildExclusionInstructions(settings),
-    examples: formatExamples(examples),
-    bullets: request.bullets.trim() === '' ? '(no bullets given)' : request.bullets.trim(),
-    charConstraint: buildCharConstraintInstruction({
+    aspirationalExamples: buildAspirationalBlock(pools.aspirational),
+    voiceExamples: formatExamples(pools.voice),
+    length: buildCharConstraintInstruction({
       charCap: request.charCap,
       softCapChars: settings.softCapChars,
     }),
+    intentFraming: INTENT_FRAMING[classifyIntentShape(request.bullets)],
+    bullets: request.bullets.trim() === '' ? '(no bullets given)' : request.bullets.trim(),
   };
   if (request.mode === 'reply') {
     const ctx = request.replyContext;
     slots.targetText = ctx?.targetText ?? '(no target captured)';
-    slots.parentSection = buildParentSection(ctx?.grandparentText ?? null);
+    slots.threadContext = buildThreadContextBlock(ctx?.grandparentText ?? null);
   }
   return renderTemplate(template, slots);
+}
+
+/**
+ * Build a refine prompt — chip, more/less, repair, and tighten all go
+ * through here, so every revision pass carries the same voice anchor
+ * (style guide + exclusions in the system body) as generation. The
+ * instruction is panel-supplied for chip/more-less and code-supplied
+ * for repair/tighten (`buildRepairInstruction`, `TIGHTEN_INSTRUCTION`).
+ */
+export function assembleRefinePrompt(
+  settings: Settings,
+  previousDraftText: string,
+  instruction: string,
+): RenderedPrompt {
+  return renderTemplate(settings.promptTemplates.refine, {
+    precedence: REFINE_PRECEDENCE,
+    styleGuide:
+      settings.styleGuide.trim() === ''
+        ? "(no style guide set — preserve the draft's existing voice)"
+        : settings.styleGuide.trim(),
+    exclusions: buildExclusionInstructions(settings),
+    draft: previousDraftText,
+    instruction,
+  });
 }
 
 /**
@@ -69,10 +113,10 @@ export function classifyIntentShape(bullets: string): IntentShape {
 }
 
 /**
- * Render a violation list as the bullet block the repair template's
- * {{violations}} slot expects. One line per structural rule that fired
- * (regardless of how many spans), plus one line naming the distinct
- * banlist entries that matched.
+ * Render a violation list as the bullet block `buildRepairInstruction`
+ * embeds. One line per structural rule that fired (regardless of how
+ * many spans), plus one line naming the distinct banlist entries that
+ * matched.
  */
 export function summarizeViolations(violations: Span[]): string {
   const lines: string[] = [];

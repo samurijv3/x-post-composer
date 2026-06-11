@@ -1,25 +1,31 @@
 export {
   renderTemplate,
+  fillSlots,
   validateTemplate,
   extractSlotNames,
-  splitPrompt,
-  SYSTEM_USER_MARKER,
+  type RenderedPrompt,
   type TemplateValidation,
-  type SplitPrompt,
 } from './template';
 export {
   DEFAULT_PROMPT_TEMPLATES,
+  GENERATION_PRECEDENCE,
+  REFINE_PRECEDENCE,
   INTENT_FRAMING,
+  TIGHTEN_INSTRUCTION,
+  buildRepairInstruction,
   formatExamples,
+  buildAspirationalBlock,
   buildExclusionInstructions,
   buildCharConstraintInstruction,
-  buildParentSection,
+  buildThreadContextBlock,
   type IntentShape,
 } from './defaults';
 export {
   assembleInitialPrompt,
+  assembleRefinePrompt,
   classifyIntentShape,
   composeMoreLessInstruction,
   summarizeViolations,
   escalateChipInstruction,
+  type ExamplePools,
 } from './assemble';

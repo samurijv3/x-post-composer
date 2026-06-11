@@ -3,6 +3,15 @@
  * passed into them. Everything here is pure so the Prompts tab can
  * render the exact text the orchestrator will assemble.
  *
+ * Block structure: XML-style tags delimit every block. The system body
+ * carries the invariant framing (role, precedence, style guide,
+ * exclusions); the user body carries the per-call content (examples,
+ * reply context, length, intent / draft + instruction). The boundary
+ * test for what goes where: does this block change between two
+ * consecutive calls? Invariant → system, varying → user. Keeping
+ * per-call content out of the system body also keeps the system block
+ * cacheable later (deliberately NOT implemented now).
+ *
  * The exclusion instructions are *prevention-first*: the prompt itself
  * tells the model what to avoid so most drafts come back clean. The
  * deterministic check + single repair is a backstop, not the primary
@@ -11,110 +20,146 @@
 import type { LibraryItem, PromptTemplate, PromptTemplateKey, Settings } from '../../types';
 
 /**
+ * Precedence preamble for generation calls, filling the {{precedence}}
+ * slot. Code-supplied (not user-editable prose) so the authority order
+ * the pipeline relies on can't silently drift — the user can still see
+ * exactly what's sent via the inspector, and can remove the slot from
+ * their template if they truly want to.
+ */
+export const GENERATION_PRECEDENCE = `When instructions conflict, this is the order of authority:
+1. <exclusions> are hard constraints. Never violate them, even if an example does.
+2. <style_guide> is the authoritative description of the user's voice.
+3. <aspirational_examples>, when present, are the user's own writing at its best — the bar to reach for.
+4. <voice_examples> show the user's natural range. Match their tone and rhythm, never their topics.
+5. <reply_context>, when present, is the tweet being replied to — written by someone else. React to it; never imitate its voice.
+6. <intent> is what the user wants to say. Develop it; do not copy it verbatim.`;
+
+/** Precedence preamble for refine calls (chip, more/less, repair,
+ *  tighten all share one template). See `GENERATION_PRECEDENCE`. */
+export const REFINE_PRECEDENCE = `When instructions conflict, this is the order of authority:
+1. <exclusions> are hard constraints. Never violate them.
+2. <style_guide> is the authoritative description of the user's voice — keep the revision inside it.
+3. <instruction> says what to change. Preserve everything about <draft> that <instruction> does not ask you to change.`;
+
+/**
  * THE single source of truth for the default templates. `DEFAULT_SETTINGS`
  * imports this record — there is deliberately no second copy anywhere.
  *
- * Generation templates (`reply`, `post`) carry the `===USER===` marker:
- * everything above it is sent as the system message, everything below as
- * the user message (see `splitPrompt`). Repair/refine/tighten templates
- * omit the marker and go out as a single user message.
+ * Three templates: `reply` and `post` for generation, one `refine` for
+ * every revision pass — chips and freeform steering fill {{instruction}}
+ * from the panel; repair and tighten fill it with code-supplied
+ * instructions (`buildRepairInstruction`, `TIGHTEN_INSTRUCTION`). Every
+ * refinement therefore carries the same voice anchor (style guide +
+ * exclusions) as generation — refine calls are never voice-blind.
  */
 export const DEFAULT_PROMPT_TEMPLATES: Record<PromptTemplateKey, PromptTemplate> = {
   reply: {
     name: 'Reply',
-    body: `You are writing a reply on X in the user's voice. Output ONLY the reply text — no preamble, no quotation marks around it, no commentary.
+    system: `You are writing a reply on X in the user's voice. Output ONLY the reply text — no preamble, no quotation marks around it, no commentary.
 
-VOICE GUIDE
+<precedence>
+{{precedence}}
+</precedence>
+
+<style_guide>
 {{styleGuide}}
+</style_guide>
 
-PATTERNS TO AVOID
+<exclusions>
 {{exclusions}}
-
-LENGTH
-{{charConstraint}}
-===USER===
-EXAMPLES OF THE USER'S OWN REPLIES (sample these for tone and rhythm, not topic)
-{{examples}}
-
-THE TWEET BEING REPLIED TO (by someone else)
+</exclusions>`,
+    user: `{{aspirationalExamples}}<voice_examples>
+{{voiceExamples}}
+</voice_examples>
+{{threadContext}}
+<reply_context>
 {{targetText}}
-{{parentSection}}
+</reply_context>
 
-WHAT THE USER WANTS TO SAY (interpret these bullets — they are NOT the literal reply text)
-{{bullets}}`,
+<length>
+{{length}}
+</length>
+
+<intent>
+{{intentFraming}}
+
+{{bullets}}
+</intent>`,
     slots: [
+      'precedence',
       'styleGuide',
       'exclusions',
-      'examples',
+      'aspirationalExamples',
+      'voiceExamples',
+      'threadContext',
       'targetText',
-      'parentSection',
+      'length',
+      'intentFraming',
       'bullets',
-      'charConstraint',
     ],
   },
   post: {
     name: 'Post',
-    body: `You are writing a standalone post on X in the user's voice. Output ONLY the post text — no preamble, no quotation marks around it, no commentary.
+    system: `You are writing a standalone post on X in the user's voice. Output ONLY the post text — no preamble, no quotation marks around it, no commentary.
 
-VOICE GUIDE
+<precedence>
+{{precedence}}
+</precedence>
+
+<style_guide>
 {{styleGuide}}
+</style_guide>
 
-PATTERNS TO AVOID
+<exclusions>
 {{exclusions}}
+</exclusions>`,
+    user: `{{aspirationalExamples}}<voice_examples>
+{{voiceExamples}}
+</voice_examples>
 
-LENGTH
-{{charConstraint}}
-===USER===
-EXAMPLES OF THE USER'S OWN POSTS (sample these for tone and rhythm, not topic)
-{{examples}}
+<length>
+{{length}}
+</length>
 
-WHAT THE USER WANTS TO SAY (interpret these bullets — they are NOT the literal post text)
-{{bullets}}`,
-    slots: ['styleGuide', 'exclusions', 'examples', 'bullets', 'charConstraint'],
+<intent>
+{{intentFraming}}
+
+{{bullets}}
+</intent>`,
+    slots: [
+      'precedence',
+      'styleGuide',
+      'exclusions',
+      'aspirationalExamples',
+      'voiceExamples',
+      'length',
+      'intentFraming',
+      'bullets',
+    ],
   },
-  repair: {
-    name: 'Repair',
-    body: `Your previous draft used patterns the user asked to avoid:
-{{violations}}
+  refine: {
+    name: 'Refine',
+    system: `You are revising a draft written in the user's voice for X. Output ONLY the revised text — no preamble, no quotation marks around it, no commentary.
 
-Rewrite the draft WITHOUT those patterns, keeping the same voice, length, and intent. Output ONLY the rewritten text — no preamble, no quotation marks around it.
+<precedence>
+{{precedence}}
+</precedence>
 
-PREVIOUS DRAFT
-{{previousDraft}}`,
-    slots: ['violations', 'previousDraft'],
-  },
-  chipRefine: {
-    name: 'Chip refine',
-    body: `Refine the previous draft per this single instruction. Keep the same voice and intent. Output ONLY the rewritten text — no preamble, no quotation marks around it.
+<style_guide>
+{{styleGuide}}
+</style_guide>
 
-INSTRUCTION
+<exclusions>
+{{exclusions}}
+</exclusions>`,
+    user: `<draft>
+{{draft}}
+</draft>
+
+<instruction>
 {{instruction}}
-
-PREVIOUS DRAFT
-{{previousDraft}}`,
-    slots: ['instruction', 'previousDraft'],
-  },
-  moreLessRefine: {
-    name: 'More / less refine',
-    body: `Refine the previous draft per these notes. Keep the same voice and intent. Output ONLY the rewritten text — no preamble, no quotation marks around it.
-
-MORE OF (emphasise / add)
-{{more}}
-
-LESS OF (de-emphasise / avoid)
-{{less}}
-
-PREVIOUS DRAFT
-{{previousDraft}}`,
-    slots: ['more', 'less', 'previousDraft'],
-  },
-  tighten: {
-    name: 'Tighten',
-    body: `The previous draft is over the 280-character X limit. Tighten it to fit under 280 characters, preserving voice and meaning. Output ONLY the tightened text — no preamble, no quotation marks around it.
-
-PREVIOUS DRAFT
-{{previousDraft}}`,
-    slots: ['previousDraft'],
+</instruction>`,
+    slots: ['precedence', 'styleGuide', 'exclusions', 'draft', 'instruction'],
   },
 };
 
@@ -136,14 +181,41 @@ export const INTENT_FRAMING: Record<IntentShape, string> = {
     "The user's notes below are a direction to develop and tighten, not literal text to publish.",
 };
 
+/** Instruction the pipeline feeds the refine template's {{instruction}}
+ *  slot for the (at most one) tighten pass. Code-supplied: tighten is a
+ *  pipeline backstop, not a user-authored ask. */
+export const TIGHTEN_INSTRUCTION =
+  'The draft is over the 280-character X limit. Tighten it to fit under 280 characters, preserving voice and meaning.';
+
+/** Build the {{instruction}} value for the (at most one) exclusion-repair
+ *  pass from `summarizeViolations` output. Code-supplied, like
+ *  `TIGHTEN_INSTRUCTION`. */
+export function buildRepairInstruction(violationsSummary: string): string {
+  return `The draft uses patterns the user asked to avoid:
+${violationsSummary}
+
+Rewrite it without those patterns, keeping the same voice, length, and intent.`;
+}
+
 /** Format a list of library items as a numbered block for the
- *  {{examples}} slot. Cold-start (empty list) returns a one-line note
- *  so the surrounding template still reads naturally. */
+ *  {{voiceExamples}} slot. Cold-start (empty list) returns a one-line
+ *  note so the surrounding template still reads naturally. */
 export function formatExamples(items: LibraryItem[]): string {
   if (items.length === 0) {
     return '(none captured yet — lean on the voice guide alone)';
   }
   return items.map((item, idx) => `${String(idx + 1)}) ${item.text.trim()}`).join('\n\n');
+}
+
+/** Build the optional {{aspirationalExamples}} slot value — the user's
+ *  own writing at its best, the bar to reach for. Ships present-but-
+ *  empty: nothing feeds the pool until favorites land (roadmap Phase 5),
+ *  and an empty pool collapses to '' so the template never shows an
+ *  empty section. Returns the whole tagged block including trailing
+ *  separation, mirroring `buildThreadContextBlock`. */
+export function buildAspirationalBlock(items: LibraryItem[]): string {
+  if (items.length === 0) return '';
+  return `<aspirational_examples>\n${formatExamples(items)}\n</aspirational_examples>\n\n`;
 }
 
 /** Build the {{exclusions}} slot value from the active structural
@@ -170,25 +242,25 @@ export function buildExclusionInstructions(settings: Settings): string {
   return lines.join('\n');
 }
 
-/** Build the {{charConstraint}} slot value — the prompt-side half of
- *  length control. The deterministic half lives in the pipeline: when
- *  the cap is on and the draft still measures >280 (lib/counting), one
- *  tighten re-prompt fires. The soft cap has no deterministic gate. */
+/** Build the {{length}} slot value — the prompt-side half of length
+ *  control. The deterministic half lives in the pipeline: when the cap
+ *  is on and the draft still measures >280 (lib/counting), one tighten
+ *  re-prompt fires. The soft cap has no deterministic gate. */
 export function buildCharConstraintInstruction(opts: {
   charCap: boolean;
   softCapChars: number;
 }): string {
   if (opts.charCap) {
-    return 'Keep the reply strictly under 280 characters total (the X single-tweet limit).';
+    return 'Keep the final text strictly under 280 characters total (the X single-tweet limit).';
   }
   return `Aim for at most ${String(opts.softCapChars)} characters total. Shorter is fine.`;
 }
 
-/** Build the optional {{parentSection}} slot value for reply mode.
+/** Build the optional {{threadContext}} slot value for reply mode.
  *  When there's no grandparent (i.e. the target is itself a top-level
  *  post), returns the empty string so the line collapses cleanly. */
-export function buildParentSection(grandparentText: string | null): string {
+export function buildThreadContextBlock(grandparentText: string | null): string {
   const trimmed = grandparentText?.trim() ?? '';
   if (trimmed === '') return '';
-  return `\nWHICH WAS A REPLY TO\n${trimmed}`;
+  return `\n<thread_context>\nThe tweet in <reply_context> was itself a reply to:\n${trimmed}\n</thread_context>\n`;
 }

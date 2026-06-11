@@ -67,20 +67,21 @@ export interface ChipPreset {
   instruction: string;
 }
 
-export type PromptTemplateKey =
-  | 'reply'
-  | 'post'
-  | 'repair'
-  | 'chipRefine'
-  | 'moreLessRefine'
-  | 'tighten';
+export type PromptTemplateKey = 'reply' | 'post' | 'refine';
 
 export interface PromptTemplate {
   /** Human-readable name shown in the Prompts tab. */
   name: string;
-  /** Template body with `{{slot}}` placeholders. */
-  body: string;
-  /** Slots the template advertises. Validated at assembly time. */
+  /** System-message body with `{{slot}}` placeholders — the invariant
+   *  framing (role, precedence, style guide, exclusions) that does not
+   *  change between two consecutive calls. */
+  system: string;
+  /** User-message body with `{{slot}}` placeholders — the per-call
+   *  content (examples, reply context, length, intent / draft +
+   *  instruction). */
+  user: string;
+  /** Slots the template advertises, across both bodies. Validated at
+   *  assembly time. */
   slots: string[];
 }
 

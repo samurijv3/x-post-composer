@@ -1,76 +1,73 @@
 /**
  * Prompt template engine — pure, dead-simple {{slot}} substitution.
  *
- * Templates are an editable string (the body) plus an explicit list of
- * required slot names. `renderTemplate` substitutes; `validateTemplate`
- * reports drift between what the body references and what the author
- * declared. Drift becomes a *warning* in the Prompts tab, never a
- * crash — the user can edit prompts freely and see their mistakes.
+ * A template is two editable strings — a `system` body and a `user`
+ * body — plus an explicit list of required slot names. The bodies map
+ * one-to-one onto the Messages API's system/user roles: the boundary is
+ * structural, not a marker inside a single string. `renderTemplate`
+ * substitutes both; `validateTemplate` reports drift between what the
+ * bodies reference and what the author declared. Drift becomes a
+ * *warning* in the Prompts tab, never a crash — the user can edit
+ * prompts freely and see their mistakes.
  *
  * Slot syntax: `{{slotName}}`. Names are `[A-Za-z][A-Za-z0-9_]*`.
  * Unfilled slots render as empty strings (so an optional section like
- * `{{parentSection}}` collapses cleanly when there's no parent).
+ * `{{threadContext}}` collapses cleanly when there's no parent).
  */
 import type { PromptTemplate } from '../../types';
 
 const SLOT_RE = /\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g;
 
 /**
- * Marker that, when present in a generation template's body, splits
- * the rendered prompt into a SYSTEM portion (everything above) and a
- * USER portion (everything below). The orchestrator passes them as
- * separate fields to Anthropic — the model treats system framing
- * differently from user content. (Caching of the system portion only
- * applies above a per-model minimum prefix size; see
- * `MessagesCallRequest.system` in src/api/anthropic.ts.)
- *
- * Templates without this marker fall back to "everything is a single
- * user message" — preserving backwards compatibility with any custom
- * template a user has authored.
+ * A rendered template, ready to send: `system` goes out as the system
+ * message, `user` as the user message. Either may be empty (an empty
+ * system is sent as a plain single-user-message call).
  */
-export const SYSTEM_USER_MARKER = '===USER===';
-
-export interface SplitPrompt {
-  /** Empty string when no marker is present (caller sends as a single user message). */
+export interface RenderedPrompt {
   system: string;
   user: string;
 }
 
 /**
- * Split a rendered prompt body at the SYSTEM_USER_MARKER. When the
- * marker is absent, returns `{ system: '', user: <whole prompt> }`.
+ * Substitute `{{slot}}` markers in a single body string with the values
+ * provided. Unknown slots render as empty string.
  */
-export function splitPrompt(rendered: string): SplitPrompt {
-  const idx = rendered.indexOf(SYSTEM_USER_MARKER);
-  if (idx === -1) return { system: '', user: rendered };
-  return {
-    system: rendered.slice(0, idx).trim(),
-    user: rendered.slice(idx + SYSTEM_USER_MARKER.length).trim(),
-  };
+export function fillSlots(body: string, values: Record<string, string>): string {
+  return body.replace(SLOT_RE, (_match, name: string) => values[name] ?? '');
 }
 
 /**
- * Substitute `{{slot}}` markers in the template body with the values
- * provided. Unknown slots in the body render as empty string.
+ * Render both template bodies with the same slot values. Each side is
+ * trimmed so collapsed optional sections never leave stray blank edges.
  */
-export function renderTemplate(template: PromptTemplate, values: Record<string, string>): string {
-  return template.body.replace(SLOT_RE, (_match, name: string) => values[name] ?? '');
+export function renderTemplate(
+  template: PromptTemplate,
+  values: Record<string, string>,
+): RenderedPrompt {
+  return {
+    system: fillSlots(template.system, values).trim(),
+    user: fillSlots(template.user, values).trim(),
+  };
 }
 
 export interface TemplateValidation {
-  /** Slot names that the template's declared `slots` lists but the body
-   *  does not actually reference. Almost always harmless — the user
+  /** Slot names that the template's declared `slots` lists but neither
+   *  body actually references. Almost always harmless — the user
    *  probably removed a section. */
   declaredButUnused: string[];
-  /** Slot names found in the body but missing from the declared
+  /** Slot names found in a body but missing from the declared
    *  `slots` list. The template will still render; this just flags
    *  drift so the user notices when they invent a slot the orchestrator
    *  doesn't know how to fill. */
   usedButUndeclared: string[];
 }
 
+/** Compare declared slots against the slots referenced across BOTH bodies. */
 export function validateTemplate(template: PromptTemplate): TemplateValidation {
-  const usedInBody = new Set(extractSlotNames(template.body));
+  const usedInBody = new Set([
+    ...extractSlotNames(template.system),
+    ...extractSlotNames(template.user),
+  ]);
   const declared = new Set(template.slots);
 
   const declaredButUnused = [...declared].filter((s) => !usedInBody.has(s));

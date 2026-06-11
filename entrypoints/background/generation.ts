@@ -12,9 +12,12 @@
  *              → tightenRepair? → persistLastPrompt → reply
  *
  * Only Generate touches the example pool (re-runs selectExamples).
- * Refine reshapes whatever draft the panel sends.
+ * Refine reshapes whatever draft the panel sends. Every call — initial,
+ * repair, tighten — carries a system block (role + precedence + style
+ * guide + exclusions), so no pass is ever voice-blind.
  */
 import { getAllItems, getApiKey, getSettings, setLastPrompt } from '../../src/storage';
+import type { PromptCall } from '../../src/storage';
 import type { GenerationRequest, GenerationResult, RefineRequest, Settings } from '../../src/types';
 import { selectExamples } from '../../src/lib/sampling';
 import {
@@ -25,10 +28,13 @@ import {
 } from '../../src/lib/exclusion';
 import {
   assembleInitialPrompt,
+  assembleRefinePrompt,
+  buildRepairInstruction,
+  composeMoreLessInstruction,
   escalateChipInstruction,
-  renderTemplate,
-  splitPrompt,
   summarizeViolations,
+  TIGHTEN_INSTRUCTION,
+  type RenderedPrompt,
 } from '../../src/lib/prompt';
 import { isOver280, weightedLength } from '../../src/lib/counting';
 import { callAnthropic, verifyKey } from '../../src/api/anthropic';
@@ -71,7 +77,13 @@ export async function runGeneration(request: GenerationRequest): Promise<Generat
     { poolSize: settings.poolSize },
   );
 
-  const initialPrompt = assembleInitialPrompt(request, settings, examples);
+  // The aspirational pool is empty until favorites land (roadmap
+  // Phase 5) — its template block collapses cleanly. Wire the real
+  // pool here, behind the same selectExamples seam.
+  const initialPrompt = assembleInitialPrompt(request, settings, {
+    voice: examples,
+    aspirational: [],
+  });
   const temperature = request.isRegenerate
     ? settings.temperature.regenerate
     : settings.temperature.generate;
@@ -82,13 +94,15 @@ export async function runGeneration(request: GenerationRequest): Promise<Generat
     mode: request.mode,
     charCap: request.charCap,
     initialPrompt,
+    initialLabel: request.isRegenerate ? 'regenerate' : 'generate',
     temperature,
   });
 }
 
 // ---------------------------------------------------------------------
-// Refine entry — assembles a refine prompt (chip or more/less) then
-// runs the same post-processing pipeline.
+// Refine entry — composes the instruction (chip or more/less), renders
+// it through the single refine template, then runs the same
+// post-processing pipeline.
 // ---------------------------------------------------------------------
 
 export async function runRefine(request: RefineRequest): Promise<GenerationResult> {
@@ -110,7 +124,8 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
   }
 
   const kind = request.kind;
-  let initialPrompt: string;
+  let instruction: string;
+  let initialLabel: string;
   if (kind.type === 'chip') {
     const chip = settings.chips.find((c) => c.id === kind.chipId);
     if (!chip) {
@@ -120,26 +135,21 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
         message: `Chip "${kind.chipId}" not found in current settings.`,
       };
     }
-    const instruction = escalateChipInstruction(chip.instruction, kind.intensity);
-    initialPrompt = renderTemplate(settings.promptTemplates.chipRefine, {
-      instruction,
-      previousDraft: request.previousDraftText,
-    });
+    instruction = escalateChipInstruction(chip.instruction, kind.intensity);
+    initialLabel =
+      kind.intensity > 1
+        ? `refine (chip: ${chip.label}, press ${String(kind.intensity)})`
+        : `refine (chip: ${chip.label})`;
   } else {
-    const more = kind.more.trim();
-    const less = kind.less.trim();
-    if (more === '' && less === '') {
+    instruction = composeMoreLessInstruction(kind.more, kind.less);
+    if (instruction === '') {
       return {
         ok: false,
         kind: 'bad-request',
         message: 'more/less are both empty — nothing to refine on.',
       };
     }
-    initialPrompt = renderTemplate(settings.promptTemplates.moreLessRefine, {
-      more: more === '' ? '(none)' : more,
-      less: less === '' ? '(none)' : less,
-      previousDraft: request.previousDraftText,
-    });
+    initialLabel = 'refine (more/less)';
   }
 
   return runPipeline({
@@ -147,7 +157,8 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
     settings,
     mode: request.mode,
     charCap: request.charCap,
-    initialPrompt,
+    initialPrompt: assembleRefinePrompt(settings, request.previousDraftText, instruction),
+    initialLabel,
     temperature: settings.temperature.generate,
   });
 }
@@ -167,27 +178,24 @@ interface PipelineOptions {
   settings: Settings;
   mode: 'post' | 'reply';
   charCap: boolean;
-  initialPrompt: string;
+  initialPrompt: RenderedPrompt;
+  /** Inspector label for the initial call ('generate', 'refine (…)', …). */
+  initialLabel: string;
   temperature: number;
 }
 
 async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
-  const { apiKey, settings, mode, charCap, initialPrompt, temperature } = opts;
+  const { apiKey, settings, mode, charCap, initialPrompt, initialLabel, temperature } = opts;
   const fixOptions = {
     fixEmDash: settings.structuralRules.noEmDash,
     fixSmartQuotes: settings.structuralRules.noSmartQuotes,
   };
 
-  // Split at the `===USER===` marker. Generation templates put stable
-  // framing (voice guide, exclusions, char rules) above the marker so
-  // it is sent as a system message; refine + repair templates omit the
-  // marker and go entirely as a single user message.
-  const firstSplit = splitPrompt(initialPrompt);
   const firstCall = await callAnthropic({
     apiKey,
     model: settings.model,
-    system: firstSplit.system,
-    prompt: firstSplit.user,
+    system: initialPrompt.system,
+    prompt: initialPrompt.user,
     temperature,
     maxTokens: MAX_TOKENS,
   });
@@ -210,22 +218,23 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
   let appliedAutoFixes: Span[] = firstFixed.appliedFixes;
   let residualViolations = firstCheck.violations;
   let wasRepaired = false;
-  const promptChain: string[] = [initialPrompt];
-  const repairLabels: string[] = [];
+  // Every call in the invocation, recorded exactly as sent — the
+  // inspector renders this verbatim. Transparency is load-bearing.
+  const calls: PromptCall[] = [{ label: initialLabel, ...initialPrompt }];
 
   if (hasRepairableViolations(firstCheck)) {
     const violationsSummary = summarizeViolations(firstCheck.violations);
-    const repairPrompt = renderTemplate(settings.promptTemplates.repair, {
-      violations: violationsSummary,
-      previousDraft: firstFixed.text,
-    });
+    const repairPrompt = assembleRefinePrompt(
+      settings,
+      firstFixed.text,
+      buildRepairInstruction(violationsSummary),
+    );
 
-    const repairSplit = splitPrompt(repairPrompt);
     const repairCall = await callAnthropic({
       apiKey,
       model: settings.model,
-      system: repairSplit.system,
-      prompt: repairSplit.user,
+      system: repairPrompt.system,
+      prompt: repairPrompt.user,
       temperature: settings.temperature.regenerate,
       maxTokens: MAX_TOKENS,
     });
@@ -237,23 +246,23 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
       appliedAutoFixes = [...firstFixed.appliedFixes, ...repaired.appliedFixes];
       residualViolations = repairedCheck.violations;
       wasRepaired = true;
-      promptChain.push(repairPrompt);
-      repairLabels.push(`exclusion repair (${violationsSummary.replace(/\n/g, ' · ')})`);
+      calls.push({
+        label: `repair (${violationsSummary.replace(/\n/g, ' · ')})`,
+        ...repairPrompt,
+      });
     }
     // Repair call failed → keep first draft so the user still sees
     // something. Don't loop.
   }
 
   if (charCap && isOver280(finalText)) {
-    const tightenPrompt = renderTemplate(settings.promptTemplates.tighten, {
-      previousDraft: finalText,
-    });
-    const tightenSplit = splitPrompt(tightenPrompt);
+    const overLength = weightedLength(finalText);
+    const tightenPrompt = assembleRefinePrompt(settings, finalText, TIGHTEN_INSTRUCTION);
     const tightenCall = await callAnthropic({
       apiKey,
       model: settings.model,
-      system: tightenSplit.system,
-      prompt: tightenSplit.user,
+      system: tightenPrompt.system,
+      prompt: tightenPrompt.user,
       temperature: settings.temperature.generate,
       maxTokens: MAX_TOKENS,
     });
@@ -264,8 +273,10 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
       appliedAutoFixes = [...appliedAutoFixes, ...tightened.appliedFixes];
       residualViolations = tightenedCheck.violations;
       wasRepaired = true;
-      promptChain.push(tightenPrompt);
-      repairLabels.push(`tighten (${String(weightedLength(firstFixed.text))} → target ≤280)`);
+      calls.push({
+        label: `tighten (${String(overLength)} → target ≤280)`,
+        ...tightenPrompt,
+      });
     }
     // Tighten failed → user sees the over-limit draft and the gate
     // surface in the panel will warn them.
@@ -274,10 +285,9 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
   await setLastPrompt({
     timestamp: Date.now(),
     mode,
-    prompt: promptChain.join('\n\n--- NEXT CALL ---\n\n'),
+    calls,
     response: finalText,
     wasRepaired,
-    ...(repairLabels.length === 0 ? {} : { repairContext: repairLabels.join('\n') }),
   });
 
   return {

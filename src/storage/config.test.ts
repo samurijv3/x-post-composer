@@ -72,42 +72,76 @@ describe('getSettings', () => {
   });
 
   describe('promptTemplates migration', () => {
-    it('restores the default body when a stored template body is blank', async () => {
-      seed({ promptTemplates: { reply: { name: 'Reply', body: '', slots: [] } } });
+    it('resets a legacy v1 single-body template to the new default (customised or not)', async () => {
+      // v1 stored one `body` string with a ===USER=== marker; that shape
+      // has no faithful mapping onto {system, user}, so it resets —
+      // recorded in roadmap.md Build Decisions Log (Phase 1 build).
+      seed({
+        promptTemplates: {
+          reply: { name: 'Reply', body: 'my customised v1 body {{bullets}}', slots: ['bullets'] },
+        },
+      });
       const s = await getSettings();
       expect(s.promptTemplates.reply).toEqual(DEFAULT_SETTINGS.promptTemplates.reply);
     });
 
-    it('treats whitespace-only bodies as blank too', async () => {
-      seed({ promptTemplates: { post: { name: 'Post', body: '   \n  ', slots: [] } } });
+    it('drops legacy v1 keys (repair/chipRefine/moreLessRefine/tighten) entirely', async () => {
+      seed({
+        promptTemplates: {
+          chipRefine: { name: 'Chip refine', body: 'old chip body', slots: [] },
+          tighten: { name: 'Tighten', body: 'old tighten body', slots: [] },
+        },
+      });
+      const s = await getSettings();
+      expect(Object.keys(s.promptTemplates).sort()).toEqual(['post', 'refine', 'reply']);
+      expect(s.promptTemplates).toEqual(DEFAULT_SETTINGS.promptTemplates);
+    });
+
+    it('restores the default when the stored system body is blank', async () => {
+      seed({
+        promptTemplates: { reply: { name: 'Reply', system: '', user: 'custom user', slots: [] } },
+      });
+      const s = await getSettings();
+      expect(s.promptTemplates.reply).toEqual(DEFAULT_SETTINGS.promptTemplates.reply);
+    });
+
+    it('restores the default when the stored user body is blank (whitespace counts)', async () => {
+      seed({
+        promptTemplates: {
+          post: { name: 'Post', system: 'custom system', user: '   \n  ', slots: [] },
+        },
+      });
       const s = await getSettings();
       expect(s.promptTemplates.post).toEqual(DEFAULT_SETTINGS.promptTemplates.post);
     });
 
-    it('preserves a customised body verbatim', async () => {
+    it('preserves a customised system/user pair verbatim', async () => {
       seed({
         promptTemplates: {
-          tighten: {
-            name: 'Tighten',
-            body: 'My custom tighten prompt {{previousDraft}}',
-            slots: ['previousDraft'],
+          refine: {
+            name: 'Refine',
+            system: 'My custom refine system {{styleGuide}}',
+            user: 'My custom refine user {{draft}} {{instruction}}',
+            slots: ['styleGuide', 'draft', 'instruction'],
           },
         },
       });
       const s = await getSettings();
-      expect(s.promptTemplates.tighten.body).toBe('My custom tighten prompt {{previousDraft}}');
+      expect(s.promptTemplates.refine.system).toBe('My custom refine system {{styleGuide}}');
+      expect(s.promptTemplates.refine.user).toBe('My custom refine user {{draft}} {{instruction}}');
     });
 
     it('fills missing name/slots on a customised template from the default', async () => {
-      seed({ promptTemplates: { repair: { name: '', body: 'custom {{violations}}' } } });
+      seed({ promptTemplates: { post: { name: '', system: 'custom sys', user: 'custom user' } } });
       const s = await getSettings();
-      expect(s.promptTemplates.repair.name).toBe(DEFAULT_SETTINGS.promptTemplates.repair.name);
-      expect(s.promptTemplates.repair.slots).toEqual(DEFAULT_SETTINGS.promptTemplates.repair.slots);
-      expect(s.promptTemplates.repair.body).toBe('custom {{violations}}');
+      expect(s.promptTemplates.post.name).toBe(DEFAULT_SETTINGS.promptTemplates.post.name);
+      expect(s.promptTemplates.post.slots).toEqual(DEFAULT_SETTINGS.promptTemplates.post.slots);
+      expect(s.promptTemplates.post.system).toBe('custom sys');
+      expect(s.promptTemplates.post.user).toBe('custom user');
     });
 
     it('untouched templates fall back to defaults; unknown keys are dropped', async () => {
-      seed({ promptTemplates: { bogus: { name: 'x', body: 'y', slots: [] } } });
+      seed({ promptTemplates: { bogus: { name: 'x', system: 'y', user: 'z', slots: [] } } });
       const s = await getSettings();
       expect(Object.keys(s.promptTemplates).sort()).toEqual(
         Object.keys(DEFAULT_SETTINGS.promptTemplates).sort(),

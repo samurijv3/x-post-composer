@@ -29,14 +29,15 @@ export interface MessagesCallRequest {
   model: string;
   /** Body of the user message. */
   prompt: string;
-  /** Optional system message — the stable framing (voice guide,
-   *  exclusions, char rules) above the template's ===USER=== marker.
-   *  Sent with `cache_control: { type: "ephemeral" }`, but be honest
-   *  about what that buys: Anthropic only caches prefixes above a
-   *  per-model minimum (~4096 tokens on the default Haiku 4.5), and a
-   *  typical Margin system block is far below it, so the marker is
-   *  silently ignored. The split's real value is model framing; the
-   *  cache only kicks in for users with very large style guides. */
+  /** Optional system message — the template's System body (role,
+   *  precedence, style guide, exclusions; the framing that doesn't
+   *  change between two consecutive calls). Sent with `cache_control:
+   *  { type: "ephemeral" }`, but be honest about what that buys:
+   *  Anthropic only caches prefixes above a per-model minimum (~4096
+   *  tokens on the default Haiku 4.5), and a typical Margin system
+   *  block is far below it, so the marker is silently ignored. The
+   *  split's real value is model framing; the cache only kicks in for
+   *  users with very large style guides. */
   system?: string;
   temperature: number;
   maxTokens: number;
@@ -90,7 +91,8 @@ export async function callAnthropic(req: MessagesCallRequest): Promise<MessagesC
     // array with `cache_control` — harmless when below the per-model
     // cacheable minimum (the usual case; see MessagesCallRequest.system)
     // and a genuine discount when a user's framing grows past it.
-    // Refine/repair calls omit system entirely.
+    // Every pipeline call (generate, refine, repair, tighten) carries
+    // one; only verifyKey's ping omits it.
     const body: Record<string, unknown> = {
       model: req.model,
       max_tokens: req.maxTokens,

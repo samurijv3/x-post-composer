@@ -77,19 +77,30 @@ function mergeWithDefaults(stored: Partial<Settings> | undefined): Settings {
   };
 }
 
+/** What a stored template record may actually look like: the current
+ *  two-body shape, or the legacy v1 single-`body` shape. */
+type StoredPromptTemplate = Partial<PromptTemplate> & { body?: string };
+
 /**
- * Per-template merge with an empty-body migration.
+ * Per-template merge with two migrations folded in:
  *
- * Early pre-release builds seeded `promptTemplates` with placeholder
- * entries whose `body` was `''`; those empties may still sit in
- * `chrome.storage.local`, and a naive object spread would keep them —
- * leading to an empty `messages.0.content` and a 400 from Anthropic.
- * Treat an empty body as "never customised" and fall back to the
- * current default for that template. A genuinely customised body
- * (anything non-empty) is preserved verbatim.
+ * 1. **v1 single-body → v2 system/user reset.** Templates used to be one
+ *    `body` string with a `===USER===` marker; they are now an explicit
+ *    `{system, user}` pair with different slot names. An old customised
+ *    body has no faithful mapping onto the new shape, so any record
+ *    without both new fields RESETS to the current default — customised
+ *    v1 bodies are deliberately dropped (recorded in roadmap.md Build
+ *    Decisions Log, Phase 1 build). Old keys that no longer exist
+ *    (repair, chipRefine, moreLessRefine, tighten) drop out naturally
+ *    because we iterate the new key set.
+ * 2. **Blanked-field restore.** An empty system or user body — a stale
+ *    placeholder or an accidental blanking — would send a broken prompt,
+ *    so either field being blank restores the whole default template. A
+ *    genuinely customised pair (both fields non-empty) is preserved
+ *    verbatim.
  */
 function mergePromptTemplates(
-  stored: Partial<Record<PromptTemplateKey, PromptTemplate>> | undefined,
+  stored: Partial<Record<PromptTemplateKey, StoredPromptTemplate>> | undefined,
 ): Settings['promptTemplates'] {
   const keys = Object.keys(DEFAULT_SETTINGS.promptTemplates) as PromptTemplateKey[];
   const out = { ...DEFAULT_SETTINGS.promptTemplates };
@@ -98,17 +109,18 @@ function mergePromptTemplates(
     const storedTemplate = stored[key];
     if (!storedTemplate) continue;
     const dflt = DEFAULT_SETTINGS.promptTemplates[key];
-    const body = storedTemplate.body?.trim() ?? '';
-    if (body === '') {
-      // Stale pre-release placeholder, or the user accidentally blanked
-      // it. Either way an empty prompt is a guaranteed 400 — restore
-      // the default.
+    const system = typeof storedTemplate.system === 'string' ? storedTemplate.system : '';
+    const user = typeof storedTemplate.user === 'string' ? storedTemplate.user : '';
+    if (system.trim() === '' || user.trim() === '') {
+      // Legacy v1 shape (no system/user at all) or a blanked field —
+      // either way the stored record can't be sent as-is. Reset.
       out[key] = dflt;
       continue;
     }
     out[key] = {
       name: storedTemplate.name || dflt.name,
-      body: storedTemplate.body,
+      system,
+      user,
       slots: storedTemplate.slots ?? dflt.slots,
     };
   }

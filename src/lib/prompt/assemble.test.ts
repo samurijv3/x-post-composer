@@ -3,11 +3,17 @@ import { DEFAULT_SETTINGS, type GenerationRequest, type LibraryItem } from '../.
 import type { Span } from '../exclusion';
 import {
   assembleInitialPrompt,
+  assembleRefinePrompt,
   classifyIntentShape,
   composeMoreLessInstruction,
   escalateChipInstruction,
   summarizeViolations,
+  type ExamplePools,
 } from './assemble';
+
+function pools(voice: LibraryItem[] = [], aspirational: LibraryItem[] = []): ExamplePools {
+  return { voice, aspirational };
+}
 
 function item(text: string, type: LibraryItem['type'] = 'post'): LibraryItem {
   return {
@@ -148,46 +154,99 @@ describe('summarizeViolations', () => {
 });
 
 describe('assembleInitialPrompt', () => {
-  it('fills every slot — no unrendered {{slot}} markers survive', () => {
-    const out = assembleInitialPrompt(postRequest(), DEFAULT_SETTINGS, [item('hello')]);
-    expect(out).not.toMatch(/\{\{/);
+  it('fills every slot — no unrendered {{slot}} markers survive in either body', () => {
+    const out = assembleInitialPrompt(postRequest(), DEFAULT_SETTINGS, pools([item('hello')]));
+    expect(out.system).not.toMatch(/\{\{/);
+    expect(out.user).not.toMatch(/\{\{/);
+  });
+
+  it('places stable framing in system and per-call content in user', () => {
+    const settings = { ...DEFAULT_SETTINGS, styleGuide: 'dry, lowercase' };
+    const out = assembleInitialPrompt(
+      postRequest({ bullets: 'ship the thing' }),
+      settings,
+      pools([item('a voice example')]),
+    );
+    // System: role + precedence + style guide + exclusions, nothing per-call.
+    expect(out.system).toContain('order of authority');
+    expect(out.system).toContain('dry, lowercase');
+    expect(out.system).toContain('em dashes');
+    expect(out.system).not.toContain('ship the thing');
+    expect(out.system).not.toContain('a voice example');
+    // User: examples + length + intent, no stable framing.
+    expect(out.user).toContain('a voice example');
+    expect(out.user).toContain('ship the thing');
+    expect(out.user).not.toContain('dry, lowercase');
+    expect(out.user).not.toContain('order of authority');
   });
 
   it('falls back to explicit placeholders for empty style guide and bullets', () => {
-    const out = assembleInitialPrompt(postRequest({ bullets: '   ' }), DEFAULT_SETTINGS, []);
-    expect(out).toContain('(no style guide set — infer voice from the examples)');
-    expect(out).toContain('(no bullets given)');
+    const out = assembleInitialPrompt(postRequest({ bullets: '   ' }), DEFAULT_SETTINGS, pools());
+    expect(out.system).toContain('(no style guide set — infer voice from the examples)');
+    expect(out.user).toContain('(no bullets given)');
   });
 
   it('injects the trimmed style guide and bullets when present', () => {
     const settings = { ...DEFAULT_SETTINGS, styleGuide: '  dry, lowercase  ' };
-    const out = assembleInitialPrompt(postRequest({ bullets: '  ship the thing  ' }), settings, []);
-    expect(out).toContain('dry, lowercase');
-    expect(out).toContain('ship the thing');
-    expect(out).not.toContain('  ship the thing  ');
+    const out = assembleInitialPrompt(
+      postRequest({ bullets: '  ship the thing  ' }),
+      settings,
+      pools(),
+    );
+    expect(out.system).toContain('dry, lowercase');
+    expect(out.user).toContain('ship the thing');
+    expect(out.user).not.toContain('  ship the thing  ');
   });
 
   it('renders the hard 280 constraint when charCap is on, the soft cap when off', () => {
-    const capped = assembleInitialPrompt(postRequest({ charCap: true }), DEFAULT_SETTINGS, []);
-    expect(capped).toContain('280');
+    const capped = assembleInitialPrompt(postRequest({ charCap: true }), DEFAULT_SETTINGS, pools());
+    expect(capped.user).toContain('280');
     const soft = assembleInitialPrompt(
       postRequest({ charCap: false }),
       { ...DEFAULT_SETTINGS, softCapChars: 700 },
-      [],
+      pools(),
     );
-    expect(soft).toContain('700');
+    expect(soft.user).toContain('700');
   });
 
-  it('numbers the sampled examples into the prompt', () => {
-    const out = assembleInitialPrompt(postRequest(), DEFAULT_SETTINGS, [
-      item('first example'),
-      item('second example'),
-    ]);
-    expect(out).toContain('1) first example');
-    expect(out).toContain('2) second example');
+  it('numbers the sampled voice examples into the user body', () => {
+    const out = assembleInitialPrompt(
+      postRequest(),
+      DEFAULT_SETTINGS,
+      pools([item('first example'), item('second example')]),
+    );
+    expect(out.user).toContain('1) first example');
+    expect(out.user).toContain('2) second example');
   });
 
-  it('reply mode includes the target tweet and collapses the parent section when absent', () => {
+  it('collapses the aspirational block when the pool is empty, renders it when filled', () => {
+    const empty = assembleInitialPrompt(postRequest(), DEFAULT_SETTINGS, pools([item('voice')]));
+    expect(empty.user).not.toContain('<aspirational_examples>');
+    const filled = assembleInitialPrompt(
+      postRequest(),
+      DEFAULT_SETTINGS,
+      pools([item('voice')], [item('my best work')]),
+    );
+    expect(filled.user).toContain('<aspirational_examples>');
+    expect(filled.user).toContain('my best work');
+  });
+
+  it('chooses the intent framing from the bullet shape', () => {
+    const fragments = assembleInitialPrompt(
+      postRequest({ bullets: 'one thought\nanother thought' }),
+      DEFAULT_SETTINGS,
+      pools(),
+    );
+    expect(fragments.user).toContain('Find the throughline');
+    const prose = assembleInitialPrompt(
+      postRequest({ bullets: 'A full direction to develop, written out as a sentence.' }),
+      DEFAULT_SETTINGS,
+      pools(),
+    );
+    expect(prose.user).toContain('a direction to develop and tighten');
+  });
+
+  it('reply mode includes the target tweet and collapses thread context when absent', () => {
     const out = assembleInitialPrompt(
       postRequest({
         mode: 'reply',
@@ -203,14 +262,15 @@ describe('assembleInitialPrompt', () => {
         },
       }),
       DEFAULT_SETTINGS,
-      [],
+      pools(),
     );
-    expect(out).toContain('the tweet being answered');
-    expect(out).not.toContain('WHICH WAS A REPLY TO');
-    expect(out).not.toMatch(/\{\{/);
+    expect(out.user).toContain('the tweet being answered');
+    expect(out.user).toContain('<reply_context>');
+    expect(out.user).not.toContain('<thread_context>');
+    expect(out.user).not.toMatch(/\{\{/);
   });
 
-  it('reply mode renders the grandparent under its own heading when present', () => {
+  it('reply mode renders the grandparent inside thread_context when present', () => {
     const out = assembleInitialPrompt(
       postRequest({
         mode: 'reply',
@@ -226,18 +286,45 @@ describe('assembleInitialPrompt', () => {
         },
       }),
       DEFAULT_SETTINGS,
-      [],
+      pools(),
     );
-    expect(out).toContain('WHICH WAS A REPLY TO');
-    expect(out).toContain('thread opener');
+    expect(out.user).toContain('<thread_context>');
+    expect(out.user).toContain('thread opener');
   });
 
   it('reply mode survives a missing reply context with a placeholder', () => {
     const out = assembleInitialPrompt(
       postRequest({ mode: 'reply', replyContext: null }),
       DEFAULT_SETTINGS,
-      [],
+      pools(),
     );
-    expect(out).toContain('(no target captured)');
+    expect(out.user).toContain('(no target captured)');
+  });
+});
+
+describe('assembleRefinePrompt', () => {
+  it('anchors every refinement to the voice: style guide + exclusions in system', () => {
+    // Regression guard for the v1 behavior where refine/repair/tighten
+    // calls carried only the draft + instruction and were voice-blind.
+    const settings = { ...DEFAULT_SETTINGS, styleGuide: 'dry, lowercase' };
+    const out = assembleRefinePrompt(settings, 'previous draft text', 'Make it shorter.');
+    expect(out.system).toContain('dry, lowercase');
+    expect(out.system).toContain('em dashes');
+    expect(out.system).toContain('order of authority');
+  });
+
+  it('places the draft and instruction in the user body, nothing per-call in system', () => {
+    const out = assembleRefinePrompt(DEFAULT_SETTINGS, 'previous draft text', 'Make it warmer.');
+    expect(out.user).toContain('previous draft text');
+    expect(out.user).toContain('Make it warmer.');
+    expect(out.system).not.toContain('previous draft text');
+    expect(out.system).not.toContain('Make it warmer.');
+    expect(out.system).not.toMatch(/\{\{/);
+    expect(out.user).not.toMatch(/\{\{/);
+  });
+
+  it('uses a refine-appropriate placeholder when no style guide is set', () => {
+    const out = assembleRefinePrompt(DEFAULT_SETTINGS, 'draft', 'instruction');
+    expect(out.system).toContain("preserve the draft's existing voice");
   });
 });

@@ -16,8 +16,7 @@ interface Props {
 
 const TEMPLATE_GROUPS: { name: string; keys: PromptTemplateKey[] }[] = [
   { name: 'Generation', keys: ['reply', 'post'] },
-  { name: 'Refine', keys: ['chipRefine', 'moreLessRefine'] },
-  { name: 'Repair', keys: ['repair', 'tighten'] },
+  { name: 'Refine', keys: ['refine'] },
 ];
 
 /** Prompts section — every template and chip behind a draft, editable. */
@@ -59,9 +58,11 @@ export function PromptsSection({ onSaved }: Props) {
       <div className="opt-card">
         <div className="opt-card-title">Prompt templates</div>
         <p className="opt-card-desc">
-          The exact text sent to the model. Slots like <code>{'{{bullets}}'}</code> are filled at
-          generation time. Generation templates use a <code>===USER===</code> marker — text above is
-          sent as the system message, text below as the user message. One open at a time.
+          The exact text sent to the model. Each template has a System body (stable framing) and a
+          User body (per-call content), sent as separate message roles. Slots like{' '}
+          <code>{'{{bullets}}'}</code> are filled at generation time. Chips, more/less steering, and
+          the pipeline’s repair and tighten passes all run through the one Refine template — only
+          its <code>{'{{instruction}}'}</code> changes. One open at a time.
         </p>
         <div className="tmpl-groups">
           {TEMPLATE_GROUPS.map((g) => (
