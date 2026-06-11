@@ -73,7 +73,46 @@ function mergeWithDefaults(stored: Partial<Settings> | undefined): Settings {
       ...DEFAULT_SETTINGS.structuralRules,
       ...(stored.structuralRules ?? {}),
     },
+    ...mergeChips(stored),
     promptTemplates: mergePromptTemplates(stored.promptTemplates),
+  };
+}
+
+/** The default chips that existed before seed tracking — installs from
+ *  that era were seeded with exactly this set, so anything beyond it is
+ *  a new default that still needs its one-time offer. */
+const PRE_TRACKING_SEEDS = ['shorter', 'warmer', 'punchier'];
+
+/**
+ * One-time, idempotent default-chip seeding.
+ *
+ * The plain spread preserves a saved `chips` array verbatim, so a chip
+ * added to the DEFAULTS (e.g. 'longer') would never appear for an
+ * existing install. This seeds each not-yet-offered default exactly
+ * once: `seededChipIds` records what has been offered, so a user who
+ * deletes a seeded chip never sees it resurrected on the next read.
+ * Each seed is inserted after its predecessor among the defaults that
+ * the user still has ('longer' lands next to 'shorter'), falling back
+ * to appending.
+ */
+function mergeChips(stored: Partial<Settings>): Pick<Settings, 'chips' | 'seededChipIds'> {
+  const allDefaultIds = DEFAULT_SETTINGS.chips.map((c) => c.id);
+  if (stored.chips === undefined) {
+    return { chips: DEFAULT_SETTINGS.chips, seededChipIds: allDefaultIds };
+  }
+  const alreadySeeded = stored.seededChipIds ?? PRE_TRACKING_SEEDS;
+  const chips = [...stored.chips];
+  for (const candidate of DEFAULT_SETTINGS.chips) {
+    if (alreadySeeded.includes(candidate.id)) continue;
+    if (chips.some((c) => c.id === candidate.id)) continue;
+    const defaultIndex = DEFAULT_SETTINGS.chips.findIndex((c) => c.id === candidate.id);
+    const predecessorId = DEFAULT_SETTINGS.chips[defaultIndex - 1]?.id;
+    const insertAfter = predecessorId ? chips.findIndex((c) => c.id === predecessorId) : -1;
+    chips.splice(insertAfter === -1 ? chips.length : insertAfter + 1, 0, candidate);
+  }
+  return {
+    chips,
+    seededChipIds: Array.from(new Set([...alreadySeeded, ...allDefaultIds])),
   };
 }
 

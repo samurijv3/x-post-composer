@@ -59,6 +59,12 @@ export interface Settings {
   /** Chip presets shown above the refine box. */
   chips: ChipPreset[];
 
+  /** Ids of default chips this install has already been offered. Lets a
+   *  NEW default chip seed into an existing install exactly once — and
+   *  makes deleting a seeded chip permanent (no zombie re-seeding on
+   *  every read). Maintained by the settings merge. */
+  seededChipIds: string[];
+
   /** Editable prompt templates with named slots. The default bodies
    *  live in lib/prompt/defaults.ts (the single source of truth). */
   promptTemplates: Record<PromptTemplateKey, PromptTemplate>;
@@ -94,6 +100,17 @@ export interface PromptTemplate {
 // 2026-06; re-verify there when changing, per CLAUDE.md §2.
 export const DEFAULT_MODEL = 'claude-haiku-4-5-20251001';
 
+const DEFAULT_CHIPS: ChipPreset[] = [
+  { id: 'shorter', label: 'Shorter', instruction: 'Make it noticeably shorter.' },
+  {
+    id: 'longer',
+    label: 'Longer',
+    instruction: 'Make it noticeably longer — develop the idea a step further.',
+  },
+  { id: 'warmer', label: 'Warmer', instruction: 'Make the tone warmer and more human.' },
+  { id: 'punchier', label: 'Punchier', instruction: 'Make it punchier and more direct.' },
+];
+
 export const DEFAULT_SETTINGS: Settings = {
   handle: '',
   keyStorageMode: 'local',
@@ -123,11 +140,8 @@ export const DEFAULT_SETTINGS: Settings = {
     'as an AI',
     'in conclusion',
   ],
-  chips: [
-    { id: 'shorter', label: 'Shorter', instruction: 'Make it noticeably shorter.' },
-    { id: 'warmer', label: 'Warmer', instruction: 'Make the tone warmer and more human.' },
-    { id: 'punchier', label: 'Punchier', instruction: 'Make it punchier and more direct.' },
-  ],
+  chips: DEFAULT_CHIPS,
+  seededChipIds: DEFAULT_CHIPS.map((c) => c.id),
   // The bodies live in lib/prompt/defaults.ts — the one place default
   // prompt text is defined (see ARCH-01 in AUDIT.md).
   promptTemplates: DEFAULT_PROMPT_TEMPLATES,

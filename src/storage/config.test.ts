@@ -157,6 +157,46 @@ describe('getSettings', () => {
   });
 });
 
+describe('default-chip seeding (one-time, idempotent)', () => {
+  const PRE_SEED_CHIPS = [
+    { id: 'shorter', label: 'Shorter', instruction: 'Make it noticeably shorter.' },
+    { id: 'warmer', label: 'Warmer', instruction: 'Make the tone warmer and more human.' },
+    { id: 'punchier', label: 'Punchier', instruction: 'Make it punchier and more direct.' },
+  ];
+
+  it("seeds 'longer' into a pre-tracking install, right after 'shorter'", async () => {
+    seed({ chips: PRE_SEED_CHIPS }); // no seededChipIds stored — old install
+    const s = await getSettings();
+    expect(s.chips.map((c) => c.id)).toEqual(['shorter', 'longer', 'warmer', 'punchier']);
+    expect(s.seededChipIds).toContain('longer');
+  });
+
+  it('never resurrects a seeded chip the user deleted', async () => {
+    seed({
+      chips: PRE_SEED_CHIPS, // user removed 'longer' after it was seeded
+      seededChipIds: ['shorter', 'longer', 'warmer', 'punchier'],
+    });
+    const s = await getSettings();
+    expect(s.chips.map((c) => c.id)).toEqual(['shorter', 'warmer', 'punchier']);
+  });
+
+  it('preserves custom chips and appends a seed when its predecessor is gone', async () => {
+    seed({
+      chips: [{ id: 'mine', label: 'Mine', instruction: 'Do my thing.' }],
+      seededChipIds: ['shorter', 'warmer', 'punchier'],
+    });
+    const s = await getSettings();
+    expect(s.chips[0]?.id).toBe('mine'); // custom chip untouched, first
+    expect(s.chips.map((c) => c.id)).toContain('longer'); // seeded (appended)
+  });
+
+  it('a fresh install just gets the defaults', async () => {
+    const s = await getSettings();
+    expect(s.chips).toEqual(DEFAULT_SETTINGS.chips);
+    expect(s.seededChipIds).toEqual(DEFAULT_SETTINGS.chips.map((c) => c.id));
+  });
+});
+
 describe('setSettings', () => {
   it('persists a patch merged over the current record', async () => {
     seed({ handle: 'old', poolSize: 11 });
