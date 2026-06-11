@@ -65,6 +65,12 @@ describe('getSettings', () => {
     expect(s.structuralRules.noStaccato).toBe(true);
   });
 
+  it('supplies the noAiColon default (off) for installs saved before the rule existed', async () => {
+    seed({ structuralRules: { noEmDash: true, noSmartQuotes: true, noStaccato: true } });
+    const s = await getSettings();
+    expect(s.structuralRules.noAiColon).toBe(false);
+  });
+
   it('keeps a deliberately-emptied banlist empty (no silent re-defaulting)', async () => {
     seed({ doNotSay: [] });
     const s = await getSettings();

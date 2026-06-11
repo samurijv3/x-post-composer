@@ -47,6 +47,10 @@ export interface Settings {
     noStaccato: boolean;
     noEmDash: boolean;
     noSmartQuotes: boolean;
+    /** The label-colon construction ("The result: …"). DEFAULT OFF and
+     *  deliberately narrow — colons are common in legitimate writing;
+     *  times, ratios, and list lead-ins are never flagged. */
+    noAiColon: boolean;
   };
 
   /** Whole-word banlist enforced by the do-not-say matcher. */
@@ -103,6 +107,9 @@ export const DEFAULT_SETTINGS: Settings = {
     noStaccato: true,
     noEmDash: true,
     noSmartQuotes: true,
+    // Off by default: narrow as it is, colon style is too personal to
+    // police unasked (roadmap Phase 3).
+    noAiColon: false,
   },
   // Small starter set of common AI-isms. Users can edit freely in the
   // options page's Output rules section.

@@ -142,6 +142,12 @@ describe('summarizeViolations', () => {
     );
   });
 
+  it('names the label-colon construction', () => {
+    expect(summarizeViolations([span('aiColon')])).toBe(
+      '- the label-colon construction ("The result: \u2026") \u2014 rewrite as full sentences',
+    );
+  });
+
   it('dedupes banlist entries and skips empty ones', () => {
     const out = summarizeViolations([
       span('doNotSay', 'delve'),

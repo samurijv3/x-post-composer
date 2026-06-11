@@ -117,6 +117,24 @@ export function OutputRulesSection({ onSaved }: Props) {
                   <span className="track" />
                 </span>
               </label>
+              <label
+                className="field-row rule-toggle"
+                title="Narrow on purpose: only short sentence-opening labels ('The result: …'). Times, ratios, and list lead-ins are never flagged."
+              >
+                <span>No label-colon openers (“The result: …”)</span>
+                <span className="switch">
+                  <input
+                    type="checkbox"
+                    checked={rules.noAiColon}
+                    onChange={(e) =>
+                      void update({
+                        structuralRules: { ...rules, noAiColon: e.target.checked },
+                      })
+                    }
+                  />
+                  <span className="track" />
+                </span>
+              </label>
             </div>
           </div>
 

@@ -6,7 +6,7 @@
  * detector. `entry` is only populated for `doNotSay` hits and records
  * which banned word/phrase matched, so the repair prompt can name it.
  */
-export type RuleId = 'emDash' | 'smartQuote' | 'staccato' | 'doNotSay';
+export type RuleId = 'emDash' | 'smartQuote' | 'staccato' | 'aiColon' | 'doNotSay';
 
 export interface Span {
   start: number;

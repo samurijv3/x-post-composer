@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, type Settings } from '../../types';
 import { checkExclusions, hasRepairableViolations } from './check';
 
-function settings(overrides: Partial<Settings> = {}): Settings {
+function settings(
+  overrides: Omit<Partial<Settings>, 'structuralRules'> & {
+    structuralRules?: Partial<Settings['structuralRules']>;
+  } = {},
+): Settings {
   return {
     ...DEFAULT_SETTINGS,
     ...overrides,
@@ -27,6 +31,13 @@ describe('checkExclusions', () => {
     expect(rules).toContain('emDash');
     expect(rules).toContain('smartQuote');
     expect(rules).toContain('doNotSay');
+  });
+
+  it('the aiColon rule is OFF by default and gated by its toggle', () => {
+    const text = 'The result: it worked.';
+    expect(checkExclusions(text, settings()).violations).toEqual([]); // default off
+    const r = checkExclusions(text, settings({ structuralRules: { noAiColon: true } }));
+    expect(r.violations.map((v) => v.rule)).toEqual(['aiColon']);
   });
 
   it('respects rule toggles — disabling noEmDash drops em-dash violations', () => {

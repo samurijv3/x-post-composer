@@ -126,6 +126,9 @@ export function summarizeViolations(violations: Span[]): string {
   if (rules.has('staccato')) {
     lines.push('- 3 or more consecutive sentences of 4 words or fewer');
   }
+  if (rules.has('aiColon')) {
+    lines.push('- the label-colon construction ("The result: …") — rewrite as full sentences');
+  }
   const banlistEntries = Array.from(
     new Set(
       violations

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectEmDash, detectSmartQuotes, detectStaccato } from './structural';
+import { detectAiColon, detectEmDash, detectSmartQuotes, detectStaccato } from './structural';
 
 describe('detectEmDash', () => {
   it('returns no spans for plain text', () => {
@@ -104,5 +104,64 @@ describe('detectStaccato', () => {
 
   it('does not flag empty text', () => {
     expect(detectStaccato('')).toEqual([]);
+  });
+});
+
+describe('detectAiColon — narrow by construction', () => {
+  it('flags the canonical label-colon openers', () => {
+    const spans = detectAiColon('The result: it worked.');
+    expect(spans).toHaveLength(1);
+    expect(spans[0]?.matchedText).toBe('The result:');
+    expect(spans[0]?.rule).toBe('aiColon');
+
+    expect(detectAiColon('The real leverage: shipping beats polish.')).toHaveLength(1);
+  });
+
+  it('flags a label-colon opener mid-text (after a sentence boundary)', () => {
+    const spans = detectAiColon('We shipped it. The lesson: never wait for perfect.');
+    expect(spans).toHaveLength(1);
+    expect(spans[0]?.matchedText).toBe('The lesson:');
+  });
+
+  it('NEVER flags times', () => {
+    expect(detectAiColon('Meet at 12:30 sharp.')).toEqual([]);
+    expect(detectAiColon('The standup: 9:15 daily.')).toEqual([]); // second colon disqualifies too
+  });
+
+  it('NEVER flags ratios', () => {
+    expect(detectAiColon('We got a 3:1 return.')).toEqual([]);
+  });
+
+  it('NEVER flags list lead-ins (colon at end of line)', () => {
+    expect(detectAiColon('My checklist:\n- ship\n- sleep')).toEqual([]);
+    expect(detectAiColon('Three things:')).toEqual([]);
+  });
+
+  it('NEVER flags inline enumerations (commas after the colon)', () => {
+    expect(detectAiColon('Three things: speed, cost, trust.')).toEqual([]);
+  });
+
+  it('NEVER flags URLs', () => {
+    expect(detectAiColon('read https://example.com today')).toEqual([]);
+  });
+
+  it('NEVER flags long pre-colon fragments (a real clause before the colon)', () => {
+    expect(detectAiColon('What we learned after a full year of this: patience.')).toEqual([]);
+  });
+
+  it('NEVER flags fragments containing digits or punctuation', () => {
+    expect(detectAiColon('Q3 numbers: up and to the right.')).toEqual([]);
+    expect(detectAiColon('"The result": quoted, so the fragment shape fails.')).toEqual([]);
+  });
+
+  it('span offsets point at the label, not the clause', () => {
+    const text = 'Honestly. The kicker: nobody noticed.';
+    const span = detectAiColon(text)[0];
+    expect(span).toBeDefined();
+    expect(text.slice(span!.start, span!.end)).toBe('The kicker:');
+  });
+
+  it('does not flag empty text', () => {
+    expect(detectAiColon('')).toEqual([]);
   });
 });

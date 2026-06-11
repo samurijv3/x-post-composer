@@ -7,7 +7,7 @@
  * single repair re-prompt, and by the UI to highlight residue.
  */
 import type { Settings } from '../../types';
-import { detectEmDash, detectSmartQuotes, detectStaccato } from './structural';
+import { detectAiColon, detectEmDash, detectSmartQuotes, detectStaccato } from './structural';
 import { detectDoNotSay } from './doNotSay';
 import type { Span } from './types';
 
@@ -21,6 +21,7 @@ export function checkExclusions(text: string, settings: Settings): ExclusionChec
   if (settings.structuralRules.noEmDash) violations.push(...detectEmDash(text));
   if (settings.structuralRules.noSmartQuotes) violations.push(...detectSmartQuotes(text));
   if (settings.structuralRules.noStaccato) violations.push(...detectStaccato(text));
+  if (settings.structuralRules.noAiColon) violations.push(...detectAiColon(text));
   if (settings.doNotSay.length > 0) {
     violations.push(...detectDoNotSay(text, settings.doNotSay));
   }

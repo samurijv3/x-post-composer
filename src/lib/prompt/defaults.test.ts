@@ -161,7 +161,12 @@ describe('buildExclusionInstructions', () => {
   it('omits lines for disabled rules', () => {
     const out = buildExclusionInstructions({
       ...DEFAULT_SETTINGS,
-      structuralRules: { noEmDash: false, noSmartQuotes: false, noStaccato: false },
+      structuralRules: {
+        noEmDash: false,
+        noSmartQuotes: false,
+        noStaccato: false,
+        noAiColon: false,
+      },
       doNotSay: [],
     });
     expect(out).toContain('(none active)');

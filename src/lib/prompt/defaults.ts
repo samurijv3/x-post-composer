@@ -234,6 +234,11 @@ export function buildExclusionInstructions(settings: Settings): string {
       '- Do not write 3 or more consecutive sentences of 4 words or fewer. Vary sentence length.',
     );
   }
+  if (settings.structuralRules.noAiColon) {
+    lines.push(
+      '- Do not open sentences with a label-colon fragment ("The result: …", "The real leverage: …"). Write the full sentence instead.',
+    );
+  }
   const banlist = settings.doNotSay.map((w) => w.trim()).filter((w) => w.length > 0);
   if (banlist.length > 0) {
     lines.push(`- Do not use these words or phrases: ${banlist.join(', ')}`);
