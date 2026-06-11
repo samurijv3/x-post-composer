@@ -58,7 +58,7 @@ Everything is text to the model at send time — there is no separate "attachmen
   - _System_ (invariant call-to-call): role definition, the "output ONLY the text, no preamble/quotes" rule (stated once here, not repeated per template), the precedence preamble, the style guide, and the exclusions.
   - _User_ (changes call-to-call): the example blocks (freshly sampled each call → user), the reply context, the length constraint (set per-composition), and the intent.
   - Bonus: a stable system block is **cacheable** — a real latency/cost win later for a tool firing many short calls per session. Getting the boundary right today keeps that option open; a sloppy boundary forfeits it.
-- **XML-style tags delimit every block** (e.g. `<style_guide>…</style_guide>`). Models respect explicit open/close boundaries far more reliably than ALL-CAPS headers, and the benefit scales as the prompt grows. Replaces the current caps headers and the literal `===USER===` marker (which becomes a real message-role split).
+- **XML-style tags delimit every block** (e.g. `<style_guide>…</style_guide>`). Models respect explicit open/close boundaries far more reliably than ALL-CAPS headers, and the benefit scales as the prompt grows. Replaces the current caps headers and the literal `===USER===` marker notation. _(Reconciled 2026-06-11: the split already reaches the API as real message roles today — `splitPrompt` sends everything above the marker as the `system` parameter (`lib/prompt/template.ts` → `background/generation.ts`). What's genuinely open is the template **storage/editing** mechanism — explicit two-body templates vs. a formalized marker — settled at the Phase 1 build; see the Build Decisions Log.)_
 - **Two example blocks, not three:**
   - `<aspirational_examples>` — the starred items. Instruction: _"the user at their best; the bar to reach for."_
   - `<voice_examples>` — the sampled curated/archive pool. Instruction (keep the current good framing): _"match tone and rhythm, not topic."_
@@ -86,7 +86,7 @@ Several dogfooding items were really symptoms of the tool lacking a crisp draft 
 
 - **BYO key.** The key lives only in the background service worker's reach — never injected into the X page, never in a content script, never logged, never anywhere except the LLM provider call. Stored in `chrome.storage.local` (never `.sync`); an optional in-memory `session` mode exists for cautious users.
 - **No fake at-rest encryption** (it's security theater on a public repo). Honest posture: stored unencrypted, protected by the OS account + extension sandbox; blast radius of a leak is bounded to API spend and is fully revocable; **users should set a spend cap.** Stated plainly in README and near the key field.
-- **No telemetry, no phoning home, no analytics.** One external host only.
+- **No telemetry, no phoning home, no analytics.** One external API host only (plus inbound avatar images from `pbs.twimg.com` — the image-only carve-out in `CLAUDE.md` §6).
 - **Read-only DOM contact, never writes, never auto-posts.** Output goes to the clipboard only. DOM reads anchor on the most stable hooks available and degrade gracefully.
 - **Privacy claim is precise:** "no middleman server," _not_ "nothing leaves your device" — tweet content and drafts are sent to the chosen LLM provider as prompt content. Say so.
 - **Corpus in versioned IndexedDB** (local, unsynced); config + key in `chrome.storage.local`. **Export-library-as-JSON** is the portable backup, since local data doesn't follow the user across machines.
@@ -121,8 +121,8 @@ _Self-contained, sits behind the existing assembly seam, and improves **every ge
 _Contained, and they're what make the tool feel unfinished today — especially important for a publicly-built, open-source project._
 
 - **Overlay-robustness cluster (treat as one root fix).** The selection/highlight overlay persists over X's modals (e.g. the reply pop-up), and behaves inconsistently inside X lists and on `/status/` thread URLs. Root cause is shared: the overlay doesn't track X's navigation and modal states. Lean on X's own state signals rather than tracking position independently; explore hide / send-backward behavior when a modal opens. Fixing piecemeal will whack-a-mole.
-- **X-ing out of the reply-context highlight should clear context** — identical behavior to clicking the trashcan icon.
-- **"Show me" CTA wiring.** When saving a tweet that's already in the corpus, the "already saved → Show me" CTA currently does nothing; it should scroll the existing item into view in the library list and flash/highlight it.
+- **X-ing out of the reply-context highlight should clear context** — identical behavior to clicking the trashcan icon. _(Reconciled 2026-06-11: in code this path is wired — the overlay's dismiss button sends `content:dismiss-reply-context`, which clears the lock end to end (`slices.md` §3). The observed failures most plausibly came from the stale panel-state bug fixed in the 2026-06 hardening pass (AUDIT.md MV3-01). Re-verify in the field before building; if it still misbehaves, treat it as part of the overlay-robustness cluster above, not as missing wiring.)_
+- **"Show me" CTA wiring.** When saving a tweet that's already in the corpus, the "already saved → Show me" CTA should scroll the existing item into view in the library list and flash/highlight it. _(Reconciled 2026-06-11: "currently does nothing" was stale — the CTA is partially wired: it switches to the Voice screen and flashes the row (`App.tsx` `showDup` → `flashRowId` → `voice/LibRow`). What's actually missing: no `scrollIntoView` anywhere, so an off-screen row flashes invisibly — which presents as "does nothing" — and the dedicated `flash-dup` style in `LibRow` is unreachable because the screen always routes the `'added'` highlight. The fix is scroll-into-view plus routing the dup flash.)_
 - **Navigate-away-from-X overlay.** When the panel is open but the user leaves X, show a translucent "go back to X" overlay. Minor, and related to the overlay state-awareness work above.
 
 ## Phase 3 — Workbench + Draft Lifecycle
@@ -158,7 +158,7 @@ _Sits directly on the Phase 3 lifecycle. The self-reinforcing engine: the tool g
 - Add `favorite: boolean` to `LibraryItem`, orthogonal to `source`.
 - **Star toggle** on any `manual` or `shipped` item; a **visible star count** somewhere quiet, to encourage a small, curated set (visibility is the real control — resist building favorite-ranking or bulk-starring tools, which erode the very property that makes stars useful).
 - **Sampling:** guaranteed-on-top fixed N starred items (own pool, shuffled, additive to `poolSize`), per Core Concept A.
-- Wire the **curated/archive balance slider** (built but disabled since original v1) to activate alongside Phase 7.
+- Build the **curated/archive balance slider** (inert until an archive exists; Phase 7 activates it). _(Reconciled 2026-06-11: "built but disabled since original v1" was stale twice over — what existed was an inert `manualCorpusBalance` settings field, never a slider, never read by sampling, never surfaced in any UI; and it was deleted in the 2026-06 hardening pass as dead code (AUDIT.md ARCH-04, per the no-speculative-config rule). The slider and its sampling weight are built fresh in this phase.)_
 - Enforce the **starring boundary + promotion-via-X-search + dedupe** from Core Concept A.
 - _Parked micro-concern:_ if a large set of shipped stars ever drowns the oldest deliberate handpicks _within_ the starred pool, add a small guarantee for handpicked stars — only if actually felt.
 
@@ -176,7 +176,7 @@ _The most differentiated near-term bet, and part of the wedge. Builds on the `se
 _Reframed from "eventually" to a priority: it's what makes the tool valuable on day one for a new user. Upload archive → instant corpus → drafts that already sound like you. The difference between a tool people try and a tool people keep._
 
 - **Accept the X archive `.zip`**, locate and parse the relevant files inside (`tweets.js` / parts, `account.js` for the handle) — feel as much like a simple file upload as possible; don't make the user dig out a specific file.
-- Apply the **quality-screening predicates** (built as pure functions in the original v1; activated here): emoji-only, single-word, below-min-char, dedup, exclude pure retweets, etc.
+- Apply the **quality-screening predicates**: emoji-only, single-word, and below-min-char already exist as tested, dormant pure functions (`src/lib/screening/` — activated here); dedupe and exclude-pure-retweets are new screens built in this phase.
 - Capture **engagement/recency metadata** from the archive (`favorite_count`, `retweet_count`, `created_at`, reply metadata) — free and non-fragile. _Caveat: replies-received counts and impressions are generally not in the archive; likes, reposts, and age are._
 - Store as `source: archive`, `embedding: null`. **Activates the curated/archive balance slider** (default 70/30).
 - **Auto-generate a style-guide draft** from a sample of the archive as an onboarding beat. **Critical: confirm-don't-assert.** Present it as an editable draft the user ratifies ("does this sound right?"), never as asserted fact. A subtly-wrong auto-asserted style guide annoys the user _and_ silently poisons every subsequent generation. Same generate-then-confirm discipline as post/reply classification.
@@ -233,4 +233,4 @@ _Small or deferred, surfaced so they're not lost._
 - **Onboarding first-run experience** — designed holistically later. Capabilities (archive import, style-guide generation) exist as settings features in the meantime.
 - **Intent-shape framing implementation** — two selectable sub-templates vs. one template with a variable line (settle at Phase 1 build).
 - **Within-curated handpick protection** — only if drowning is actually felt after Phase 5.
-- **Verify the transparency features actually shipped** — the prompt inspector, the editable prompt-template UI, and export-as-JSON are believed present but untested end-to-end. They _are_ the no-snake-oil wedge, so confirm they work, not just that the UI gestures at them.
+- **Verify the transparency features actually shipped** — the prompt inspector, the editable prompt-template UI, and export-as-JSON are present (`src/ui/LastPromptInspector.tsx`, `src/ui/sections/PromptsSection.tsx`, `src/ui/sections/DataSection.tsx`; their engine logic is unit-tested) but unverified end-to-end in a real browser. They _are_ the no-snake-oil wedge, so confirm they work, not just that the UI gestures at them.
