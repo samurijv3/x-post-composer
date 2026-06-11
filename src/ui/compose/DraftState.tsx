@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import type { ChipPreset } from '../../types';
 import type { Span } from '../../lib/exclusion';
 import { X_HARD_LIMIT } from '../../lib/counting';
@@ -6,6 +6,7 @@ import { DraftEditor } from './DraftEditor';
 import { LastPromptInspector } from '../LastPromptInspector';
 import {
   IcCheck,
+  IcChevR,
   IcCopy,
   IcEdit,
   IcLess,
@@ -20,6 +21,7 @@ import {
 import { CapToggle } from './CapToggle';
 import { ErrorCard, type ErrorKind } from './ErrorCard';
 import { ReplyContextBanner } from './ReplyContextBanner';
+import { ReplyContextCard } from './ReplyContextCard';
 import type { BriefControls, ReplyContextControls } from './types';
 
 const MORELESS_MAX = 140;
@@ -94,22 +96,37 @@ export function DraftState({
 }: DraftStateProps) {
   const hasContext = reply.replyContext !== null;
   const mode: 'post' | 'reply' = hasContext ? 'reply' : 'post';
+  // Peek at the tweet being replied to: the draft dominates the canvas,
+  // but the full context card (exactly as it looked pre-draft) is one
+  // click away — from the collapsed bar's "to @handle" or the expanded
+  // card's "Replying to" row.
+  const [contextOpen, setContextOpen] = useState<boolean>(false);
+  const peekTitle = contextOpen
+    ? "Hide the tweet you're replying to"
+    : "Show the tweet you're replying to";
   return (
     <>
       {!expanded ? (
         <div className="brief">
           <span className={`badge ${mode}`}>{mode}</span>
+          {hasContext && (
+            <button
+              type="button"
+              className="brief-peek"
+              title={peekTitle}
+              aria-expanded={contextOpen}
+              onClick={() => setContextOpen(!contextOpen)}
+            >
+              to @{reply.replyContext?.targetAuthorHandle ?? '—'}
+            </button>
+          )}
           <button
             type="button"
             className="brief-main"
             onClick={() => setExpanded(true)}
             title="Edit your brief"
           >
-            <span className="brief-text">
-              {mode === 'reply' && reply.replyContext?.targetAuthorHandle
-                ? `to @${reply.replyContext.targetAuthorHandle} · ${briefText}`
-                : briefText}
-            </span>
+            <span className="brief-text">{briefText}</span>
             <IcEdit className="brief-edit" />
           </button>
           <button
@@ -126,8 +143,17 @@ export function DraftState({
         <div className="card inset" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {hasContext && reply.replyContext ? (
             <div className="brief-ctx">
-              <IcReply />
-              Replying to @{reply.replyContext.targetAuthorHandle ?? '—'}
+              <button
+                type="button"
+                className="brief-ctx-toggle"
+                title={peekTitle}
+                aria-expanded={contextOpen}
+                onClick={() => setContextOpen(!contextOpen)}
+              >
+                <IcReply />
+                Replying to @{reply.replyContext.targetAuthorHandle ?? '—'}
+                <IcChevR className={`ctx-chev ${contextOpen ? 'open' : ''}`} />
+              </button>
               <span className="head-spacer" />
               <button
                 type="button"
@@ -168,6 +194,10 @@ export function DraftState({
             </button>
           </div>
         </div>
+      )}
+
+      {contextOpen && reply.replyContext && (
+        <ReplyContextCard context={reply.replyContext} onClear={reply.onClearReplyContext} />
       )}
 
       {error && <ErrorCard kind={error} onRetry={onRetry} onSettings={onOpenOptions} />}

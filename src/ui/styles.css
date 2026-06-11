@@ -2207,3 +2207,43 @@ code {
   background: color-mix(in oklab, var(--ok) 14%, transparent);
   color: var(--ok);
 }
+
+/* Context peek — the reply-context tweet stays one click away after a
+   draft takes over the canvas. */
+.brief-peek {
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  border: 0;
+  background: var(--accent-weak);
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.brief-peek:hover {
+  background: var(--accent-weak-2);
+}
+.brief-ctx-toggle {
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.brief-ctx-toggle .ctx-chev {
+  width: 14px;
+  height: 14px;
+  color: var(--text-3);
+  transition: transform 0.12s ease;
+}
+.brief-ctx-toggle .ctx-chev.open {
+  transform: rotate(90deg);
+}
