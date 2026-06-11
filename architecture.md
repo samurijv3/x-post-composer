@@ -20,7 +20,7 @@ How Margin is put together on this branch. Decisions and intent live in `design.
 │  generation.ts sample→assemble→CALL→autoFix→repair?→tighten?         │
 │                ── the ONLY reader of the key / caller of Anthropic ──│
 │  capture.ts    author filter → classify → persist → notices          │
-│  tabs.ts       pushToTabs, composer round-trip (X_HOSTS)             │
+│  tabs.ts       pushToTabs, composer round-trip, active-tab-on-X      │
 └──────┬──────────────────────────────┬────────────────────────────────┘
        │ tabs.sendMessage             │ fetch (60s abort)
 ┌──────▼─────────────────────────┐   ▼
@@ -45,7 +45,7 @@ How Margin is put together on this branch. Decisions and intent live in `design.
 
 ## Brain / shell split
 
-All consequential logic is pure and framework-free in `src/lib/` (no React, no `chrome.*`, no `fetch`, no DOM): exclusion engine, prompt engine + assembly, sampling, counting, screening, voice validation/classification, formatting. The shells compose it.
+All consequential logic is pure and framework-free in `src/lib/` (no React, no `chrome.*`, no `fetch`, no DOM): exclusion engine, prompt engine + assembly, sampling, counting, screening, voice validation/classification, formatting, the overlay render policy, the on-X URL predicate. The shells compose it.
 
 **One deliberate exception:** `entrypoints/twitter.content/extract.ts` is consequential logic that necessarily reads DOM (`Element → data`). It lives inside the content entrypoint, not `lib/`, and gets the lib treatment anyway: pure functions of their arguments, every X-markup assumption pinned by DOM-fixture tests (`extract.test.ts`).
 
