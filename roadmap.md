@@ -122,7 +122,7 @@ _Self-contained, sits behind the existing assembly seam, and improves **every ge
 
 ## Phase 2 — Bug Fixes (trust & polish)
 
-**✅ Shipped 2026-06-11** (`fix/phase2-trust-polish`) — _pending the field pass: the overlay behaviors below are exactly the kind of thing only a live x.com session can confirm, and the build environment has none. The manual-verification list is in the build session's closing note; judgment calls are in the Build Decisions Log. Rationale graduated to `design.md` → "Pull in reply context" / "On-page overlays yield to X"._
+**✅ Shipped 2026-06-11** (`fix/phase2-trust-polish`) — _field-verified the same day across several live rounds (modal round-trips, list pages, truncated tweets, in-modal selection, dismiss parity, Show me, off-X overlay); the fixes those rounds produced are the dated field-pass entries in the Build Decisions Log. Judgment calls there too. Rationale graduated to `design.md` → "Pull in reply context" / "On-page overlays yield to X"._
 
 _Contained, and they're what make the tool feel unfinished today — especially important for a publicly-built, open-source project._
 
