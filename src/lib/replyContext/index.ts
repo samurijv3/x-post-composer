@@ -1,1 +1,1 @@
-export { mergeReplyContextSelection } from './merge';
+export { mergeReplyContextSelection, normalizeTweetText } from './merge';

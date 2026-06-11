@@ -6,6 +6,7 @@ import {
   extractReplyContextFromComposer,
   extractTweet,
   findArticleByStatusId,
+  findArticleByTweetText,
   findGrandparentArticle,
   hasMedia,
   isTweetTruncated,
@@ -316,6 +317,37 @@ describe('findArticleByStatusId', () => {
   it('modal scope returns null when the tweet only exists on the page', () => {
     document.body.append(cell(tweetArticle({ statusId: '10' })));
     expect(findArticleByStatusId('10', 'modal')).toBeNull();
+  });
+});
+
+describe('findArticleByTweetText', () => {
+  it('finds the modal copy by text — the identity fallback when X strips the status link', () => {
+    // The reply modal re-renders the locked tweet without anchors; the
+    // highlight follows the lock into the modal via text identity.
+    const dialog = fromHTML('<div role="dialog" aria-modal="true"></div>');
+    const modalCopy = tweetArticle({ text: 'the locked tweet', statusId: '11' });
+    dialog.appendChild(modalCopy);
+    document.body.append(cell(tweetArticle({ text: 'the locked tweet', statusId: '11' })), dialog);
+    expect(findArticleByTweetText('the locked tweet', 'modal')).toBe(modalCopy);
+  });
+
+  it('normalizes whitespace the same way the same-tweet merge does', () => {
+    const article = tweetArticle({ text: 'spaced out text' });
+    document.body.append(cell(article));
+    expect(findArticleByTweetText('  spaced   out\n\ntext ')).toBe(article);
+  });
+
+  it('page scope skips dialog copies; empty text matches nothing', () => {
+    const dialog = fromHTML('<div role="dialog" aria-modal="true"></div>');
+    dialog.appendChild(tweetArticle({ text: 'only in modal' }));
+    document.body.append(dialog);
+    expect(findArticleByTweetText('only in modal')).toBeNull();
+    expect(findArticleByTweetText('   ')).toBeNull();
+  });
+
+  it('returns null when no article carries the text', () => {
+    document.body.append(cell(tweetArticle({ text: 'something else' })));
+    expect(findArticleByTweetText('the locked tweet')).toBeNull();
   });
 });
 

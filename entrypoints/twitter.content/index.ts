@@ -39,6 +39,7 @@ import {
   extractReplyContextFromComposer,
   extractTweet,
   findArticleByStatusId,
+  findArticleByTweetText,
   isTweetTruncated,
   isXModalOpen,
 } from './extract';
@@ -104,13 +105,26 @@ export default defineContentScript({
     }
 
     /**
+     * Resolve the locked tweet's article in the given layer: by status
+     * id when the lock carries one, falling back to text identity —
+     * the same-tweet rule the merge uses — for renderings that carry
+     * no /status/ link (X's modal copies). This is what lets the
+     * highlight FOLLOW the lock into a modal that re-renders it.
+     */
+    function findLockArticle(scope: 'page' | 'modal'): Element | null {
+      if (replyContextLock === null) return null;
+      const byId = replyContextLock.targetStatusId
+        ? findArticleByStatusId(replyContextLock.targetStatusId, scope)
+        : null;
+      return byId ?? findArticleByTweetText(replyContextLock.targetText, scope);
+    }
+
+    /**
      * Whether the overlay's current lock target may keep painting even
-     * when the statusId search comes up empty. X's modal copies carry
-     * no /status/ link, so a directly-clicked modal tweet can never be
-     * re-FOUND by id — but the element the user clicked is still right
-     * there. Keep it while it stays connected and lives in the active
-     * layer (modal content while a modal is open; page content
-     * otherwise).
+     * when both identity searches come up empty (e.g. X re-rendered
+     * the text mid-animation). Keep it while it stays connected and
+     * lives in the active layer (modal content while a modal is open;
+     * page content otherwise).
      */
     function currentLockTargetStillValid(current: Element | null): current is Element {
       if (current === null || !current.isConnected) return false;
@@ -144,13 +158,12 @@ export default defineContentScript({
     function applyOverlayState(): void {
       // The policy lives in lib (decideOverlayVisibility, tested);
       // this shell only supplies inputs and applies the verdict.
-      const lockStatusId = replyContextLock?.targetStatusId ?? null;
       const verdict = decideOverlayVisibility({
         panelOpen,
         captureMode,
         xModalOpen,
         awayFromLockPath: awayFromLockPath(),
-        hasLockTarget: lockStatusId !== null,
+        hasLockTarget: replyContextLock !== null,
         hoveringTweet: hoveredArticle !== null,
         hoveredInModal:
           hoveredArticle !== null && hoveredArticle.closest('[aria-modal="true"]') !== null,
@@ -158,13 +171,10 @@ export default defineContentScript({
 
       // Modal open → search only the modal's layer (its copy is the one
       // the user is working with); otherwise page scope, which skips
-      // dialog-resident copies. When the id search misses but the
-      // existing target is still connected in the active layer (a
-      // clicked modal copy has no /status/ link to find it by), keep it.
-      let lockArticle =
-        verdict.showLock && lockStatusId !== null
-          ? findArticleByStatusId(lockStatusId, xModalOpen ? 'modal' : 'page')
-          : null;
+      // dialog-resident copies. When both identity searches miss but
+      // the existing target is still connected in the active layer,
+      // keep it.
+      let lockArticle = verdict.showLock ? findLockArticle(xModalOpen ? 'modal' : 'page') : null;
       if (lockArticle === null && verdict.showLock) {
         const current = overlay.getLockTarget();
         if (currentLockTargetStillValid(current)) lockArticle = current;
@@ -492,21 +502,18 @@ export default defineContentScript({
 
             // Re-find the lock article only while it may paint (modal
             // open → modal scope; otherwise page scope + path rule).
-            // When the locked tweet isn't in the searched layer, the
-            // find returns null and the highlight hides — UNLESS the
-            // current target is still valid (a clicked modal copy has
-            // no /status/ link to re-find it by; keep it while it's
-            // connected). Storage is preserved either way so generation
-            // can still use the context.
+            // findLockArticle tries the status id then text identity,
+            // so the highlight follows the lock into a modal that
+            // re-renders the same tweet. When both searches miss, the
+            // highlight hides — unless the current target is still
+            // valid in the active layer. Storage is preserved either
+            // way so generation can still use the context.
             if (
               (xModalOpen || !awayFromLockPath()) &&
               captureMode === 'reply-context' &&
-              replyContextLock?.targetStatusId
+              replyContextLock !== null
             ) {
-              const fresh = findArticleByStatusId(
-                replyContextLock.targetStatusId,
-                xModalOpen ? 'modal' : 'page',
-              );
+              const fresh = findLockArticle(xModalOpen ? 'modal' : 'page');
               if (fresh !== current && (fresh !== null || !currentLockTargetStillValid(current))) {
                 overlay.setLock(fresh);
               }

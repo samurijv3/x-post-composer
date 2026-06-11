@@ -2,7 +2,7 @@
 
 Normative rule: CLAUDE.md §5 — every load-bearing piece of deterministic logic has a behavioral test; **no coverage-percentage gate, no filler tests**. This file is the how.
 
-Current state: **284 tests, 20 files**, all green via `npm run test`.
+Current state: **288 tests, 20 files**, all green via `npm run test`.
 
 ## Stack and config
 
@@ -29,7 +29,7 @@ Current state: **284 tests, 20 files**, all green via `npm run test`.
 | Settings merge + migration                                     | `src/storage/config.test.ts`                             | Decides whether saved settings survive upgrades (blanked-template restore, nested merges, empty-banlist preservation)                                                |
 | Corpus + IDB migration                                         | `src/storage/corpus.test.ts`                             | CRUD, duplicate-id constraint, single-tx clear, and a real v1→v2 migration against a hand-seeded v1 database                                                         |
 | Anthropic client                                               | `src/api/anthropic.test.ts`                              | Request shape (key in header only, never in body/errors), the full HTTP-status → error-kind table, text-block extraction — all against a stubbed `fetch`, no network |
-| X-markup extraction                                            | `entrypoints/twitter.content/extract.test.ts` (38 tests) | Each test pins one assumption about X's DOM; when X drifts, the failing test **names the assumption that died**                                                      |
+| X-markup extraction                                            | `entrypoints/twitter.content/extract.test.ts` (44 tests) | Each test pins one assumption about X's DOM; when X drifts, the failing test **names the assumption that died**                                                      |
 
 ## Deliberately untested (don't add filler here)
 

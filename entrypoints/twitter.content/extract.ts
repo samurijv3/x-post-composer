@@ -10,6 +10,7 @@
  */
 import type { RawCapture } from '../../src/types/capture';
 import type { ReplyContext } from '../../src/types';
+import { normalizeTweetText } from '../../src/lib/replyContext';
 
 export function extractTweet(
   article: Element,
@@ -136,15 +137,43 @@ export function findArticleByStatusId(
 ): Element | null {
   const articles = document.querySelectorAll('article[data-testid="tweet"]');
   for (const a of Array.from(articles)) {
-    const inModal = a.closest('[aria-modal="true"]') !== null;
-    if (scope === 'modal') {
-      if (!inModal) continue;
-    } else if (inModal || a.closest('[role="dialog"]')) {
-      continue;
-    }
+    if (!articleInLayer(a, scope)) continue;
     if (readStatusId(a) === statusId) return a;
   }
   return null;
+}
+
+/**
+ * Find the article rendering the given tweet text within one layer —
+ * the identity fallback for copies that carry no /status/ link (X's
+ * modal renderings). Text is normalized the same way the same-tweet
+ * merge normalizes it (`normalizeTweetText`, lib/replyContext), so
+ * "the lock's tweet" means the same thing in both places. More
+ * expensive than the id search (reads each article's visible text) —
+ * callers try the id first.
+ */
+export function findArticleByTweetText(
+  text: string,
+  scope: 'page' | 'modal' = 'page',
+): Element | null {
+  const wanted = normalizeTweetText(text);
+  if (wanted === '') return null;
+  const articles = document.querySelectorAll('article[data-testid="tweet"]');
+  for (const a of Array.from(articles)) {
+    if (!articleInLayer(a, scope)) continue;
+    const textRoot = a.querySelector('[data-testid="tweetText"]');
+    if (!textRoot) continue;
+    if (normalizeTweetText(readVisibleText(textRoot)) === wanted) return a;
+  }
+  return null;
+}
+
+/** Shared layer filter for the article finders: 'modal' = inside the
+ *  open aria-modal layer; 'page' = outside every dialog. */
+function articleInLayer(article: Element, scope: 'page' | 'modal'): boolean {
+  const inModal = article.closest('[aria-modal="true"]') !== null;
+  if (scope === 'modal') return inModal;
+  return !inModal && article.closest('[role="dialog"]') === null;
 }
 
 /**

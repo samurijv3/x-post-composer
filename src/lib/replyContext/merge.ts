@@ -12,8 +12,11 @@
 import type { ReplyContext } from '../../types';
 
 /** Collapse whitespace runs so two renderings of the same tweet text
- *  (timeline vs modal) compare equal. */
-function normalizeTweetText(text: string): string {
+ *  (timeline vs modal) compare equal. Exported because the overlay's
+ *  text-identity article search (extract.ts) must normalize the SAME
+ *  way — a second definition drifting from this one is the bug class
+ *  conventions.md rule 4 exists to prevent. */
+export function normalizeTweetText(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 

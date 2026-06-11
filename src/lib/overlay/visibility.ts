@@ -33,7 +33,8 @@ export interface OverlayStateInputs {
   /** The tab is currently away from the path where the lock was last
    *  affirmed (selection, mode re-engage, or initial load). */
   awayFromLockPath: boolean;
-  /** A reply-context lock with a targetStatusId exists. */
+  /** A reply-context lock exists. (Text identity suffices to find its
+   *  article — a status id is not required.) */
   hasLockTarget: boolean;
   /** A tweet article is currently hovered. */
   hoveringTweet: boolean;
