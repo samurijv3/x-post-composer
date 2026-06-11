@@ -3,6 +3,7 @@ import {
   consumeAutoReplyFlag,
   countItems,
   getCaptureMode,
+  getReplyContextLock,
   getSettings,
   setCaptureMode,
   setReplyContextLock,
@@ -12,6 +13,7 @@ import {
 } from '../storage';
 import { isMessageOfType, onNotice, sendToBackground, type BackgroundReply } from '../messaging';
 import { weightedLength, X_HARD_LIMIT } from '../lib/counting';
+import { mergeReplyContextSelection } from '../lib/replyContext';
 import type {
   ChipPreset,
   GenerationRequest,
@@ -104,7 +106,13 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
           Extract<BackgroundReply, { type: 'bg:reply-context-result' }>
         >({ type: 'panel:capture-reply-context' });
         if (reply.ok && reply.context) {
-          await setReplyContextLock(reply.context);
+          // Composer-anchored extraction reads X's dialog copies, which
+          // can be metadata-poor — merge a re-delivery of the same
+          // tweet instead of degrading the lock. Read the current lock
+          // fresh (the React state here may be a stale closure).
+          await setReplyContextLock(
+            mergeReplyContextSelection(await getReplyContextLock(), reply.context),
+          );
         } else {
           onToast(reply.message ?? 'Could not capture reply context.');
         }

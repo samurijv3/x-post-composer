@@ -103,6 +103,22 @@ export default defineContentScript({
       return lockAffirmedPath !== null && lockAffirmedPath !== window.location.pathname;
     }
 
+    /**
+     * Whether the overlay's current lock target may keep painting even
+     * when the statusId search comes up empty. X's modal copies carry
+     * no /status/ link, so a directly-clicked modal tweet can never be
+     * re-FOUND by id — but the element the user clicked is still right
+     * there. Keep it while it stays connected and lives in the active
+     * layer (modal content while a modal is open; page content
+     * otherwise).
+     */
+    function currentLockTargetStillValid(current: Element | null): current is Element {
+      if (current === null || !current.isConnected) return false;
+      const inModal = current.closest('[aria-modal="true"]') !== null;
+      if (xModalOpen) return inModal;
+      return !inModal && current.closest('[role="dialog"]') === null;
+    }
+
     // ---------------------------------------------------------------
     // Overlay system
     // ---------------------------------------------------------------
@@ -142,11 +158,17 @@ export default defineContentScript({
 
       // Modal open → search only the modal's layer (its copy is the one
       // the user is working with); otherwise page scope, which skips
-      // dialog-resident copies.
-      const lockArticle =
+      // dialog-resident copies. When the id search misses but the
+      // existing target is still connected in the active layer (a
+      // clicked modal copy has no /status/ link to find it by), keep it.
+      let lockArticle =
         verdict.showLock && lockStatusId !== null
           ? findArticleByStatusId(lockStatusId, xModalOpen ? 'modal' : 'page')
           : null;
+      if (lockArticle === null && verdict.showLock) {
+        const current = overlay.getLockTarget();
+        if (currentLockTargetStillValid(current)) lockArticle = current;
+      }
       overlay.setLock(lockArticle);
 
       // Preview is suppressed when hovering the locked article so we
@@ -228,9 +250,13 @@ export default defineContentScript({
       if (isCaptureModeState(message)) {
         // Re-engaging reply-context mode is a fresh user gesture — it
         // re-affirms the lock on the page the user is now on, lifting
-        // any navigation suppression.
+        // any navigation suppression. Not while a modal is up, though:
+        // the modal's pathname is transient noise, and the pre-modal
+        // affirmation is where the highlight should resume on close.
         if (message.mode === 'reply-context' && captureMode !== 'reply-context') {
-          if (replyContextLock !== null) lockAffirmedPath = window.location.pathname;
+          if (replyContextLock !== null && !xModalOpen) {
+            lockAffirmedPath = window.location.pathname;
+          }
         }
         captureMode = message.mode;
         applyOverlayState();
@@ -239,8 +265,16 @@ export default defineContentScript({
 
       if (isReplyContextLockState(message)) {
         // A new lock (the user clicked a tweet, possibly in another
-        // tab) re-affirms the highlight for THIS tab's current page.
-        lockAffirmedPath = message.lock === null ? null : window.location.pathname;
+        // tab) re-affirms the highlight for THIS tab's current page —
+        // unless a modal is open: a selection made inside a modal keeps
+        // the pre-modal affirmation, so closing the modal hands the
+        // highlight back to the underlying page (the modal's own URL is
+        // noise, not a place to anchor to).
+        if (message.lock === null) {
+          lockAffirmedPath = null;
+        } else if (!xModalOpen || lockAffirmedPath === null) {
+          lockAffirmedPath = window.location.pathname;
+        }
         replyContextLock = message.lock;
         applyOverlayState();
         return false;
@@ -400,6 +434,13 @@ export default defineContentScript({
           return;
         }
         sendOneWay({ type: 'content:reply-context-selected', context: ctx });
+        // The user clicked THIS article — affirm it as the highlight
+        // target immediately rather than waiting for the round-trip,
+        // which cannot re-find modal-rendered copies by status id (they
+        // carry no /status/ link). The authoritative lock push follows;
+        // currentLockTargetStillValid keeps this element painted while
+        // it stays connected in the active layer.
+        if (panelOpen) overlay.setLock(article);
       } catch {
         sendOneWay({ type: 'content:reply-context-failed', reason: 'unknown' });
       }
@@ -452,8 +493,11 @@ export default defineContentScript({
             // Re-find the lock article only while it may paint (modal
             // open → modal scope; otherwise page scope + path rule).
             // When the locked tweet isn't in the searched layer, the
-            // find returns null and the highlight hides; storage is
-            // preserved so generation can still use the context.
+            // find returns null and the highlight hides — UNLESS the
+            // current target is still valid (a clicked modal copy has
+            // no /status/ link to re-find it by; keep it while it's
+            // connected). Storage is preserved either way so generation
+            // can still use the context.
             if (
               (xModalOpen || !awayFromLockPath()) &&
               captureMode === 'reply-context' &&
@@ -463,7 +507,7 @@ export default defineContentScript({
                 replyContextLock.targetStatusId,
                 xModalOpen ? 'modal' : 'page',
               );
-              if (fresh !== current) {
+              if (fresh !== current && (fresh !== null || !currentLockTargetStillValid(current))) {
                 overlay.setLock(fresh);
               }
             }

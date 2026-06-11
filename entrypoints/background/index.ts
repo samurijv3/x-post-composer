@@ -21,6 +21,7 @@ import {
   setReplyContextLock,
 } from '../../src/storage';
 import type { ReplyContext } from '../../src/types';
+import { mergeReplyContextSelection } from '../../src/lib/replyContext';
 import { runGeneration, runRefine, runVerifyKey } from './generation';
 import {
   failureReasonToSaveResultKind,
@@ -169,9 +170,12 @@ export default defineBackground(() => {
       // status id. Persist as the active lock. Reply-context mode stays
       // ON deliberately so the user can hover other tweets and click
       // to swap the locked context without re-toggling the mode. They
-      // turn it off in the panel when done.
-      await setReplyContextLock(message.context);
-      return { type: 'bg:reply-context-lock-state', lock: message.context };
+      // turn it off in the panel when done. A re-delivery of the SAME
+      // tweet (X's modal copies carry no author/status links) merges
+      // into the existing lock instead of degrading it.
+      const merged = mergeReplyContextSelection(await getReplyContextLock(), message.context);
+      await setReplyContextLock(merged);
+      return { type: 'bg:reply-context-lock-state', lock: merged };
     }
 
     if (isMessageOfType(message, 'content:dismiss-reply-context')) {
