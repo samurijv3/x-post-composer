@@ -109,8 +109,9 @@ export function DraftState({
       {!expanded ? (
         <>
           <div className="brief">
-            <span className={`badge ${mode}`}>{mode}</span>
-            {hasContext && (
+            {/* One chip, not two: in reply mode the mode IS "reply to
+                @handle", and the whole chip is the context peek. */}
+            {hasContext ? (
               <button
                 type="button"
                 className="brief-peek"
@@ -118,8 +119,10 @@ export function DraftState({
                 aria-expanded={contextOpen}
                 onClick={() => setContextOpen(!contextOpen)}
               >
-                to @{reply.replyContext?.targetAuthorHandle ?? '—'}
+                reply to @{reply.replyContext?.targetAuthorHandle ?? '—'}
               </button>
+            ) : (
+              <span className={`badge ${mode}`}>{mode}</span>
             )}
             <button
               type="button"
