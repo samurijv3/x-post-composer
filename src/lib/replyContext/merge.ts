@@ -31,7 +31,12 @@ export function normalizeTweetText(text: string): string {
  */
 export function isTruncatedRenderingOf(full: string, partial: string): boolean {
   const fullNorm = normalizeTweetText(full);
+  // X nests the literal "Show more" label inside the tweet-text node on
+  // some renderings, so the visible text reads "…prefix… Show more" —
+  // strip the label, then any trailing ellipsis. (The label string is
+  // the same X-markup assumption isTweetTruncated already encodes.)
   const partialNorm = normalizeTweetText(partial)
+    .replace(/(?:…|\.{3})?\s*Show more$/i, '')
     .replace(/(?:…|\.{3})$/, '')
     .trimEnd();
   if (partialNorm === '') return false;

@@ -168,10 +168,13 @@ export function findArticleByTweetText(
     if (!textRoot) continue;
     const visible = readVisibleText(textRoot);
     if (normalizeTweetText(visible) === wanted) return a;
-    // Truncation-gated prefix identity: only an article that is
-    // actually cut off may match by prefix — a genuinely short tweet
-    // must never prefix-steal the highlight.
-    if (isTweetTruncated(a) && isTruncatedRenderingOf(text, visible)) return a;
+    // Truncation-gated prefix identity: only an article that shows
+    // evidence of being cut off — the Show-more affordance, or text
+    // ending in a truncation ellipsis (modal renderings vary in which
+    // they carry) — may match by prefix. A genuinely short tweet must
+    // never prefix-steal the highlight.
+    const looksTruncated = isTweetTruncated(a) || /(?:…|\.{3})\s*(?:Show more)?\s*$/i.test(visible);
+    if (looksTruncated && isTruncatedRenderingOf(text, visible)) return a;
   }
   return null;
 }

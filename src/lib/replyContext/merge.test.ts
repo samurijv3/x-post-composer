@@ -85,6 +85,13 @@ describe('mergeReplyContextSelection', () => {
     expect(isTruncatedRenderingOf(full, 'a  long\ntweet that keeps going')).toBe(true);
   });
 
+  it('strips the Show more label X nests inside the tweet-text node', () => {
+    const full = 'a long tweet that keeps going well past the collapse point';
+    expect(isTruncatedRenderingOf(full, 'a long tweet that keeps going…Show more')).toBe(true);
+    expect(isTruncatedRenderingOf(full, 'a long tweet that keeps going… Show more')).toBe(true);
+    expect(isTruncatedRenderingOf(full, 'a long tweet that keeps goingShow more')).toBe(true);
+  });
+
   it('rejects non-prefixes, equal text, and empty partials as truncated renderings', () => {
     const full = 'a long tweet that keeps going';
     expect(isTruncatedRenderingOf(full, 'a different opening…')).toBe(false);

@@ -366,11 +366,36 @@ describe('findArticleByTweetText', () => {
     ).toBe(truncatedCopy);
   });
 
-  it('never prefix-matches an article without the Show more affordance', () => {
+  it('never prefix-matches an article without truncation evidence', () => {
     // A genuinely short tweet that happens to be a prefix of the lock
     // text must not steal the highlight.
     document.body.append(cell(tweetArticle({ text: 'a long tweet' })));
     expect(findArticleByTweetText('a long tweet that keeps going')).toBeNull();
+  });
+
+  it('matches a modal copy whose Show more label sits inside the tweet-text node', () => {
+    // Some modal renderings nest the affordance INSIDE tweetText, so
+    // the visible text ends "…Show more" — it must still read as a
+    // truncated rendering of the expanded lock text.
+    const dialog = fromHTML('<div role="dialog" aria-modal="true"></div>');
+    const copy = fromHTML(`<article data-testid="tweet">
+      <div data-testid="tweetText"><span>a long tweet that keeps going…</span><span data-testid="tweet-text-show-more-link">Show more</span></div>
+    </article>`);
+    dialog.appendChild(copy);
+    document.body.append(dialog);
+    expect(
+      findArticleByTweetText('a long tweet that keeps going well past the collapse point', 'modal'),
+    ).toBe(copy);
+  });
+
+  it('a trailing truncation ellipsis counts as evidence even without a Show-more control', () => {
+    const bare = fromHTML(`<article data-testid="tweet">
+      <div data-testid="tweetText"><span>a long tweet that keeps going…</span></div>
+    </article>`);
+    document.body.append(cell(bare));
+    expect(
+      findArticleByTweetText('a long tweet that keeps going well past the collapse point'),
+    ).toBe(bare);
   });
 });
 
