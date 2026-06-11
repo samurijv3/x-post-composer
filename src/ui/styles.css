@@ -2340,3 +2340,11 @@ code {
   letter-spacing: 0.03em;
   color: var(--text-3);
 }
+
+/* Star toggle — quiet until starred, then filled accent. */
+.star-btn.starred {
+  color: var(--accent);
+}
+.star-btn.starred svg {
+  fill: var(--accent);
+}

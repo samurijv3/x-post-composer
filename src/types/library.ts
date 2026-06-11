@@ -39,6 +39,13 @@ export interface LibraryItem {
   timestamp: string;
   /** Engagement counts from X, when available. `null` when unknown. */
   engagement: { likes?: number; reposts?: number } | null;
+  /** Star (Core Concept A): the user's judgment laid on top of source —
+   *  orthogonal to it. Starred items form their own guaranteed sampling
+   *  pool and feed <aspirational_examples>. Starrable on 'manual' and
+   *  'shipped' only (the archive is the stream you haven't individually
+   *  engaged with — promote via X-search + handpick instead). */
+  favorite: boolean;
+
   /** Reserved for semantic retrieval; always null in v1. */
   embedding: number[] | null;
   /** Epoch ms at the moment the item was stored. */

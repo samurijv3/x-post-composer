@@ -63,6 +63,11 @@ export const IcRefresh = (p: SVGProps<SVGSVGElement>) => (
     <path d="M18 2.5V6h-3.5M6 21.5V18h3.5" />
   </Svg>
 );
+export const IcStar = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1.1 5.8L12 16.8l-5.3 2.8 1.1-5.8-4.3-4.1 5.9-.8L12 3.5z" />
+  </Svg>
+);
 export const IcUndo = (p: SVGProps<SVGSVGElement>) => (
   <Svg {...p}>
     <path d="M4 9h11a5 5 0 0 1 0 10H9" />

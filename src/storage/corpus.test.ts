@@ -24,6 +24,7 @@ function makeItem(overrides: Partial<LibraryItem> = {}): LibraryItem {
     authorAvatarUrl: overrides.authorAvatarUrl ?? null,
     timestamp: overrides.timestamp ?? '2026-01-01T00:00:00Z',
     engagement: overrides.engagement ?? null,
+    favorite: overrides.favorite ?? false,
     embedding: overrides.embedding ?? null,
     createdAt: overrides.createdAt ?? Date.now(),
   };
@@ -166,5 +167,46 @@ describe('corpus store', () => {
     expect(bySource.get('was-capture')).toBe('manual');
     expect(bySource.get('was-import')).toBe('archive');
     expect(bySource.get('was-manual')).toBe('manual');
+    // The same chain runs v4: every pre-star row arrives unfavorited.
+    expect(items.every((i) => i.favorite === false)).toBe(true);
+  });
+
+  it('v3→v4 migration backfills favorite: false', async () => {
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 3);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        const store = db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
+        store.createIndex('byType', 'type', { unique: false });
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction(STORE_ITEMS, 'readwrite');
+        tx.objectStore(STORE_ITEMS).add({
+          id: 'pre-star',
+          text: 'no favorite field yet',
+          type: 'post',
+          source: 'manual',
+          authorHandle: 'me',
+          authorDisplayName: null,
+          authorAvatarUrl: null,
+          timestamp: '2025-01-01T00:00:00Z',
+          engagement: null,
+          embedding: null,
+          createdAt: 1,
+        });
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error ?? new Error('seed transaction failed'));
+      };
+      req.onerror = () => reject(req.error ?? new Error('seed open failed'));
+    });
+    _resetCorpusCache();
+
+    const items = await getAllItems();
+    expect(items).toHaveLength(1);
+    expect(items[0]?.favorite).toBe(false);
   });
 });

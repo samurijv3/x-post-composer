@@ -15,11 +15,13 @@
  *       becomes 'manual' (both are handpicks), 'import' becomes
  *       'archive'; 'shipped' is introduced for the Phase 4 corpus loop
  *       (no existing rows carry it, so no backfill for it).
+ *   v4: adds `favorite: boolean` (the Star tier), backfilled false on
+ *       existing rows.
  */
 import type { LibraryItem } from '../types';
 
 export const DB_NAME = 'x-post-composer';
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 /**
  * Version stamped into library-export JSON. Tracks the LibraryItem ROW
  * shape, which is defined by the DB schema version — bump alongside
@@ -66,6 +68,7 @@ export function openCorpus(): Promise<IDBDatabase> {
       const passes: MigrationPass[] = [];
       if (oldVersion < 2) passes.push(backfillDisplayFieldsV2);
       if (oldVersion < 3) passes.push(collapseSourceTaxonomyV3);
+      if (oldVersion < 4) passes.push(backfillFavoriteV4);
       let passIndex = 0;
       const runNextPass = (): void => {
         const pass = passes[passIndex++];
@@ -127,6 +130,25 @@ function collapseSourceTaxonomyV3(store: IDBObjectStore, done: () => void): void
       cursor.update(row);
     } else if (row.source === 'import') {
       row.source = 'archive';
+      cursor.update(row);
+    }
+    cursor.continue();
+  };
+}
+
+/** v4 pass: backfill `favorite: false` (the Star tier) on rows stored
+ *  before stars existed. */
+function backfillFavoriteV4(store: IDBObjectStore, done: () => void): void {
+  const cursorReq = store.openCursor();
+  cursorReq.onsuccess = () => {
+    const cursor = cursorReq.result;
+    if (!cursor) {
+      done();
+      return;
+    }
+    const row = cursor.value as Partial<LibraryItem>;
+    if (row.favorite === undefined) {
+      row.favorite = false;
       cursor.update(row);
     }
     cursor.continue();

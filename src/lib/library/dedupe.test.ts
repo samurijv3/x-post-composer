@@ -13,6 +13,7 @@ function item(overrides: Partial<LibraryItem> = {}): LibraryItem {
     authorAvatarUrl: null,
     timestamp: '2026-01-01T00:00:00Z',
     engagement: null,
+    favorite: false,
     embedding: null,
     createdAt: 1,
     ...overrides,
@@ -66,6 +67,17 @@ describe('mergeLibraryDuplicate', () => {
     // The record keeps its storage identity and history.
     expect(merged.id).toBe('uuid-9');
     expect(merged.createdAt).toBe(1);
+  });
+
+  it('the favorite flag survives an in-place promotion (starrable after, star kept)', () => {
+    // A starred shipped item, later handpicked on X: the merge promotes
+    // source to manual but must not strip the star — favorite is the
+    // user's judgment, orthogonal to source (Core Concept A).
+    const starredShipped = item({ id: 'uuid-9', source: 'shipped', favorite: true });
+    const handpick = item({ id: '777', source: 'manual', favorite: false });
+    const merged = mergeLibraryDuplicate(starredShipped, handpick);
+    expect(merged.source).toBe('manual');
+    expect(merged.favorite).toBe(true);
   });
 
   it('a lower-precedence write never downgrades — returns the existing object untouched', () => {

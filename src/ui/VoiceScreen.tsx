@@ -62,6 +62,9 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
 
   const posts = items.filter((i) => i.type === 'post').length;
   const replies = items.filter((i) => i.type === 'reply').length;
+  // The visible count IS the control: it nudges toward a small canon
+  // (Core Concept A) — deliberately no ranking or bulk tools.
+  const starred = items.filter((i) => i.favorite).length;
   const visible = filter === 'all' ? items : items.filter((i) => i.type === filter);
 
   async function remove(item: LibraryItem): Promise<void> {
@@ -140,6 +143,12 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
           <span className="eyebrow">Saved examples</span>
           <p className="help" style={{ marginTop: 2 }}>
             The writing your drafts learn from. Edit or retype anytime.
+            {starred > 0 && (
+              <span title="Starred items are guaranteed in every prompt — keep the set small">
+                {' '}
+                ★ {starred} starred
+              </span>
+            )}
           </p>
         </div>
         {/* Only show + when the form is closed. While open, the

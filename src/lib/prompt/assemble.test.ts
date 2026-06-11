@@ -25,6 +25,7 @@ function item(text: string, type: LibraryItem['type'] = 'post'): LibraryItem {
     authorAvatarUrl: null,
     timestamp: '2026-01-01T00:00:00Z',
     engagement: null,
+    favorite: false,
     embedding: null,
     createdAt: 0,
   };

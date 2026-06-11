@@ -46,6 +46,7 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
     authorAvatarUrl: capture.authorAvatarUrl,
     timestamp: capture.timestamp ?? new Date().toISOString(),
     engagement: null,
+    favorite: false,
     embedding: null,
     createdAt: Date.now(),
   };
@@ -121,6 +122,7 @@ export async function handleManualAdd(
     authorAvatarUrl: null,
     timestamp: new Date().toISOString(),
     engagement: null,
+    favorite: false,
     embedding: null,
     createdAt: Date.now(),
   };
@@ -184,6 +186,7 @@ export async function handleShippedDraft(
     authorAvatarUrl: null,
     timestamp: new Date().toISOString(),
     engagement: null,
+    favorite: false,
     embedding: null,
     createdAt: Date.now(),
   };

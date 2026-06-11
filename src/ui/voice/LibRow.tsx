@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { LibraryItem } from '../../types';
 import { Avatar } from '../Avatar';
-import { IcEdit, IcTrash } from '../icons';
+import { IcEdit, IcStar, IcTrash } from '../icons';
 import { formatRelativeTweetTime } from '../../lib/format/relativeTime';
 
 interface LibRowProps {
@@ -114,6 +114,26 @@ export function LibRow({ item, open, highlight, onToggle, onRemove, onSave }: Li
               )}
               <span className="head-spacer" />
               <div className="lib-actions">
+                {item.source !== 'archive' && (
+                  // The starring boundary (Core Concept A): manual and
+                  // shipped only. Archive items are promoted by finding
+                  // them on X and handpicking — never starred directly.
+                  <button
+                    type="button"
+                    className={`icon-btn star-btn ${item.favorite ? 'starred' : ''}`}
+                    style={{ width: 26, height: 26 }}
+                    title={
+                      item.favorite
+                        ? 'Starred — guaranteed in every prompt as an aspirational example. Click to unstar.'
+                        : 'Star — you at your best; the bar drafts should reach for'
+                    }
+                    aria-label={item.favorite ? 'Unstar' : 'Star'}
+                    aria-pressed={item.favorite}
+                    onClick={() => onSave({ favorite: !item.favorite })}
+                  >
+                    <IcStar />
+                  </button>
+                )}
                 <button
                   type="button"
                   className="icon-btn"
