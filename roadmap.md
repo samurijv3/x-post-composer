@@ -163,6 +163,8 @@ _Sits directly on the Phase 3 lifecycle. The self-reinforcing engine: the tool g
 
 ## Phase 5 — Star Tier + Example-Streams Sampling
 
+**✅ Shipped 2026-06-11** (`feat/star-tier`) — _favorite flag (IDB v4), the boundary-enforced star toggle, the quiet count, the guaranteed star pool feeding `<aspirational_examples>`, and the curated/archive tier math (slider inert until Phase 7). The parked within-star handpick guarantee stays parked. Rationale graduated to `design.md`; decisions below._
+
 *Lights up the aspirational block from Phase 1 and completes the voice model. Works on `manual` + `shipped` immediately; the curated/archive *balance* only becomes meaningful once an archive exists (Phase 7).*
 
 - Add `favorite: boolean` to `LibraryItem`, orthogonal to `source`.
@@ -373,3 +375,12 @@ Considered promoting Shorter/Longer to baked-in controls alongside Regenerate/Po
 - **The duplicate banner now points at the existing record** (`duplicateOfId` = the real row), so "Show me" lands on the item that actually lives in the library — previously it carried the incoming id, which for a text-match duplicate of a uuid row pointed at nothing.
 - **'shipped' is visible**: library rows wear a `shipped` chip (the loop should be observable, not silent accumulation); manual rows stay unbadged as the norm.
 - **Manual paste of already-present text refreshes in place and reports success** — the item is in the library either way; the list refresh shows it.
+
+### 2026-06-11 — Phase 5 build (star tier + sampling, shipped)
+
+- **The star cap is `floor(poolSize / 2)`**: stars are additive to the pool, so this bounds them at one third of the total examples in any prompt — the canon raises the bar without averaging the range away. The `starCount` slider runs 0–8 (0 = stars off entirely; default 4).
+- **`curatedArchiveBalance` is stored as a 0..1 fraction** (default 0.7), rendered as a 70/30 percentage slider. The tier math is mutual top-up: curated fills to its share first, archive tops up the remainder, and whatever archive can't supply flows back to curated — so zero archive items reproduces the pre-tier curated-only behavior exactly, and the slider stays honestly disabled (with a note) until Phase 7 imports something.
+- **Stars over budget aren't lost**: a starred item not selected for the aspirational pool remains an ordinary candidate for the voice sample. Only the SELECTED stars are excluded from voice (the no-item-twice rule).
+- **The favorite flag rides the existing record through merges**: dedupe promotions (`shipped`→`manual` on handpick) keep the star — favorite is the user's judgment, orthogonal to source — pinned by a dedupe test.
+- **The sampler defensively excludes favorited archive rows** from the star pool even though the UI boundary makes them impossible — the rule is encoded where it matters, and such a row still samples normally as archive.
+- **The within-star handpicked guarantee stays parked** per the roadmap — build only if drowning is actually felt.
