@@ -234,3 +234,16 @@ _Small or deferred, surfaced so they're not lost._
 - **Intent-shape framing implementation** — two selectable sub-templates vs. one template with a variable line (settle at Phase 1 build).
 - **Within-curated handpick protection** — only if drowning is actually felt after Phase 5.
 - **Verify the transparency features actually shipped** — the prompt inspector, the editable prompt-template UI, and export-as-JSON are present (`src/ui/LastPromptInspector.tsx`, `src/ui/sections/PromptsSection.tsx`, `src/ui/sections/DataSection.tsx`; their engine logic is unit-tested) but unverified end-to-end in a real browser. They _are_ the no-snake-oil wedge, so confirm they work, not just that the UI gestures at them.
+
+---
+
+## Build Decisions Log
+
+_Append-only. Every build session that makes a recordable judgment call adds a dated entry here; correcting an earlier entry means adding a new one, never editing the old. This is where "settle at build" questions land their answers._
+
+### 2026-06-11 — pre-series decisions (settled before the Phase 1 build)
+
+- **Series scope:** this build series executes **Phases 1–7**. Phases 8–11 wait for a later series.
+- **Source-taxonomy migration:** the current `LibraryItem.source` union — `'capture' | 'manual' | 'import'` (`src/types/library.ts`) — collapses to this roadmap's taxonomy (Core Concept A): `capture` and `manual` **merge into `manual`** (both are handpicks in Concept A's sense — one via the on-page gesture, one via paste), `import` is **renamed `archive`**, and **`shipped` is added**. The IndexedDB migration (a `DB_VERSION` bump with an appended upgrade block and a seeded-old-schema migration test, per `architecture.md`) lands in the **Phase 4 session**, where `shipped` is first written — no earlier phase needs the new union.
+- **Intent-shape framing** (the Phase 1 open question): **a single template with a variable framing line**, not two selectable sub-templates. One template keeps the editable-prompt story simple (one thing to inspect and edit) and the fragments-vs-prose difference is one sentence of framing, not a structural fork. If the Phase 1 build surfaces a strong reason to flip this, flip it and record the why here.
+- **System/user template-split mechanism** (explicit two-body templates vs. a formalized marker): **deliberately left open — decided during the Phase 1 build** and recorded here as a new entry. Context for that decision: the wire format is already real message roles today (`splitPrompt` → `system` parameter); the choice is purely about template storage and the editing UX, and must preserve user-customized template bodies across the change (the settings merge in `src/storage/config.ts` is the migration point).
