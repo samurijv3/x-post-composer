@@ -57,7 +57,10 @@ export function assembleInitialPrompt(
       charCap: request.charCap,
       softCapChars: settings.softCapChars,
     }),
-    intentFraming: INTENT_FRAMING[classifyIntentShape(request.bullets)],
+    // A bulleted input is an explicit fragments signal from the panel
+    // (real • bullets) — trust it over re-guessing from the text.
+    intentFraming:
+      INTENT_FRAMING[request.bulletedInput ? 'fragments' : classifyIntentShape(request.bullets)],
     bullets: request.bullets.trim() === '' ? '(no bullets given)' : request.bullets.trim(),
   };
   if (request.mode === 'reply') {

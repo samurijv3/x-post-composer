@@ -14,7 +14,14 @@ import {
 import { isMessageOfType, onNotice, sendToBackground, type BackgroundReply } from '../messaging';
 import { weightedLength, X_HARD_LIMIT } from '../lib/counting';
 import { isSameTweet, mergeReplyContextSelection } from '../lib/replyContext';
-import { emitDraftCommit, INITIAL_DRAFT_LIFECYCLE, reduceDraftLifecycle } from '../lib/draft';
+import {
+  applyBulletPrefixes,
+  BULLET_PREFIX,
+  emitDraftCommit,
+  INITIAL_DRAFT_LIFECYCLE,
+  reduceDraftLifecycle,
+  stripBulletPrefixes,
+} from '../lib/draft';
 import type {
   ChipPreset,
   GenerationRequest,
@@ -138,6 +145,8 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
 
   // ---- composition state ----
   const [bullets, setBullets] = useState<string>('');
+  // Bullet mode: per-session input affordance, not a setting.
+  const [bulleted, setBulleted] = useState<boolean>(false);
   // The draft lifecycle (empty → generating → active → committed) is a
   // pure reducer in lib/draft — every consequential transition,
   // including stale-request gating and both undo scopes, is decided
@@ -265,6 +274,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
       charCap,
       replyContext: hasContext ? replyContext : null,
       isRegenerate: opts.isRegenerate,
+      bulletedInput: bulleted,
     };
     try {
       const reply = await sendToBackground<
@@ -440,7 +450,21 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
       e.preventDefault();
       if (!busy && bullets.trim() !== '') void generate({ isRegenerate: false });
+      return;
     }
+    // Bullet mode: plain Enter starts the next bullet. setRangeText
+    // keeps the caret native; state syncs from the DOM value.
+    if (bulleted && e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+      e.preventDefault();
+      const el = e.currentTarget;
+      el.setRangeText('\n' + BULLET_PREFIX, el.selectionStart, el.selectionEnd, 'end');
+      setBullets(el.value);
+    }
+  }
+
+  function toggleBulleted(next: boolean): void {
+    setBulleted(next);
+    setBullets(next ? applyBulletPrefixes(bullets) : stripBulletPrefixes(bullets));
   }
   function steerKey(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
@@ -452,7 +476,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   const count = weightedLength(draft);
   const over = charCap && count > X_HARD_LIMIT;
   const briefText =
-    bullets
+    stripBulletPrefixes(bullets)
       .trim()
       .split('\n')
       .find((l) => l.trim() !== '') ?? (hasContext ? 'Untitled reply' : 'Untitled post');
@@ -470,6 +494,8 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     charCap,
     setCharCap: handleCapToggle,
     softCapChars,
+    bulleted,
+    setBulleted: toggleBulleted,
     onGenKey: genKey,
   };
   const draftView: DraftView = {

@@ -9,3 +9,4 @@ export {
   type ReplacementSnapshot,
 } from './lifecycle';
 export { onDraftCommit, emitDraftCommit, type DraftCommit } from './commit';
+export { applyBulletPrefixes, stripBulletPrefixes, BULLET_PREFIX } from './bullets';

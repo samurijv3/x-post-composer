@@ -213,6 +213,17 @@ describe('assembleInitialPrompt', () => {
     expect(filled.user).toContain('my best work');
   });
 
+  it('a bulleted input forces fragments framing — the panel signal beats the heuristic', () => {
+    // Single line of plain prose would classify as prose; the explicit
+    // bullet-mode flag overrides.
+    const out = assembleInitialPrompt(
+      postRequest({ bullets: 'one developed thought written as prose.', bulletedInput: true }),
+      DEFAULT_SETTINGS,
+      pools(),
+    );
+    expect(out.user).toContain('Find the throughline');
+  });
+
   it('chooses the intent framing from the bullet shape', () => {
     const fragments = assembleInitialPrompt(
       postRequest({ bullets: 'one thought\nanother thought' }),

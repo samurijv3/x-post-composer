@@ -48,6 +48,10 @@ export interface GenerationRequest {
    *  `Settings.temperature.regenerate` (~0.9) instead of `.generate`
    *  (~0.7) so the new draft is noticeably different from the last. */
   isRegenerate?: boolean;
+  /** True when the prompt box was in bullet mode — an explicit
+   *  "fragments" signal for the intent framing, stronger than letting
+   *  the heuristic re-guess from the text. */
+  bulletedInput?: boolean;
 }
 
 /**

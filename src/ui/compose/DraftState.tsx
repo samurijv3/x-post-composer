@@ -192,8 +192,24 @@ export function DraftState({
             />
           )}
           <label className="fld">
-            <span className="fld-label">
+            <span className="fld-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {hasContext ? 'Your angle' : 'What do you want to say?'}
+              <span className="head-spacer" />
+              <button
+                type="button"
+                className={`minitoggle ${brief.bulleted ? 'on' : 'off'}`}
+                title={
+                  brief.bulleted
+                    ? 'Bullet mode is ON — Enter starts the next bullet'
+                    : 'Bullet mode — write loose thoughts as real bullets'
+                }
+                onClick={(e) => {
+                  e.preventDefault();
+                  brief.setBulleted(!brief.bulleted);
+                }}
+              >
+                • bullets
+              </button>
             </span>
             <textarea
               rows={3}

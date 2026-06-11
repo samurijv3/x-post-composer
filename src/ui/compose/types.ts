@@ -21,5 +21,9 @@ export interface BriefControls {
   charCap: boolean;
   setCharCap: (v: boolean) => void;
   softCapChars: number;
+  /** Bullet mode: the box writes real • bullets and the request carries
+   *  an explicit fragments signal for the intent framing. */
+  bulleted: boolean;
+  setBulleted: (v: boolean) => void;
   onGenKey: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
 }
