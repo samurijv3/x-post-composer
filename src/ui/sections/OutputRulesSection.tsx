@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { countItems, getSettings, setSettings } from '../../storage';
+import { countItems, getAllItems, getSettings, setSettings } from '../../storage';
 import { isMessageOfType, onNotice } from '../../messaging';
 import type { Settings } from '../../types';
 
@@ -19,6 +19,8 @@ export function OutputRulesSection({ onSaved }: Props) {
   const [settings, setSettingsState] = useState<Settings | null>(null);
   const [banlistText, setBanlistText] = useState<string>('');
   const [libraryCount, setLibraryCount] = useState<number>(0);
+  const [starredCount, setStarredCount] = useState<number>(0);
+  const [archiveCount, setArchiveCount] = useState<number>(0);
 
   const load = useCallback(async () => {
     const s = await getSettings();
@@ -29,8 +31,13 @@ export function OutputRulesSection({ onSaved }: Props) {
   const refreshCount = useCallback(async () => {
     try {
       setLibraryCount(await countItems());
+      const items = await getAllItems();
+      setStarredCount(items.filter((i) => i.favorite).length);
+      setArchiveCount(items.filter((i) => i.source === 'archive').length);
     } catch {
       setLibraryCount(0);
+      setStarredCount(0);
+      setArchiveCount(0);
     }
   }, []);
 
@@ -160,6 +167,62 @@ export function OutputRulesSection({ onSaved }: Props) {
                 <> — pool size effectively caps at that number.</>
               ) : (
                 <>.</>
+              )}
+            </p>
+
+            <div className="field-row" style={{ marginTop: 14 }}>
+              <span className="fld-label">Guaranteed stars</span>
+              <span className="count">{settings.starCount}</span>
+            </div>
+            <input
+              type="range"
+              className="range"
+              min={0}
+              max={8}
+              value={settings.starCount}
+              onChange={(e) => void update({ starCount: Number(e.target.value) })}
+            />
+            <p className="opt-card-desc" style={{ marginTop: 10, marginBottom: 0 }}>
+              Starred examples ride on top of the pool, in <em>every</em> prompt
+              {starredCount > 0 ? (
+                <>
+                  {' '}
+                  — you have <strong>★ {starredCount}</strong> starred
+                </>
+              ) : (
+                <> — star items on the Voice screen to use this</>
+              )}
+              . Capped at half the pool size so the canon can't drown out range.
+            </p>
+
+            <div className="field-row" style={{ marginTop: 14 }}>
+              <span className="fld-label">Curated / archive balance</span>
+              <span className="count">
+                {Math.round(settings.curatedArchiveBalance * 100)} /{' '}
+                {Math.round((1 - settings.curatedArchiveBalance) * 100)}
+              </span>
+            </div>
+            <input
+              type="range"
+              className="range"
+              min={0}
+              max={100}
+              step={5}
+              disabled={archiveCount === 0}
+              value={Math.round(settings.curatedArchiveBalance * 100)}
+              onChange={(e) => void update({ curatedArchiveBalance: Number(e.target.value) / 100 })}
+            />
+            <p className="opt-card-desc" style={{ marginTop: 10, marginBottom: 0 }}>
+              {archiveCount === 0 ? (
+                <>
+                  Inert until an archive import exists (Phase 7) — with no archive items the pool is
+                  100% curated regardless.
+                </>
+              ) : (
+                <>
+                  How the sampled pool splits between handpicked/shipped examples and your archive
+                  import.
+                </>
               )}
             </p>
           </div>

@@ -1,9 +1,20 @@
 /**
- * Example sampling — the CLAUDE.md §8 seam.
+ * Example sampling — the CLAUDE.md §8 seam, implementing the roadmap's
+ * Core Concept A model:
  *
- * v1 implementation: filter the library by mode (reply-mode samples
- * reply items; post-mode samples post items), shuffle, return up to
- * `poolSize` items. If fewer matching items exist, return all of them.
+ *   STARS, on top (own pool): up to `starCount` favorited items,
+ *     shuffled among all stars, GUARANTEED in every prompt, additive to
+ *     `poolSize`. Hard-capped at floor(poolSize / 2) so stars can never
+ *     exceed a third of the total examples — the canon must not drown
+ *     out range. Feeds <aspirational_examples>.
+ *
+ *   CURATED tier ('manual' + 'shipped', filled first) and ARCHIVE tier
+ *     (the noisy backstop) share the `poolSize` budget per
+ *     `curatedShare` (default 0.7). Whichever tier can't fill its
+ *     share, the other tops up — with zero archive items the math
+ *     degrades naturally to curated-only. Feeds <voice_examples>.
+ *
+ *   No item appears twice: stars are excluded from the tier pools.
  *
  * Later phases swap the shuffle for semantic retrieval behind THIS
  * exact signature so callers do not change. The `context` argument is
@@ -15,17 +26,23 @@ import type { LibraryItem } from '../../types';
 export type GenerationMode = 'post' | 'reply';
 
 export interface SamplingContext {
-  /** The tweet being replied to (reply mode). v1 unused. */
+  /** The tweet being replied to (reply mode). Unused until retrieval. */
   parentText?: string;
-  /** The tweet directly above the parent in a thread (reply mode). v1 unused. */
+  /** The tweet directly above the parent in a thread (reply mode). Unused until retrieval. */
   grandparentText?: string;
-  /** The user's bullets describing what to say. v1 unused. */
+  /** The user's bullets describing what to say. Unused until retrieval. */
   bullets?: string;
 }
 
 export interface SamplingOptions {
-  /** Upper bound on the number of examples returned. */
+  /** Budget for the sampled (non-star) tiers combined. */
   poolSize: number;
+  /** How many starred items ride on top (additive to poolSize). The
+   *  effective number is capped at floor(poolSize / 2). */
+  starCount: number;
+  /** Curated tier's share of `poolSize`, 0..1 (default 0.7). Inert in
+   *  practice until archive items exist (Phase 7). */
+  curatedShare: number;
   /**
    * Random number generator in `[0, 1)`. Defaults to `Math.random`.
    * Injected for deterministic tests.
@@ -33,18 +50,58 @@ export interface SamplingOptions {
   rng?: () => number;
 }
 
+export interface SelectedExamples {
+  /** The guaranteed star pool → <aspirational_examples>. */
+  aspirational: LibraryItem[];
+  /** The curated+archive sample → <voice_examples>. */
+  voice: LibraryItem[];
+}
+
 export function selectExamples(
   mode: GenerationMode,
   _context: SamplingContext,
   library: LibraryItem[],
   options: SamplingOptions,
-): LibraryItem[] {
-  const matching = library.filter((item) => item.type === mode);
-  if (matching.length === 0) return [];
+): SelectedExamples {
   const rng = options.rng ?? Math.random;
-  const shuffled = shuffleInPlace([...matching], rng);
-  const cap = Math.max(0, options.poolSize);
-  return shuffled.slice(0, cap);
+  const poolSize = Math.max(0, options.poolSize);
+  const matching = library.filter((item) => item.type === mode);
+
+  // Stars first — their own pool, guaranteed presence. The archive
+  // guard is defensive: the starring boundary already prevents
+  // favorited archive rows, but the sampler encodes the rule too.
+  const starBudget = Math.min(Math.max(0, options.starCount), Math.floor(poolSize / 2));
+  const stars = matching.filter((item) => item.favorite && item.source !== 'archive');
+  const aspirational = shuffleInPlace([...stars], rng).slice(0, starBudget);
+  const starred = new Set(aspirational.map((item) => item.id));
+
+  // The sampled tiers split what's left. No item appears twice in one
+  // prompt, so anything already starred-in is excluded here.
+  const sampled = matching.filter((item) => !starred.has(item.id));
+  const curated = sampled.filter((item) => item.source !== 'archive');
+  const archive = sampled.filter((item) => item.source === 'archive');
+
+  // Curated fills first, up to its share; archive tops up the rest;
+  // whatever archive can't supply flows back to curated. With zero
+  // archive items this is exactly the pre-tier curated-only behavior.
+  const curatedTarget = Math.round(poolSize * clamp01(options.curatedShare));
+  const archiveTake = Math.min(archive.length, poolSize - Math.min(curated.length, curatedTarget));
+  const curatedTake = Math.min(curated.length, poolSize - archiveTake);
+
+  const voice = shuffleInPlace(
+    [
+      ...shuffleInPlace([...curated], rng).slice(0, curatedTake),
+      ...shuffleInPlace([...archive], rng).slice(0, archiveTake),
+    ],
+    rng,
+  );
+
+  return { aspirational, voice };
+}
+
+function clamp01(n: number): number {
+  if (Number.isNaN(n)) return 0;
+  return Math.min(1, Math.max(0, n));
 }
 
 /** Fisher–Yates shuffle. Mutates the array; caller passes a copy. */

@@ -76,15 +76,19 @@ export async function runGeneration(request: GenerationRequest): Promise<Generat
       bullets: request.bullets,
     },
     library,
-    { poolSize: settings.poolSize },
+    {
+      poolSize: settings.poolSize,
+      starCount: settings.starCount,
+      curatedShare: settings.curatedArchiveBalance,
+    },
   );
 
-  // The aspirational pool is empty until favorites land (roadmap
-  // Phase 5) — its template block collapses cleanly. Wire the real
-  // pool here, behind the same selectExamples seam.
+  // Stars feed <aspirational_examples> (guaranteed, on top); the
+  // curated/archive sample feeds <voice_examples>. Both pools come
+  // from the one selectExamples seam.
   const initialPrompt = assembleInitialPrompt(request, settings, {
-    voice: examples,
-    aspirational: [],
+    voice: examples.voice,
+    aspirational: examples.aspirational,
   });
   const temperature = request.isRegenerate
     ? settings.temperature.regenerate

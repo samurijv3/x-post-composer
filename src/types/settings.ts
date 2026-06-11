@@ -36,6 +36,16 @@ export interface Settings {
   /** How many library items the prompt builder is allowed to consider. */
   poolSize: number;
 
+  /** How many starred items ride on top of the sampled pool, guaranteed
+   *  in every prompt (Core Concept A). Capped in the sampler at
+   *  floor(poolSize / 2) so the canon can't drown out range. */
+  starCount: number;
+
+  /** Curated ('manual'+'shipped') share of the sampled pool, 0..1.
+   *  Archive tops up the remainder. Inert until archive items exist
+   *  (Phase 7 activates the slider). */
+  curatedArchiveBalance: number;
+
   /** Free-text guidance always injected into the prompt. */
   styleGuide: string;
 
@@ -123,6 +133,8 @@ export const DEFAULT_SETTINGS: Settings = {
   charCapDefault: true,
   softCapChars: 1000,
   poolSize: 20,
+  starCount: 4,
+  curatedArchiveBalance: 0.7,
   styleGuide: '',
   temperature: { generate: 0.7, regenerate: 0.9 },
   structuralRules: {

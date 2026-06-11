@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { LibraryItem } from '../../types';
-import { selectExamples } from './selectExamples';
+import { selectExamples, type SamplingOptions } from './selectExamples';
 
-function item(id: string, type: LibraryItem['type'], text = id): LibraryItem {
+function item(
+  id: string,
+  type: LibraryItem['type'],
+  overrides: Partial<LibraryItem> = {},
+): LibraryItem {
   return {
     id,
-    text,
+    text: id,
     type,
     source: 'manual',
     authorHandle: 'me',
@@ -16,6 +20,7 @@ function item(id: string, type: LibraryItem['type'], text = id): LibraryItem {
     favorite: false,
     embedding: null,
     createdAt: 0,
+    ...overrides,
   };
 }
 
@@ -29,65 +34,151 @@ function seqRng(values: number[]): () => number {
   };
 }
 
-describe('selectExamples', () => {
-  it('filters by mode — reply mode returns only reply items', () => {
-    const lib = [item('p1', 'post'), item('r1', 'reply'), item('r2', 'reply'), item('p2', 'post')];
-    const out = selectExamples('reply', {}, lib, { poolSize: 10 });
-    expect(out.map((i) => i.id).sort()).toEqual(['r1', 'r2']);
+function opts(overrides: Partial<SamplingOptions> = {}): SamplingOptions {
+  return { poolSize: 10, starCount: 4, curatedShare: 0.7, rng: seqRng([0]), ...overrides };
+}
+
+const ids = (items: LibraryItem[]): string[] => items.map((i) => i.id).sort();
+
+describe('selectExamples — mode filter and budget', () => {
+  it('filters by mode in both pools', () => {
+    const lib = [
+      item('p1', 'post'),
+      item('r1', 'reply', { favorite: true }),
+      item('r2', 'reply'),
+      item('p2', 'post', { favorite: true }),
+    ];
+    const out = selectExamples('reply', {}, lib, opts());
+    expect(ids(out.aspirational)).toEqual(['r1']);
+    expect(ids(out.voice)).toEqual(['r2']);
   });
 
-  it('filters by mode — post mode returns only post items', () => {
-    const lib = [item('p1', 'post'), item('r1', 'reply'), item('p2', 'post')];
-    const out = selectExamples('post', {}, lib, { poolSize: 10 });
-    expect(out.map((i) => i.id).sort()).toEqual(['p1', 'p2']);
+  it('caps voice at poolSize and returns everything when the library is smaller', () => {
+    const big = Array.from({ length: 30 }, (_, n) => item(`p${String(n)}`, 'post'));
+    expect(selectExamples('post', {}, big, opts({ poolSize: 5 })).voice).toHaveLength(5);
+
+    const small = [item('p1', 'post'), item('p2', 'post')];
+    const out = selectExamples('post', {}, small, opts({ poolSize: 20 }));
+    expect(out.voice).toHaveLength(2);
   });
 
-  it('caps the result at poolSize', () => {
-    const lib = Array.from({ length: 30 }, (_, n) => item(`p${String(n)}`, 'post'));
-    const out = selectExamples('post', {}, lib, { poolSize: 5 });
-    expect(out).toHaveLength(5);
+  it('returns empty pools when nothing matches the mode', () => {
+    const out = selectExamples('post', {}, [item('r1', 'reply')], opts());
+    expect(out.aspirational).toEqual([]);
+    expect(out.voice).toEqual([]);
+  });
+});
+
+describe('selectExamples — the star pool', () => {
+  it('GUARANTEES starred items in every prompt, additive to poolSize', () => {
+    const lib = [
+      item('s1', 'post', { favorite: true }),
+      item('s2', 'post', { favorite: true }),
+      ...Array.from({ length: 20 }, (_, n) => item(`p${String(n)}`, 'post')),
+    ];
+    const out = selectExamples('post', {}, lib, opts({ poolSize: 10, starCount: 4 }));
+    expect(ids(out.aspirational)).toEqual(['s1', 's2']);
+    expect(out.voice).toHaveLength(10); // stars did not eat the budget
   });
 
-  it('returns all matching items when fewer exist than poolSize', () => {
-    const lib = [item('p1', 'post'), item('p2', 'post')];
-    const out = selectExamples('post', {}, lib, { poolSize: 20 });
-    expect(out).toHaveLength(2);
+  it('caps the star pool at floor(poolSize / 2) regardless of the setting', () => {
+    const lib = [
+      ...Array.from({ length: 9 }, (_, n) => item(`s${String(n)}`, 'post', { favorite: true })),
+      ...Array.from({ length: 9 }, (_, n) => item(`p${String(n)}`, 'post')),
+    ];
+    const out = selectExamples('post', {}, lib, opts({ poolSize: 5, starCount: 9 }));
+    expect(out.aspirational).toHaveLength(2); // floor(5/2)
   });
 
-  it('returns empty when no items match the mode', () => {
-    const lib = [item('r1', 'reply')];
-    expect(selectExamples('post', {}, lib, { poolSize: 5 })).toEqual([]);
+  it('shuffles among all stars — different rng, different picks', () => {
+    const lib = Array.from({ length: 6 }, (_, n) =>
+      item(`s${String(n)}`, 'post', { favorite: true }),
+    );
+    const a = selectExamples('post', {}, lib, opts({ starCount: 2, rng: seqRng([0]) }));
+    const b = selectExamples('post', {}, lib, opts({ starCount: 2, rng: seqRng([0.9, 0.7, 0.5]) }));
+    expect(ids(a.aspirational)).not.toEqual(ids(b.aspirational));
   });
 
-  it('returns empty when the library is empty', () => {
-    expect(selectExamples('reply', {}, [], { poolSize: 5 })).toEqual([]);
+  it('never selects a starred archive row (defensive boundary)', () => {
+    const lib = [item('a1', 'post', { source: 'archive', favorite: true })];
+    const out = selectExamples('post', {}, lib, opts());
+    expect(out.aspirational).toEqual([]);
+    expect(ids(out.voice)).toEqual(['a1']); // still sampleable as archive
   });
 
-  it('shuffles — different rngs produce different orderings', () => {
-    const lib = ['a', 'b', 'c', 'd', 'e'].map((id) => item(id, 'post'));
-    const ascending = selectExamples('post', {}, lib, {
-      poolSize: 10,
-      rng: seqRng([0, 0, 0, 0]),
-    });
-    const reversed = selectExamples('post', {}, lib, {
-      poolSize: 10,
-      rng: seqRng([0.99, 0.99, 0.99, 0.99]),
-    });
-    expect(ascending.map((i) => i.id)).not.toEqual(reversed.map((i) => i.id));
-    expect(ascending.map((i) => i.id).sort()).toEqual(['a', 'b', 'c', 'd', 'e']);
-    expect(reversed.map((i) => i.id).sort()).toEqual(['a', 'b', 'c', 'd', 'e']);
+  it('no item appears twice — selected stars are excluded from voice', () => {
+    const lib = [item('s1', 'post', { favorite: true }), item('p1', 'post'), item('p2', 'post')];
+    const out = selectExamples('post', {}, lib, opts({ poolSize: 10 }));
+    expect(ids(out.aspirational)).toEqual(['s1']);
+    expect(out.voice.some((i) => i.id === 's1')).toBe(false);
+    expect(ids(out.voice)).toEqual(['p1', 'p2']);
   });
 
-  it('does not mutate the input library', () => {
-    const lib = [item('a', 'post'), item('b', 'post'), item('c', 'post')];
-    const snapshot = lib.map((i) => i.id);
-    selectExamples('post', {}, lib, { poolSize: 10 });
-    expect(lib.map((i) => i.id)).toEqual(snapshot);
+  it('an unselected star (over budget) may still appear in voice — it is not lost', () => {
+    const lib = [
+      ...Array.from({ length: 5 }, (_, n) => item(`s${String(n)}`, 'post', { favorite: true })),
+    ];
+    const out = selectExamples('post', {}, lib, opts({ poolSize: 4, starCount: 2 }));
+    expect(out.aspirational).toHaveLength(2);
+    expect(out.voice).toHaveLength(3); // the other three sample normally
+  });
+});
+
+describe('selectExamples — curated/archive tiers', () => {
+  const curatedN = (n: number) =>
+    Array.from({ length: n }, (_, i) => item(`c${String(i)}`, 'post', { source: 'manual' }));
+  const shippedN = (n: number) =>
+    Array.from({ length: n }, (_, i) => item(`sh${String(i)}`, 'post', { source: 'shipped' }));
+  const archiveN = (n: number) =>
+    Array.from({ length: n }, (_, i) => item(`a${String(i)}`, 'post', { source: 'archive' }));
+
+  it('splits the budget per curatedShare when both tiers are plentiful', () => {
+    const out = selectExamples('post', {}, [...curatedN(20), ...archiveN(20)], opts());
+    const curated = out.voice.filter((i) => i.source !== 'archive');
+    const archive = out.voice.filter((i) => i.source === 'archive');
+    expect(curated).toHaveLength(7); // round(10 * 0.7)
+    expect(archive).toHaveLength(3);
   });
 
-  it('treats negative or zero poolSize as zero', () => {
-    const lib = [item('a', 'post')];
-    expect(selectExamples('post', {}, lib, { poolSize: 0 })).toEqual([]);
-    expect(selectExamples('post', {}, lib, { poolSize: -3 })).toEqual([]);
+  it("counts 'shipped' in the curated tier", () => {
+    const out = selectExamples(
+      'post',
+      {},
+      [...curatedN(4), ...shippedN(4), ...archiveN(20)],
+      opts(),
+    );
+    const curated = out.voice.filter((i) => i.source !== 'archive');
+    expect(curated).toHaveLength(7); // 4 manual + 3 shipped or similar mix
+  });
+
+  it('archive tops up what curated cannot fill', () => {
+    const out = selectExamples('post', {}, [...curatedN(2), ...archiveN(20)], opts());
+    expect(out.voice.filter((i) => i.source !== 'archive')).toHaveLength(2);
+    expect(out.voice.filter((i) => i.source === 'archive')).toHaveLength(8);
+  });
+
+  it('curated tops back up what archive cannot fill', () => {
+    const out = selectExamples('post', {}, [...curatedN(20), ...archiveN(1)], opts());
+    expect(out.voice.filter((i) => i.source === 'archive')).toHaveLength(1);
+    expect(out.voice.filter((i) => i.source !== 'archive')).toHaveLength(9);
+  });
+
+  it('zero archive degrades to curated-only (the pre-tier behavior)', () => {
+    const out = selectExamples('post', {}, curatedN(20), opts());
+    expect(out.voice).toHaveLength(10);
+    expect(out.voice.every((i) => i.source !== 'archive')).toBe(true);
+  });
+
+  it('zero curated lets archive fill the whole budget', () => {
+    const out = selectExamples('post', {}, archiveN(20), opts());
+    expect(out.voice).toHaveLength(10);
+    expect(out.voice.every((i) => i.source === 'archive')).toBe(true);
+  });
+
+  it('a tiny library returns everything once, no stars, no padding', () => {
+    const lib = [item('p1', 'post'), item('a1', 'post', { source: 'archive' })];
+    const out = selectExamples('post', {}, lib, opts());
+    expect(out.aspirational).toEqual([]);
+    expect(ids(out.voice)).toEqual(['a1', 'p1']);
   });
 });
