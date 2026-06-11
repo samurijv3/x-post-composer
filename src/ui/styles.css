@@ -1346,15 +1346,21 @@ code {
 
 /* Collapsible "Inspect last prompt" toggle at the bottom of Compose. */
 .inspect-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   margin-top: 8px;
+}
+/* Open = one attached container: the toggle becomes the header of the
+   panel it reveals (dashed invitation -> solid accordion). */
+.inspect-section.open {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r);
+  background: var(--surface);
+  overflow: hidden;
 }
 .inspect-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   font: inherit;
   font-size: var(--fs-sm);
   font-weight: 600;
@@ -1369,10 +1375,34 @@ code {
     color 0.12s,
     border-color 0.12s;
 }
+.inspect-section.open .inspect-toggle {
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  border-radius: 0;
+  background: var(--surface-2);
+  color: var(--text);
+}
 .inspect-toggle:hover {
   background: var(--surface-2);
   color: var(--text);
   border-color: var(--text-faint);
+}
+.inspect-section.open .inspect-toggle:hover {
+  background: var(--surface-3);
+}
+.inspect-toggle .insp-chev {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--text-3);
+  transition: transform 0.12s ease;
+}
+.inspect-toggle .insp-chev.open {
+  transform: rotate(90deg);
+}
+.inspect-body {
+  padding: 12px;
+  margin: 0;
 }
 .inspect-toggle svg {
   width: 15px;

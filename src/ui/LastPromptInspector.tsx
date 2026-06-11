@@ -84,7 +84,7 @@ export function LastPromptInspector() {
   }
 
   return (
-    <div className="inspect-section">
+    <div className={`inspect-section ${open ? 'open' : ''}`}>
       <button
         type="button"
         className="inspect-toggle"
@@ -95,13 +95,12 @@ export function LastPromptInspector() {
         <span style={{ flex: 1, textAlign: 'left' }}>
           {open ? 'Hide last prompt' : 'Inspect last prompt'}
         </span>
-        <span className="help">{open ? 'collapse' : 'see what was sent and what came back'}</span>
+        <span className="help">{open ? '' : 'see what was sent and what came back'}</span>
+        <IcChevR className={`insp-chev ${open ? 'open' : ''}`} />
       </button>
       {open &&
         (record === null ? (
-          <p className="help" style={{ marginTop: 10 }}>
-            No generation in this session yet.
-          </p>
+          <p className="help inspect-body">No generation in this session yet.</p>
         ) : (
           (() => {
             const ageMs = Date.now() - record.timestamp;
@@ -109,7 +108,7 @@ export function LastPromptInspector() {
             const seconds = Math.floor(ageMs / 1000);
             const when = minutes > 0 ? `${minutes} min ago` : `${seconds} sec ago`;
             return (
-              <div className="inspector" style={{ marginTop: 12, paddingTop: 0, borderTop: 0 }}>
+              <div className="inspector inspect-body" style={{ margin: 0, borderTop: 0 }}>
                 <div className="insp-meta">
                   <span className={`badge ${record.mode === 'reply' ? 'reply' : 'post'}`}>
                     {record.mode}
