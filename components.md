@@ -92,6 +92,14 @@ Consult this before touching or adding code: what exists, its contract, where it
 | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `mergeReplyContextSelection(existing, incoming)` | Same tweet (status-id equality, else normalized text) → field-wise merge: fresh reading wins, existing fills gaps, media flag ORs. Different tweet / no lock → incoming. Stops X's metadata-poor modal copies degrading the lock | `merge.test.ts` ; `normalizeTweetText` exported as the one text-identity normalizer ; `isTruncatedRenderingOf` (truncation-gated prefix identity) |
 
+### lib/library (`dedupe.ts`)
+
+| Export                                          | Contract                                                                                                                                                                                                                     | Tested in        |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `findLibraryDuplicate(items, {statusId, text})` | Concept A identity: tweet id when both sides carry one (a captured record's id IS its status id), else normalized text via the shared `normalizeTweetText`                                                                   | `dedupe.test.ts` |
+| `mergeLibraryDuplicate(existing, incoming)`     | Precedence `manual > shipped > archive`: lower never downgrades (returns existing by identity → callers skip the write); equal-or-higher updates IN PLACE — fresh source/type/text win, metadata enriches, storage id stable | `dedupe.test.ts` |
+| `SOURCE_PRECEDENCE`                             | The numeric ranking Phase 7's archive import inherits                                                                                                                                                                        | `dedupe.test.ts` |
+
 ### lib/overlay (`visibility.ts`)
 
 | Export                            | Contract                                                                                                                                                                                                                                                                                                                                                    | Tested in            |

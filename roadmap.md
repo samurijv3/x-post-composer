@@ -151,6 +151,8 @@ _The biggest felt improvement. Dogfooding revealed the draft view is too passive
 
 ## Phase 4 — Shipped-Tweet Corpus Loop
 
+**✅ Shipped 2026-06-11** (`feat/shipped-corpus-loop`) — _the taxonomy migration (IDB v3) and the loop itself; bundle auto-filing stays with Phase 6 and the draft→shipped diff capture stays optional/later, as planned. Rationale graduated to `design.md`; decisions in the Build Decisions Log._
+
 _Sits directly on the Phase 3 lifecycle. The self-reinforcing engine: the tool gets more like-you the more you use it._
 
 - On copy-commit, **save the committed text to the corpus as a `source: shipped` voice example.** A setting (default on) governs this, with a per-draft override — not every drafted tweet should shape future voice.
@@ -360,3 +362,14 @@ Field feedback on the same-day `• bullets` minitoggle: a mode toggle is the wr
 ### 2026-06-11 — settled: chips are directions, baked controls are verbs
 
 Considered promoting Shorter/Longer to baked-in controls alongside Regenerate/Polish/Undo. **Declined — they stay chips.** The taxonomy: baked-in controls are _workflow verbs_ whose instruction wording the pipeline mechanically relies on (refit must preserve content, polish must preserve length, repair must reference violations, precedence orders the whole prompt) — code constants because editing them could silently break machinery. Chips are _content directions_ the pipeline never depends on — and prompt text the system doesn't depend on should be user-editable, per the honest-wrapper ethos. Shorter/Longer pass the chip test: deleting them breaks nothing (the cap is enforced by refit + tighten regardless), the cap line is appended in code around whatever the chip says (edits can't defeat constraints), and they get intensity escalation from chip machinery for free. The seeding cost of user-owned chips is already paid, and "Reset to defaults" recovers deletions.
+
+### 2026-06-11 — Phase 4 build (taxonomy migration + shipped loop, shipped)
+
+- **Migration passes now run sequentially, one named function per schema version.** Adding the v3 pass exposed a real hazard the old append-a-block pattern hid: two concurrent cursors over the same store interleave row by row, and `cursor.update` writes the FULL row that cursor read — the later pass's stale read silently erased the earlier pass's backfill (the existing v1→v2 test caught it immediately). The never-edit-an-existing-migration rule survives reworded: add a pass function, never edit one; each pass kept its logic verbatim and the seeded tests pin both transitions.
+- **One text normalizer everywhere**: the corpus dedupe reuses `normalizeTweetText` from the reply-context merge (trim + collapse internal whitespace, case-sensitive — same tweet renders with the same case), so "the same tweet" means one thing in the lock and in the library.
+- **Record identity vs tweet identity**: dedupe matches by tweet id (a captured record's id IS its status id) or normalized text, but a merge never moves the storage primary key — the existing record updates in place, keeping its id and `createdAt`. A shipped row (uuid id) later handpicked (status id in hand) is found by text and promoted to 'manual' under its original key.
+- **Skips are eligibility, not errors**: the shipped save silently does nothing when the setting is off, the handle is unset, or the text is empty — the user's copy already succeeded; this is downstream bookkeeping. A genuine messaging failure does surface ("Copied — but saving it to Voice failed.").
+- **The per-draft override is opt-out only and hides when the global switch is off** (nothing to override). It resets to the setting on every new generation, not per refine — refines reshape the same draft.
+- **The duplicate banner now points at the existing record** (`duplicateOfId` = the real row), so "Show me" lands on the item that actually lives in the library — previously it carried the incoming id, which for a text-match duplicate of a uuid row pointed at nothing.
+- **'shipped' is visible**: library rows wear a `shipped` chip (the loop should be observable, not silent accumulation); manual rows stay unbadged as the norm.
+- **Manual paste of already-present text refreshes in place and reports success** — the item is in the library either way; the list refresh shows it.

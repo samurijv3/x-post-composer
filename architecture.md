@@ -107,11 +107,11 @@ Single source of truth: `src/messaging/contracts.ts` — five discriminated unio
 |                          | `replyContextLock:v1`                                 | `ReplyContext`                                   | session                 |
 |                          | `lastPrompt:v2`                                       | per-call prompt records (`calls[]`) + response   | session                 |
 |                          | `autoReplyCapture:v1`                                 | one-shot shortcut stamp (consumed on read)       | seconds                 |
-| IndexedDB                | db `x-post-composer`, store `items`, `DB_VERSION = 2` | `LibraryItem` rows, keyPath `id`, index `byType` | persistent              |
+| IndexedDB                | db `x-post-composer`, store `items`, `DB_VERSION = 3` | `LibraryItem` rows, keyPath `id`, index `byType` | persistent              |
 
 `chrome.storage.sync` is forbidden (CLAUDE.md §6). Content scripts cannot read `storage.session` (Chrome default trusted-only) — they mirror state via messaging, which is also what keeps the session-mode key out of their reach.
 
-**IndexedDB migration path** (`src/storage/corpus.ts`): the upgrade handler is a sequence of `if (oldVersion < N)` blocks — v1 created the store+index, v2 backfilled `authorDisplayName`/`authorAvatarUrl` via cursor. Rule: bump `DB_VERSION`, **append** a new block, never edit an old one, add a migration test that seeds the old shape (pattern in `corpus.test.ts`). `EXPORT_SCHEMA_VERSION` tracks the row shape for export JSON and bumps with any row-shape migration.
+**IndexedDB migration path** (`src/storage/corpus.ts`): one migration-pass FUNCTION per schema version, registered for `oldVersion < N` and run **sequentially** — v1 created the store+index, v2 backfilled `authorDisplayName`/`authorAvatarUrl`, v3 collapsed the source taxonomy (`capture`→`manual`, `import`→`archive`; `shipped` added). Sequential is load-bearing: two concurrent cursors interleave and `cursor.update` writes the full row each cursor read, so the later pass's stale read erases the earlier pass's fields. Rule: bump `DB_VERSION`, **add** a new pass function, never edit an existing one, add a migration test that seeds the old shape (pattern in `corpus.test.ts`). `EXPORT_SCHEMA_VERSION` is derived from `DB_VERSION`.
 
 `getSettings()` merges stored values over `DEFAULT_SETTINGS` per-field (nested merges for `temperature`/`structuralRules`; per-template merge resets legacy single-body or blanked templates to the current defaults — the v1→v2 template migration, see roadmap.md Build Decisions Log) — so adding a settings field needs no migration, just a default. `setSettings` is read-merge-write with a documented single-writer-per-field assumption.
 

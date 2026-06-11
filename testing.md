@@ -2,7 +2,7 @@
 
 Normative rule: CLAUDE.md §5 — every load-bearing piece of deterministic logic has a behavioral test; **no coverage-percentage gate, no filler tests**. This file is the how.
 
-Current state: **342 tests, 23 files**, all green via `npm run test`.
+Current state: **353 tests, 24 files**, all green via `npm run test`.
 
 ## Stack and config
 
@@ -25,10 +25,11 @@ Current state: **342 tests, 23 files**, all green via `npm run test`.
 | Formatting                                                     | `src/lib/format/relativeTime.test.ts`                    | User-visible timestamps incl. clock-skew behavior                                                                                                                    |
 | Overlay render policy                                          | `src/lib/overlay/visibility.test.ts`                     | Decides what may paint on x.com (panel/modal/navigation gates — the §6 disappear rules)                                                                              |
 | Draft lifecycle + commit hook + bullet transforms              | `src/lib/draft/{lifecycle,commit,bullets}.test.ts`       | The draft state machine: stale-generation gating, both undo scopes, hand-edit semantics, commit resolution                                                           |
+| Library dedupe                                                 | `src/lib/library/dedupe.test.ts`                         | Concept A: id/text identity, manual > shipped > archive precedence, never-downgrade, in-place promotion                                                              |
 | Reply-context same-tweet merge                                 | `src/lib/replyContext/merge.test.ts`                     | Stops X's metadata-poor modal copies from degrading the lock (identity + field-wise enrichment)                                                                      |
 | On-X URL predicate                                             | `src/lib/url/isXPageUrl.test.ts`                         | Drives the panel's off-X overlay; "URL invisible to us" must read as off-X                                                                                           |
 | Settings merge + migration                                     | `src/storage/config.test.ts`                             | Decides whether saved settings survive upgrades (blanked-template restore, nested merges, empty-banlist preservation)                                                |
-| Corpus + IDB migration                                         | `src/storage/corpus.test.ts`                             | CRUD, duplicate-id constraint, single-tx clear, and a real v1→v2 migration against a hand-seeded v1 database                                                         |
+| Corpus + IDB migration                                         | `src/storage/corpus.test.ts`                             | CRUD, duplicate-id constraint, single-tx clear, and real seeded migrations (v1→v3 chain, v2→v3 taxonomy collapse)                                                    |
 | Anthropic client                                               | `src/api/anthropic.test.ts`                              | Request shape (key in header only, never in body/errors), the full HTTP-status → error-kind table, text-block extraction — all against a stubbed `fetch`, no network |
 | X-markup extraction                                            | `entrypoints/twitter.content/extract.test.ts` (48 tests) | Each test pins one assumption about X's DOM; when X drifts, the failing test **names the assumption that died**                                                      |
 
