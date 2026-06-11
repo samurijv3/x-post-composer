@@ -6,7 +6,6 @@ function inputs(overrides: Partial<OverlayStateInputs> = {}): OverlayStateInputs
     panelOpen: true,
     captureMode: 'reply-context',
     xModalOpen: false,
-    awayFromLockPath: false,
     hasLockTarget: true,
     hoveringTweet: false,
     hoveredInModal: false,
@@ -33,18 +32,11 @@ describe('decideOverlayVisibility', () => {
     ).toBe(true);
   });
 
-  it('while a modal is open, the lock may paint (modal-scoped) and skips the path check', () => {
-    // The shell scopes the article search to the modal layer, so
-    // showLock=true with a timeline-only tweet still paints nothing.
-    // The modal's own pathname (/compose/post) is noise, not
-    // navigation — hence the away flag is ignored.
-    expect(
-      decideOverlayVisibility(inputs({ xModalOpen: true, awayFromLockPath: true })).showLock,
-    ).toBe(true);
-  });
-
-  it('shows the lock highlight in reply-context mode with a lock target', () => {
+  it('the lock may paint whenever mode + lock exist — modal or not', () => {
+    // Layer discipline lives in the shell's scoped article search, not
+    // here: the verdict allows painting; the search decides where.
     expect(decideOverlayVisibility(inputs()).showLock).toBe(true);
+    expect(decideOverlayVisibility(inputs({ xModalOpen: true })).showLock).toBe(true);
   });
 
   it('hides the lock highlight outside reply-context mode (mode-off hides, lock persists)', () => {
@@ -52,22 +44,8 @@ describe('decideOverlayVisibility', () => {
     expect(decideOverlayVisibility(inputs({ captureMode: 'library' })).showLock).toBe(false);
   });
 
-  it('hides the lock highlight when there is no lock target', () => {
+  it('hides the lock highlight when there is no lock', () => {
     expect(decideOverlayVisibility(inputs({ hasLockTarget: false })).showLock).toBe(false);
-  });
-
-  it('suppresses the lock highlight while away from the lock path (§6) without touching preview', () => {
-    const v = decideOverlayVisibility(inputs({ awayFromLockPath: true, hoveringTweet: true }));
-    expect(v.showLock).toBe(false);
-    expect(v.showPreview).toBe(true);
-  });
-
-  it('restores the lock highlight on returning to the lock path (modal URL round-trips)', () => {
-    // X's Reply modal pushes /compose/post and pops back on close — the
-    // away flag must be derived from the current path, so this verdict
-    // flips back to visible when the path returns.
-    expect(decideOverlayVisibility(inputs({ awayFromLockPath: true })).showLock).toBe(false);
-    expect(decideOverlayVisibility(inputs({ awayFromLockPath: false })).showLock).toBe(true);
   });
 
   it('shows the hover preview in either capture mode', () => {

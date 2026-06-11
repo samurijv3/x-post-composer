@@ -101,7 +101,7 @@ These are not advisory. Never violate them, under any circumstance, even tempora
   - **Use `pointer-events: none` on all visuals.** The user must still be able to interact with the underlying X content through the overlay.
   - **Permit at most one interactive child: a dismiss control** that may _only_ clear extension-side state (the captured reply-context lock). It may not trigger any action on X (no posting, no navigation, no DOM mutation of X's tree).
   - **Never persist data into X's DOM** in a way X could read back. Attributes we set on our own elements only; we do not annotate X's elements.
-  - **Disappear on**: capture-mode-off, reply-context cleared, dismiss clicked, SPA navigation, tab teardown.
+  - **Disappear on**: capture-mode-off, reply-context cleared, dismiss clicked, SPA navigation, tab teardown. _Clarified 2026-06-11:_ on SPA navigation the highlight vanishes with the old view and may **re-attach only to the locked tweet itself** where the new view renders it — re-derivation from live state, not lingering. It must never persist where the locked tweet is not rendered.
     Anything beyond this carve-out — hover tooltips with rich content, drag handles, action buttons embedded near X's UI, persistent badges on X's elements, layout-altering wrappers — remains forbidden under the read-only invariant.
 - **Tight permissions.** Host access limited to X.com (and twitter.com). No `<all_urls>`. Only the permissions actually needed (`storage`, `sidePanel`, clipboard write, `unlimitedStorage`).
 

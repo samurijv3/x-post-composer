@@ -23,11 +23,12 @@
  *     chrome.storage.session and are mirrored here via messaging.
  *   - X's own UI state feeds the same decision: while a modal layer
  *     (`aria-modal`) is open, overlays paint only on the modal's own
- *     content (never over the scrim); with no modal, the lock highlight
- *     paints only while the tab is on the path where the lock was
- *     affirmed (CLAUDE.md §6 — it hides on SPA navigation and returns
- *     with the path, surviving X's URL-addressable modals). The policy
- *     itself is pure and tested — `lib/overlay`.
+ *     content (never over the scrim). The lock highlight attaches to
+ *     the locked tweet itself wherever it is rendered — found by
+ *     status id or text identity in exactly one layer — so it vanishes
+ *     with a view that doesn't render the tweet and re-attaches in one
+ *     that does (CLAUDE.md §6). The policy itself is pure and tested —
+ *     `lib/overlay`.
  */
 import { defineContentScript } from 'wxt/utils/define-content-script';
 import { sendOneWay } from '../../src/messaging';
@@ -88,27 +89,12 @@ export default defineContentScript({
     // pathname is compared every frame (a property read — free).
     let xModalOpen = false;
     let currentPath = window.location.pathname;
-    // The path where the lock was last affirmed in THIS tab (selection
-    // push, mode re-engage, or the initial load fetch). The highlight
-    // paints only while the tab is on that path — §6's
-    // disappear-on-navigation, derived from the current path rather
-    // than a sticky "navigation happened" flag because X's modals are
-    // URL-addressable (Reply pushes /compose/post and pops back on
-    // close; a sticky flag killed the highlight permanently after any
-    // modal round-trip — found in the Phase 2 field pass). The lock
-    // itself is preserved in storage so the captured ReplyContext stays
-    // usable for generation; the panel card remains throughout.
-    let lockAffirmedPath: string | null = null;
-    // Set when a lock lands while a modal is open and nothing is
-    // affirmed yet (e.g. reply-context mode was turned on inside the
-    // modal): the modal's own URL is transient noise, so the anchor is
-    // deferred to whatever page the modal CLOSES onto — measured at
-    // the close, never guessed in advance.
-    let affirmOnModalClose = false;
-
-    function awayFromLockPath(): boolean {
-      return lockAffirmedPath !== null && lockAffirmedPath !== window.location.pathname;
-    }
+    // (No path anchoring: the highlight simply attaches to the locked
+    // tweet wherever the active layer renders it. Three rounds of
+    // path-affirmation machinery each broke a different real flow —
+    // X's modals push and pop URLs too freely to anchor against; see
+    // the Build Decisions Log. The lock lives in storage either way,
+    // so the panel card and generation never depended on any of this.)
 
     /**
      * Resolve the locked tweet's article in the given layer: by status
@@ -154,8 +140,6 @@ export default defineContentScript({
         // send-failed case the panel card still shows the lock and its
         // trashcan remains the recovery path.
         replyContextLock = null;
-        lockAffirmedPath = null;
-        affirmOnModalClose = false;
         applyOverlayState();
         if (!isAlive()) return;
         sendOneWay({ type: 'content:dismiss-reply-context' });
@@ -169,7 +153,6 @@ export default defineContentScript({
         panelOpen,
         captureMode,
         xModalOpen,
-        awayFromLockPath: awayFromLockPath(),
         hasLockTarget: replyContextLock !== null,
         hoveringTweet: hoveredArticle !== null,
         hoveredInModal:
@@ -240,9 +223,6 @@ export default defineContentScript({
         .then((reply: unknown) => {
           if (isReplyContextLockState(reply)) {
             replyContextLock = reply.lock;
-            // A fresh page load lands wherever the lock is relevant —
-            // affirm here so the highlight can paint on this page.
-            lockAffirmedPath = reply.lock === null ? null : window.location.pathname;
             applyOverlayState();
           }
         })
@@ -265,38 +245,12 @@ export default defineContentScript({
       if (!isAlive()) return false;
 
       if (isCaptureModeState(message)) {
-        // Re-engaging reply-context mode is a fresh user gesture — it
-        // re-affirms the lock on the page the user is now on, lifting
-        // any navigation suppression. Not while a modal is up, though:
-        // the modal's pathname is transient noise, and the pre-modal
-        // affirmation is where the highlight should resume on close.
-        if (message.mode === 'reply-context' && captureMode !== 'reply-context') {
-          if (replyContextLock !== null && !xModalOpen) {
-            lockAffirmedPath = window.location.pathname;
-          }
-        }
         captureMode = message.mode;
         applyOverlayState();
         return false;
       }
 
       if (isReplyContextLockState(message)) {
-        // A new lock (the user clicked a tweet, possibly in another
-        // tab) re-affirms the highlight for THIS tab's current page —
-        // unless a modal is open: a selection made inside a modal keeps
-        // the pre-modal affirmation (the modal's own URL is noise, not
-        // a place to anchor to), and when there IS no prior affirmation
-        // (mode turned on inside the modal), the anchor is deferred to
-        // the page the modal closes onto.
-        if (message.lock === null) {
-          lockAffirmedPath = null;
-          affirmOnModalClose = false;
-        } else if (!xModalOpen) {
-          lockAffirmedPath = window.location.pathname;
-          affirmOnModalClose = false;
-        } else if (lockAffirmedPath === null) {
-          affirmOnModalClose = true;
-        }
         replyContextLock = message.lock;
         applyOverlayState();
         return false;
@@ -507,9 +461,9 @@ export default defineContentScript({
         }
 
         // SPA navigation (X is a single-page app — pushState, no page
-        // load). §6: the highlight disappears off the affirmation path
-        // and returns on it (modal URL round-trips included); lock
-        // storage and the panel card are untouched either way.
+        // load): refresh promptly so the highlight vanishes with the
+        // old view and re-attaches only where the new view renders the
+        // locked tweet.
         if (window.location.pathname !== currentPath) {
           currentPath = window.location.pathname;
           applyOverlayState();
@@ -526,31 +480,18 @@ export default defineContentScript({
             const modalNow = isXModalOpen();
             if (modalNow !== xModalOpen) {
               xModalOpen = modalNow;
-              if (!modalNow && affirmOnModalClose) {
-                // The deferred anchor: a lock that was first affirmed
-                // inside the modal belongs to the page the modal just
-                // revealed.
-                affirmOnModalClose = false;
-                if (replyContextLock !== null) {
-                  lockAffirmedPath = window.location.pathname;
-                }
-              }
               applyOverlayState();
             }
 
-            // Re-find the lock article only while it may paint (modal
-            // open → modal scope; otherwise page scope + path rule).
-            // findLockArticle tries the status id then text identity,
-            // so the highlight follows the lock into a modal that
-            // re-renders the same tweet. When both searches miss, the
-            // highlight hides — unless the current target is still
-            // valid in the active layer. Storage is preserved either
-            // way so generation can still use the context.
-            if (
-              (xModalOpen || !awayFromLockPath()) &&
-              captureMode === 'reply-context' &&
-              replyContextLock !== null
-            ) {
+            // Re-find the lock article (modal open → modal scope;
+            // otherwise page scope). findLockArticle tries the status
+            // id then text identity, so the highlight follows the lock
+            // into a modal that re-renders the same tweet and back out
+            // again. When both searches miss, the highlight hides —
+            // unless the current target is still valid in the active
+            // layer. Storage is preserved either way so generation can
+            // still use the context.
+            if (captureMode === 'reply-context' && replyContextLock !== null) {
               const fresh = findLockArticle(xModalOpen ? 'modal' : 'page');
               if (fresh !== current && (fresh !== null || !currentLockTargetStillValid(current))) {
                 overlay.setLock(fresh);

@@ -7,20 +7,15 @@
  * Policy (CLAUDE.md §6 + design.md):
  *   - Nothing paints unless a panel is open — x.com stays untouched
  *     whenever the user isn't in our UI.
- *   - While X has a modal layer up (reply dialog, composer, lightbox),
- *     overlays may paint only on the MODAL's own content — never over
- *     the inert timeline under the scrim. The modal is its own context:
- *     the lock paints there when its tweet is rendered inside it (the
- *     shell scopes the article search to the modal layer), and the
- *     path check is skipped (X's modals are URL-addressable, so the
- *     modal's pathname is noise, not navigation).
- *   - With no modal, the lock highlight requires reply-context mode, a
- *     lock with a status id, and the tab being ON the path where the
- *     lock was last affirmed (§6: overlays disappear on SPA navigation;
- *     the lock itself persists in storage so the panel card stays
- *     usable, and returning to the affirmation path restores the
- *     highlight — a sticky "navigation happened" flag would let a
- *     Reply-modal URL round-trip kill the highlight permanently).
+ *   - The lock highlight requires reply-context mode and a lock, and it
+ *     attaches ONLY to the locked tweet itself, wherever that tweet is
+ *     rendered — the shell finds it by status id or text identity in
+ *     exactly one layer (the open modal when X has one up, the page
+ *     otherwise), so nothing ever paints over a modal's scrim or
+ *     lingers where the tweet isn't. On SPA navigation the highlight
+ *     vanishes with the old view and may re-attach only if the new view
+ *     renders the locked tweet (§6: it disappears on navigation; the
+ *     lock persists in storage so the panel card stays usable).
  *   - The hover preview requires any active capture mode, and while a
  *     modal is open it follows only modal-resident tweets.
  */
@@ -30,9 +25,6 @@ export interface OverlayStateInputs {
   captureMode: 'none' | 'library' | 'reply-context';
   /** X currently has an `[aria-modal="true"]` layer open. */
   xModalOpen: boolean;
-  /** The tab is currently away from the path where the lock was last
-   *  affirmed (selection, mode re-engage, or initial load). */
-  awayFromLockPath: boolean;
   /** A reply-context lock exists. (Text identity suffices to find its
    *  article — a status id is not required.) */
   hasLockTarget: boolean;
@@ -53,13 +45,10 @@ export function decideOverlayVisibility(state: OverlayStateInputs): OverlayVisib
     return { showLock: false, showPreview: false };
   }
   return {
-    // Modal open: the lock may paint (the shell searches only the modal
-    // layer, so a timeline-only tweet simply isn't found) and the path
-    // check is skipped. No modal: page scope + the §6 path rule.
-    showLock:
-      state.captureMode === 'reply-context' &&
-      state.hasLockTarget &&
-      (state.xModalOpen || !state.awayFromLockPath),
+    // The lock's layer discipline lives in the shell's scoped article
+    // search (modal layer when a modal is up, page otherwise) — a
+    // tweet absent from the active layer simply isn't found.
+    showLock: state.captureMode === 'reply-context' && state.hasLockTarget,
     showPreview:
       state.captureMode !== 'none' &&
       state.hoveringTweet &&
