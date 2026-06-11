@@ -107,65 +107,81 @@ export function DraftState({
   return (
     <>
       {!expanded ? (
-        <div className="brief">
-          <span className={`badge ${mode}`}>{mode}</span>
-          {hasContext && (
-            <button
-              type="button"
-              className="brief-peek"
-              title={peekTitle}
-              aria-expanded={contextOpen}
-              onClick={() => setContextOpen(!contextOpen)}
-            >
-              to @{reply.replyContext?.targetAuthorHandle ?? '—'}
-            </button>
-          )}
-          <button
-            type="button"
-            className="brief-main"
-            onClick={() => setExpanded(true)}
-            title="Edit your brief"
-          >
-            <span className="brief-text">{briefText}</span>
-            <IcEdit className="brief-edit" />
-          </button>
-          <button
-            type="button"
-            className="icon-btn brief-discard"
-            title="Discard and start over"
-            aria-label="Discard and start over"
-            onClick={onDiscard}
-          >
-            <IcTrash />
-          </button>
-        </div>
-      ) : (
-        <div className="card inset" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {hasContext && reply.replyContext ? (
-            <div className="brief-ctx">
+        <>
+          <div className="brief">
+            <span className={`badge ${mode}`}>{mode}</span>
+            {hasContext && (
               <button
                 type="button"
-                className="brief-ctx-toggle"
+                className="brief-peek"
                 title={peekTitle}
                 aria-expanded={contextOpen}
                 onClick={() => setContextOpen(!contextOpen)}
               >
-                <IcReply />
-                Replying to @{reply.replyContext.targetAuthorHandle ?? '—'}
-                <IcChevR className={`ctx-chev ${contextOpen ? 'open' : ''}`} />
+                to @{reply.replyContext?.targetAuthorHandle ?? '—'}
               </button>
-              <span className="head-spacer" />
-              <button
-                type="button"
-                className="icon-btn"
-                style={{ width: 26, height: 26 }}
-                title="Remove reply context"
-                aria-label="Remove reply context"
-                onClick={reply.onClearReplyContext}
-              >
-                <IcX />
-              </button>
-            </div>
+            )}
+            <button
+              type="button"
+              className="brief-main"
+              onClick={() => setExpanded(true)}
+              title="Edit your brief"
+            >
+              <span className="brief-text">{briefText}</span>
+              <IcEdit className="brief-edit" />
+            </button>
+            <button
+              type="button"
+              className="icon-btn brief-discard"
+              title="Discard and start over"
+              aria-label="Discard and start over"
+              onClick={onDiscard}
+            >
+              <IcTrash />
+            </button>
+          </div>
+          {/* The peeked tweet unfolds directly from the pill it was
+              opened with — never below unrelated controls. */}
+          {contextOpen && reply.replyContext && (
+            <ReplyContextCard context={reply.replyContext} onClear={reply.onClearReplyContext} />
+          )}
+        </>
+      ) : (
+        <div className="card inset" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {hasContext && reply.replyContext ? (
+            <>
+              <div className="brief-ctx">
+                <button
+                  type="button"
+                  className="brief-ctx-toggle"
+                  title={peekTitle}
+                  aria-expanded={contextOpen}
+                  onClick={() => setContextOpen(!contextOpen)}
+                >
+                  <IcReply />
+                  Replying to @{reply.replyContext.targetAuthorHandle ?? '—'}
+                  <IcChevR className={`ctx-chev ${contextOpen ? 'open' : ''}`} />
+                </button>
+                <span className="head-spacer" />
+                <button
+                  type="button"
+                  className="icon-btn"
+                  style={{ width: 26, height: 26 }}
+                  title="Remove reply context"
+                  aria-label="Remove reply context"
+                  onClick={reply.onClearReplyContext}
+                >
+                  <IcX />
+                </button>
+              </div>
+              {/* Unfolds right under the row, above the angle box. */}
+              {contextOpen && (
+                <ReplyContextCard
+                  context={reply.replyContext}
+                  onClear={reply.onClearReplyContext}
+                />
+              )}
+            </>
           ) : (
             <ReplyContextBanner
               compact
@@ -194,10 +210,6 @@ export function DraftState({
             </button>
           </div>
         </div>
-      )}
-
-      {contextOpen && reply.replyContext && (
-        <ReplyContextCard context={reply.replyContext} onClear={reply.onClearReplyContext} />
       )}
 
       {error && <ErrorCard kind={error} onRetry={onRetry} onSettings={onOpenOptions} />}
