@@ -20,6 +20,7 @@ import {
   hasBulletLines,
   INITIAL_DRAFT_LIFECYCLE,
   normalizeTypedBullets,
+  onDraftCommit,
   reduceDraftLifecycle,
   stripBulletPrefixes,
 } from '../lib/draft';
@@ -54,6 +55,9 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   const [softCapChars, setSoftCapChars] = useState<number>(1000);
   const [libraryCount, setLibraryCount] = useState<number>(0);
 
+  // The Phase 4 corpus loop's global switch, mirrored live; the
+  // per-draft override below resets to it on every new generation.
+  const [saveShippedDefault, setSaveShippedDefault] = useState<boolean>(true);
   useEffect(() => {
     let cancelled = false;
     async function loadSettings(): Promise<void> {
@@ -62,11 +66,13 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
       setChips(s.chips);
       setCharCap(s.charCapDefault);
       setSoftCapChars(s.softCapChars);
+      setSaveShippedDefault(s.saveShippedDrafts);
     }
     void loadSettings();
     const unsub = subscribeSettings((s) => {
       setChips(s.chips);
       setSoftCapChars(s.softCapChars);
+      setSaveShippedDefault(s.saveShippedDrafts);
     });
     return () => {
       cancelled = true;
@@ -158,6 +164,14 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   const [flash, setFlash] = useState<string | null>(null);
   const [chipCounts, setChipCounts] = useState<Record<string, number>>({});
   const [error, setError] = useState<ErrorKind | null>(null);
+  // Per-draft override of the shipped-corpus loop ("not every drafted
+  // tweet should shape future voice"). Resets to the setting on every
+  // new generation; consulted by the commit listener via ref.
+  const [shipToVoice, setShipToVoice] = useState<boolean>(true);
+  const shipToVoiceRef = useRef(shipToVoice);
+  shipToVoiceRef.current = shipToVoice;
+  const saveShippedDefaultRef = useRef(saveShippedDefault);
+  saveShippedDefaultRef.current = saveShippedDefault;
 
   // Latest-call-wins coordination (the reducer's pendingSeq is the
   // authoritative gate; this ref numbers the requests and lets the
@@ -266,6 +280,8 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     // Whether this generate will REPLACE a visible draft decides the
     // timed-undo toast when it lands.
     const replacesDraft = lifecycleRef.current.content !== null;
+    // A new draft gets a fresh per-draft loop decision.
+    setShipToVoice(saveShippedDefaultRef.current);
     dispatchDraft({ type: 'generation-started', seq: myId });
     const request: GenerationRequest = {
       mode: hasContext ? 'reply' : 'post',
@@ -408,6 +424,24 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     } catch {
       onToast('Could not copy.');
     }
+  }, [onToast]);
+
+  // The Phase 4 corpus loop listener: the commit hook fires on copy;
+  // when the global setting AND the per-draft override allow, the
+  // committed text goes to the background to be saved as a 'shipped'
+  // voice example (deduped there).
+  useEffect(() => {
+    const unsub = onDraftCommit((commit) => {
+      if (!saveShippedDefaultRef.current || !shipToVoiceRef.current) return;
+      sendToBackground({
+        type: 'panel:draft-committed',
+        text: commit.text,
+        mode: commit.mode,
+      }).catch(() => {
+        onToast('Copied — but saving it to Voice failed.');
+      });
+    });
+    return () => unsub();
   }, [onToast]);
 
   // Panel-scoped copy shortcut: Ctrl+Shift+Enter. Field-verified on
@@ -566,6 +600,8 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
           setExpanded={setExpanded}
           error={error}
           onEditDraft={editDraft}
+          shipToVoice={saveShippedDefault ? shipToVoice : null}
+          onToggleShipToVoice={() => setShipToVoice((v) => !v)}
           onRegenerate={() => void generate({ isRegenerate: true })}
           onPolish={() => void applyPolish()}
           onUndo={undo}

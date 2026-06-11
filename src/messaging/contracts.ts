@@ -47,7 +47,10 @@ export type PanelToBackground =
   | { type: 'panel:check-active-tab' }
   // The off-X overlay's "Open x.com" button: focus an existing X tab
   // or open a fresh one. Explicit user gesture only.
-  | { type: 'panel:open-x-tab' };
+  | { type: 'panel:open-x-tab' }
+  // The Phase 4 corpus loop: a committed draft, sent by the panel's
+  // onDraftCommit listener when the setting + per-draft override allow.
+  | { type: 'panel:draft-committed'; text: string; mode: 'post' | 'reply' };
 
 /** Requests a content script sends to the background worker. */
 export type ContentToBackground =

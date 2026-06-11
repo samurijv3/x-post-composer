@@ -104,6 +104,14 @@ export function LibRow({ item, open, highlight, onToggle, onRemove, onSave }: Li
                 </>
               )}
               <span className={`tn-type-chip ${item.type}`}>{item.type}</span>
+              {item.source === 'shipped' && (
+                <span
+                  className="badge ok"
+                  title="Composed in Margin and copied to X — handpicking the published tweet promotes it to a manual example"
+                >
+                  shipped
+                </span>
+              )}
               <span className="head-spacer" />
               <div className="lib-actions">
                 <button

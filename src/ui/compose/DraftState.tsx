@@ -64,6 +64,10 @@ interface DraftStateProps {
   setExpanded: (v: boolean) => void;
   error: ErrorKind | null;
   onEditDraft: (text: string) => void;
+  /** Per-draft corpus-loop override. Null = the global setting is off,
+   *  so the control hides entirely (nothing to override). */
+  shipToVoice: boolean | null;
+  onToggleShipToVoice: () => void;
   onRegenerate: () => void;
   onPolish: () => void;
   onUndo: () => void;
@@ -85,6 +89,8 @@ export function DraftState({
   setExpanded,
   error,
   onEditDraft,
+  shipToVoice,
+  onToggleShipToVoice,
   onRegenerate,
   onPolish,
   onUndo,
@@ -293,6 +299,18 @@ export function DraftState({
                   </span>
                 </div>
               </div>
+            )}
+            {shipToVoice !== null && (
+              <label
+                className="ship-toggle"
+                title="When on, copying this draft also saves it to Voice as a 'shipped' example — your future drafts learn from what you actually publish. Toggle off for drafts that shouldn't shape your voice."
+              >
+                <span className="switch">
+                  <input type="checkbox" checked={shipToVoice} onChange={onToggleShipToVoice} />
+                  <span className="track" />
+                </span>
+                <span className="help">save to Voice on copy</span>
+              </label>
             )}
             <div className="draft-actions">
               <button

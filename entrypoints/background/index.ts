@@ -27,6 +27,7 @@ import {
   failureReasonToSaveResultKind,
   handleCapturedTweet,
   handleManualAdd,
+  handleShippedDraft,
   replyContextFailureKind,
 } from './capture';
 import {
@@ -199,6 +200,10 @@ export default defineBackground(() => {
 
     if (isMessageOfType(message, 'panel:check-active-tab')) {
       return { type: 'bg:active-tab-state', onX: await isActiveTabOnX() };
+    }
+
+    if (isMessageOfType(message, 'panel:draft-committed')) {
+      return handleShippedDraft(message.text, message.mode);
     }
 
     if (isMessageOfType(message, 'panel:open-x-tab')) {

@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { clearAllItems, EXPORT_SCHEMA_VERSION, getAllItems } from '../../storage';
+import {
+  clearAllItems,
+  EXPORT_SCHEMA_VERSION,
+  getAllItems,
+  getSettings,
+  setSettings,
+} from '../../storage';
 import { IcCheck, IcExport, IcTrash } from '../icons';
 import { isMessageOfType, onNotice } from '../../messaging';
 
@@ -8,8 +14,8 @@ interface Props {
 }
 
 /**
- * Data section: export the corpus as JSON, or clear it entirely via
- * a two-step inline confirm.
+ * Data section: the shipped-drafts loop switch, export the corpus as
+ * JSON, or clear it entirely via a two-step inline confirm.
  */
 export function DataSection({ onSaved }: Props) {
   const [count, setCount] = useState<number>(0);
@@ -18,6 +24,17 @@ export function DataSection({ onSaved }: Props) {
   const [confirming, setConfirming] = useState<boolean>(false);
   const [clearing, setClearing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveShipped, setSaveShipped] = useState<boolean>(true);
+
+  useEffect(() => {
+    void getSettings().then((s) => setSaveShipped(s.saveShippedDrafts));
+  }, []);
+
+  async function updateSaveShipped(next: boolean): Promise<void> {
+    setSaveShipped(next);
+    await setSettings({ saveShippedDrafts: next });
+    onSaved();
+  }
 
   const refresh = useCallback(async () => {
     try {
@@ -87,6 +104,26 @@ export function DataSection({ onSaved }: Props) {
 
   return (
     <div className="opt-stack">
+      <div className="opt-card">
+        <div className="opt-card-title">Shipped drafts</div>
+        <p className="opt-card-desc">
+          When you copy a finished draft to X, save it to Voice as a <strong>shipped</strong>{' '}
+          example — your future drafts learn from what you actually publish. The compose panel
+          offers a per-draft opt-out next to Copy.
+        </p>
+        <label className="field-row rule-toggle">
+          <span>Save shipped drafts to Voice</span>
+          <span className="switch">
+            <input
+              type="checkbox"
+              checked={saveShipped}
+              onChange={(e) => void updateSaveShipped(e.target.checked)}
+            />
+            <span className="track" />
+          </span>
+        </label>
+      </div>
+
       <div className="opt-card">
         <div className="opt-card-title">Export your voice</div>
         <p className="opt-card-desc">

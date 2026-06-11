@@ -65,6 +65,11 @@ export interface Settings {
    *  every read). Maintained by the settings merge. */
   seededChipIds: string[];
 
+  /** The Phase 4 corpus loop: save committed (copied-to-X) drafts to
+   *  the library as `source: 'shipped'` examples. Default ON; the panel
+   *  offers a per-draft opt-out next to Copy. */
+  saveShippedDrafts: boolean;
+
   /** Editable prompt templates with named slots. The default bodies
    *  live in lib/prompt/defaults.ts (the single source of truth). */
   promptTemplates: Record<PromptTemplateKey, PromptTemplate>;
@@ -142,6 +147,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ],
   chips: DEFAULT_CHIPS,
   seededChipIds: DEFAULT_CHIPS.map((c) => c.id),
+  saveShippedDrafts: true,
   // The bodies live in lib/prompt/defaults.ts — the one place default
   // prompt text is defined (see ARCH-01 in AUDIT.md).
   promptTemplates: DEFAULT_PROMPT_TEMPLATES,

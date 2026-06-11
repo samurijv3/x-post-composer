@@ -4,9 +4,10 @@
  * touches the corpus; everything lands here first.
  */
 import { broadcastNotice, type BackgroundReply } from '../../src/messaging';
-import { addItem, getSettings } from '../../src/storage';
+import { addItem, getAllItems, getSettings, updateItem } from '../../src/storage';
 import type { LibraryItem, RawCapture } from '../../src/types';
 import { classifyType, validateAuthor } from '../../src/lib/voice';
+import { findLibraryDuplicate, mergeLibraryDuplicate } from '../../src/lib/library';
 
 export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
   const settings = await getSettings();
@@ -49,8 +50,32 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
     createdAt: Date.now(),
   };
 
+  // Dedupe per Core Concept A: a handpick of an already-present tweet
+  // WINS — it updates the existing record in place (promoting shipped/
+  // archive rows to 'manual') and never inserts a duplicate. Identity
+  // and precedence live in lib/library (tested).
+  const existing = findLibraryDuplicate(await getAllItems(), {
+    statusId: capture.statusId,
+    text: capture.text,
+  });
+  if (existing) {
+    const merged = mergeLibraryDuplicate(existing, item);
+    if (merged !== existing) {
+      await updateItem(merged);
+      await broadcastNotice({ type: 'bg:library-changed' });
+    }
+    await broadcastNotice({
+      type: 'bg:save-result',
+      kind: 'duplicate',
+      duplicateOfId: existing.id,
+    });
+    return;
+  }
+
   const outcome = await tryAddItem(item);
   if (outcome === 'duplicate') {
+    // Safety net: the id collided under a concurrent write the scan
+    // above didn't see.
     await broadcastNotice({
       type: 'bg:save-result',
       kind: 'duplicate',
@@ -99,6 +124,24 @@ export async function handleManualAdd(
     embedding: null,
     createdAt: Date.now(),
   };
+  // Same dedupe as capture: pasting text that is already in the
+  // library refreshes the existing record (manual outranks everything)
+  // instead of inserting a second copy.
+  const existing = findLibraryDuplicate(await getAllItems(), { statusId: null, text: trimmed });
+  if (existing) {
+    const merged = mergeLibraryDuplicate(existing, item);
+    if (merged !== existing) {
+      await updateItem(merged);
+      await broadcastNotice({ type: 'bg:library-changed' });
+    }
+    return {
+      type: 'bg:add-manual-result',
+      ok: true,
+      message: 'Already in your voice — refreshed the existing entry.',
+      itemId: existing.id,
+    };
+  }
+
   await addItem(item);
   await broadcastNotice({ type: 'bg:library-changed' });
   return {
@@ -107,6 +150,57 @@ export async function handleManualAdd(
     message: 'Added.',
     itemId: item.id,
   };
+}
+
+/**
+ * The Phase 4 corpus loop: a committed (copied-to-X) draft enters the
+ * library as a `source: 'shipped'` example. Eligibility, not errors —
+ * a disabled setting or a missing handle skips silently (the user's
+ * copy already succeeded; this is downstream bookkeeping). Dedupe: a
+ * re-copy or an already-present text never inserts a second row, and
+ * shipped never downgrades a manual record.
+ */
+export async function handleShippedDraft(
+  text: string,
+  mode: 'post' | 'reply',
+): Promise<BackgroundReply> {
+  const settings = await getSettings();
+  const trimmed = text.trim();
+  const handle = settings.handle.replace(/^@/, '').trim();
+  if (!settings.saveShippedDrafts || trimmed === '' || handle === '') {
+    return { type: 'bg:capture-ack', ok: false };
+  }
+
+  const item: LibraryItem = {
+    // No status id exists at commit time — the tweet hasn't been
+    // posted yet. A later handpick of the published tweet text-matches
+    // this record and promotes it to 'manual'.
+    id: crypto.randomUUID(),
+    text: trimmed,
+    type: mode,
+    source: 'shipped',
+    authorHandle: handle,
+    authorDisplayName: null,
+    authorAvatarUrl: null,
+    timestamp: new Date().toISOString(),
+    engagement: null,
+    embedding: null,
+    createdAt: Date.now(),
+  };
+
+  const existing = findLibraryDuplicate(await getAllItems(), { statusId: null, text: trimmed });
+  if (existing) {
+    const merged = mergeLibraryDuplicate(existing, item);
+    if (merged !== existing) {
+      await updateItem(merged);
+      await broadcastNotice({ type: 'bg:library-changed' });
+    }
+    return { type: 'bg:capture-ack', ok: true };
+  }
+
+  await addItem(item);
+  await broadcastNotice({ type: 'bg:library-changed' });
+  return { type: 'bg:capture-ack', ok: true };
 }
 
 async function tryAddItem(item: LibraryItem): Promise<'added' | 'duplicate'> {
