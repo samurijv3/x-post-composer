@@ -44,8 +44,10 @@ export function isTruncatedRenderingOf(full: string, partial: string): boolean {
 }
 
 /** Status ids decide when both sides have one; otherwise fall back to
- *  normalized text (the corpus dedupe rule, Core Concept A). */
-function isSameTweet(a: ReplyContext, b: ReplyContext): boolean {
+ *  normalized text (the corpus dedupe rule, Core Concept A). Exported
+ *  for the panel's new-context decision: a same-tweet re-delivery is
+ *  an enrichment, never "new context", so it must not clear the draft. */
+export function isSameTweet(a: ReplyContext, b: ReplyContext): boolean {
   if (a.targetStatusId !== null && b.targetStatusId !== null) {
     return a.targetStatusId === b.targetStatusId;
   }

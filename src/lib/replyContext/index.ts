@@ -1,1 +1,6 @@
-export { isTruncatedRenderingOf, mergeReplyContextSelection, normalizeTweetText } from './merge';
+export {
+  isSameTweet,
+  isTruncatedRenderingOf,
+  mergeReplyContextSelection,
+  normalizeTweetText,
+} from './merge';
