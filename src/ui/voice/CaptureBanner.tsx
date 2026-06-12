@@ -26,9 +26,13 @@ export function CaptureBanner({ handle, bundles }: { handle: string; bundles: Bu
   const on = mode === 'library';
 
   // A target whose bundle was deleted resets to plain capture rather
-  // than silently filing into nothing.
+  // than silently filing into nothing. Gated on a non-empty list: on
+  // mount the bundles prop is [] until the screen's fetch resolves,
+  // and a valid stored target must survive that window. (Zero bundles
+  // also hides the select below, and the background validates the
+  // target at capture time regardless.)
   useEffect(() => {
-    if (target !== null && !bundles.some((b) => b.id === target)) {
+    if (target !== null && bundles.length > 0 && !bundles.some((b) => b.id === target)) {
       void setCaptureBundleTarget(null);
     }
   }, [target, bundles]);
