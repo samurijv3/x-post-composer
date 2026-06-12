@@ -113,27 +113,30 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
     return () => unsub();
   }, [refresh, refreshBundles]);
 
-  const posts = items.filter((i) => i.type === 'post').length;
-  const replies = items.filter((i) => i.type === 'reply').length;
-  // The visible count IS the control: it nudges toward a small canon
-  // (Core Concept A) — deliberately no ranking or bulk tools.
-  const starred = items.filter((i) => i.favorite).length;
-  // Pills and search compose: the pill picks the slice, the query
-  // whittles it live. Pill counts stay whole-library on purpose — they
-  // are the stable overview; the list is the search feedback.
-  const pillFiltered =
+  // Pills and search compose: the query whittles first, the pill picks
+  // a slice of the matches. The pill COUNTS follow the query (faceted —
+  // they show how the matches split across types), but the starred
+  // pill's VISIBILITY and the stuck-filter reset follow the whole
+  // library, so typing can't blink the pill away or yank the filter.
+  const starredTotal = items.filter((i) => i.favorite).length;
+  const searchFiltered = items.filter((i) => matchesSearch(i.text, query));
+  const posts = searchFiltered.filter((i) => i.type === 'post').length;
+  const replies = searchFiltered.filter((i) => i.type === 'reply').length;
+  // The visible starred count IS the control: it nudges toward a small
+  // canon (Core Concept A) — deliberately no ranking or bulk tools.
+  const starred = searchFiltered.filter((i) => i.favorite).length;
+  const visible =
     filter === 'all'
-      ? items
+      ? searchFiltered
       : filter === 'starred'
-        ? items.filter((i) => i.favorite)
-        : items.filter((i) => i.type === filter);
-  const visible = pillFiltered.filter((i) => matchesSearch(i.text, query));
+        ? searchFiltered.filter((i) => i.favorite)
+        : searchFiltered.filter((i) => i.type === filter);
 
   // The starred pill disappears when the last star is removed — don't
   // leave the filter stuck on a state with no control to escape it.
   useEffect(() => {
-    if (filter === 'starred' && starred === 0) setFilter('all');
-  }, [filter, starred]);
+    if (filter === 'starred' && starredTotal === 0) setFilter('all');
+  }, [filter, starredTotal]);
 
   async function remove(item: LibraryItem): Promise<void> {
     await deleteItem(item.id);
@@ -459,7 +462,7 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
                 className={`pill ${filter === 'all' ? 'active' : ''}`}
                 onClick={() => setFilter('all')}
               >
-                All {items.length}
+                All {searchFiltered.length}
               </button>
               <button
                 type="button"
@@ -475,7 +478,7 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
               >
                 Replies {replies}
               </button>
-              {starred > 0 && (
+              {starredTotal > 0 && (
                 <button
                   type="button"
                   className={`pill ${filter === 'starred' ? 'active' : ''}`}
