@@ -4,7 +4,7 @@
  * active tab to read the open composer's reply context, and the
  * active-tab-on-X probe behind the panel's "go back to X" state.
  */
-import type { BackgroundReply, BackgroundToContent } from '../../src/messaging';
+import type { BackgroundReply, BackgroundToContent, CaptureNavKey } from '../../src/messaging';
 import { isXPageUrl } from '../../src/lib/url';
 import type { ReplyContext } from '../../src/types';
 
@@ -45,6 +45,22 @@ export async function focusOrOpenXTab(): Promise<void> {
     return;
   }
   await chrome.tabs.create({ url: 'https://x.com/home' });
+}
+
+/** Forward a panel-side nav keypress to the ACTIVE X tab's content
+ *  script only — stepping a cursor on background tabs would scroll
+ *  pages the user isn't looking at. No active X tab → nothing to do. */
+export async function sendCaptureNavToActiveTab(
+  key: CaptureNavKey,
+  repeat: boolean,
+): Promise<void> {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (tab?.id === undefined || !isXPageUrl(tab.url)) return;
+  try {
+    await chrome.tabs.sendMessage(tab.id, { type: 'bg:capture-nav', key, repeat });
+  } catch {
+    // Content script not present in this tab. Ignore.
+  }
 }
 
 /** Fire-and-forget a message to every x.com tab that has our content script. */

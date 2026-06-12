@@ -21,9 +21,18 @@ import type {
 import type { ActiveCaptureMode } from '../storage/captureMode';
 
 /** Requests the side panel sends to the background worker. */
+/** The four keys capture-mode navigation understands. */
+export type CaptureNavKey = 'ArrowUp' | 'ArrowDown' | 'Enter' | 'Escape';
+
 export type PanelToBackground =
   | { type: 'panel:ping' }
   | { type: 'panel:verify-key' }
+  // A nav keypress forwarded from the PANEL while a capture mode is
+  // armed: keystrokes land in the focused document — the panel, right
+  // after the user flips the toggle — so without forwarding the keys
+  // are dead until the user clicks the X page once. Routed to the
+  // active X tab as `bg:capture-nav`; acked and otherwise ignored.
+  | { type: 'panel:capture-nav'; key: CaptureNavKey; repeat: boolean }
   // Save a manually-pasted item. Bypasses validateAuthor because the
   // user explicitly confirmed authorship in the form. `bundleId`
   // optionally files the saved item into a bundle in the same gesture.
@@ -135,7 +144,10 @@ export type BackgroundToContent =
   // content script suppresses all visual overlays when isOpen is false
   // so x.com stays untouched whenever the user has the panel closed.
   | { type: 'bg:panel-state'; isOpen: boolean }
-  | { type: 'bg:capture-reply-context-request' };
+  | { type: 'bg:capture-reply-context-request' }
+  // A panel-forwarded nav keypress (see `panel:capture-nav`). The
+  // content script runs it through the same handler as a local one.
+  | { type: 'bg:capture-nav'; key: CaptureNavKey; repeat: boolean };
 
 /**
  * One-way notifications the background broadcasts. Any open extension

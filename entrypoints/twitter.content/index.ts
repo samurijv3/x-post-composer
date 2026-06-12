@@ -31,7 +31,7 @@
  *     `lib/overlay`.
  */
 import { defineContentScript } from 'wxt/utils/define-content-script';
-import { sendOneWay } from '../../src/messaging';
+import { sendOneWay, type CaptureNavKey } from '../../src/messaging';
 import type { ReplyContext } from '../../src/types';
 import type { ActiveCaptureMode } from '../../src/storage/captureMode';
 import { decideOverlayVisibility } from '../../src/lib/overlay';
@@ -131,23 +131,26 @@ export default defineContentScript({
     // ---------------------------------------------------------------
     // Overlay system
     // ---------------------------------------------------------------
-    const overlay = createOverlaySystem({
-      onDismiss: () => {
-        // Optimistic local clear FIRST, so the × feels identical to the
-        // panel card's trashcan (which clears via its own subscription
-        // instantly) instead of waiting three async hops for the push —
-        // and so the highlight still dies when this script has been
-        // orphaned by an extension reload (a zombie highlight with a
-        // dead × was the worst failure mode). The authoritative null
-        // arrives back as a lock-state push; in the rare alive-but-
-        // send-failed case the panel card still shows the lock and its
-        // trashcan remains the recovery path.
-        replyContextLock = null;
-        applyOverlayState();
-        if (!isAlive()) return;
-        sendOneWay({ type: 'content:dismiss-reply-context' });
-      },
-    });
+    /**
+     * Clear the reply-context lock from the page side — the overlay's
+     * × and the Escape key share this. Optimistic local clear FIRST,
+     * so it feels identical to the panel card's trashcan (which clears
+     * via its own subscription instantly) instead of waiting three
+     * async hops for the push — and so the highlight still dies when
+     * this script has been orphaned by an extension reload (a zombie
+     * highlight with a dead × was the worst failure mode). The
+     * authoritative null arrives back as a lock-state push; in the
+     * rare alive-but-send-failed case the panel card still shows the
+     * lock and its trashcan remains the recovery path.
+     */
+    function dismissReplyContext(): void {
+      replyContextLock = null;
+      applyOverlayState();
+      if (!isAlive()) return;
+      sendOneWay({ type: 'content:dismiss-reply-context' });
+    }
+
+    const overlay = createOverlaySystem({ onDismiss: dismissReplyContext });
 
     function applyOverlayState(): void {
       // The policy lives in lib (decideOverlayVisibility, tested);
@@ -262,6 +265,12 @@ export default defineContentScript({
       if (isPanelState(message)) {
         panelOpen = message.isOpen;
         applyOverlayState();
+        return false;
+      }
+
+      if (isCaptureNavMessage(message)) {
+        // A panel-forwarded keypress — same handler as a local one.
+        handleCaptureNavKey(message.key, message.repeat);
         return false;
       }
 
@@ -443,44 +452,78 @@ export default defineContentScript({
 
     let navRepeatCount = 0;
 
+    /**
+     * One nav keypress — from this page's own keydown listener OR
+     * forwarded from the panel (`bg:capture-nav`). The forwarding is
+     * what makes the keys live the moment the hover outline appears:
+     * keystrokes land in the FOCUSED document, which right after
+     * arming the mode is the panel, not this page. Returns whether
+     * the key was consumed (the local listener translates that into
+     * preventDefault; an unconsumed arrow at the rendered edge
+     * deliberately scrolls natively so virtualization renders more).
+     */
+    function handleCaptureNavKey(key: CaptureNavKey, repeat: boolean): boolean {
+      if (captureMode === 'none' || !panelOpen) return false;
+      if (key === 'ArrowDown' || key === 'ArrowUp') {
+        // The keyboard takes the cursor even when the step itself
+        // can't move (edge): the suppression must already hold when
+        // the passed-through native scroll fires echo mouseovers.
+        keyboardNavActive = true;
+        navRepeatCount = repeat ? navRepeatCount + 1 : 0;
+        const step = navRepeatCount < 5 ? 1 : navRepeatCount < 15 ? 2 : 3;
+        let cursor = hoveredArticle !== null && hoveredArticle.isConnected ? hoveredArticle : null;
+        if (cursor === null && captureMode === 'reply-context') {
+          // Nav resumes from the current selection — the locked
+          // tweet — when it's rendered, rather than the viewport.
+          cursor = findLockArticle(isXModalOpen() ? 'modal' : 'page');
+        }
+        const next = stepToAdjacentArticle(cursor, key === 'ArrowDown' ? 1 : -1, step);
+        if (next === null) return false;
+        hoveredArticle = next;
+        applyOverlayState();
+        nudgeArticleIntoView(next);
+        return true;
+      }
+      if (key === 'Enter') {
+        if (hoveredArticle === null || !hoveredArticle.isConnected) return false;
+        if (captureMode === 'library') {
+          runLibraryCapture(hoveredArticle);
+        } else {
+          runReplyContextSelect(hoveredArticle);
+        }
+        return true;
+      }
+      // Escape — staged de-select: first press drops the cursor (the
+      // highlight outline), the next drops the reply-context lock.
+      // While X has a modal open, Escape is X's (it closes the modal).
+      if (isXModalOpen()) return false;
+      if (hoveredArticle !== null) {
+        hoveredArticle = null;
+        keyboardNavActive = false;
+        applyOverlayState();
+        return true;
+      }
+      if (captureMode === 'reply-context' && replyContextLock !== null) {
+        dismissReplyContext();
+        return true;
+      }
+      return false;
+    }
+
     document.addEventListener(
       'keydown',
       (event) => {
-        if (captureMode === 'none' || !panelOpen || !isAlive()) return;
+        if (!isAlive()) return;
         if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
         if (event.isComposing) return;
+        const key = event.key;
+        if (key !== 'ArrowDown' && key !== 'ArrowUp' && key !== 'Enter' && key !== 'Escape') {
+          return;
+        }
         if (isEditableTarget(event.target)) return;
-
-        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-          // The keyboard takes the cursor even when the step itself
-          // can't move (edge): the suppression must already hold when
-          // the passed-through native scroll fires echo mouseovers.
-          keyboardNavActive = true;
-          navRepeatCount = event.repeat ? navRepeatCount + 1 : 0;
-          const step = navRepeatCount < 5 ? 1 : navRepeatCount < 15 ? 2 : 3;
-          let cursor =
-            hoveredArticle !== null && hoveredArticle.isConnected ? hoveredArticle : null;
-          if (cursor === null && captureMode === 'reply-context') {
-            // Nav resumes from the current selection — the locked
-            // tweet — when it's rendered, rather than the viewport.
-            cursor = findLockArticle(isXModalOpen() ? 'modal' : 'page');
-          }
-          const next = stepToAdjacentArticle(cursor, event.key === 'ArrowDown' ? 1 : -1, step);
-          if (next === null) return;
+        if (handleCaptureNavKey(key, event.repeat)) {
           event.preventDefault();
           event.stopPropagation();
-          hoveredArticle = next;
-          applyOverlayState();
-          nudgeArticleIntoView(next);
-        } else if (event.key === 'Enter') {
-          if (hoveredArticle === null || !hoveredArticle.isConnected) return;
-          event.preventDefault();
-          event.stopPropagation();
-          if (captureMode === 'library') {
-            runLibraryCapture(hoveredArticle);
-          } else if (captureMode === 'reply-context') {
-            runReplyContextSelect(hoveredArticle);
-          }
         }
       },
       { capture: true },
@@ -685,5 +728,17 @@ function isPanelState(value: unknown): value is { type: 'bg:panel-state'; isOpen
     value !== null &&
     (value as { type?: unknown }).type === 'bg:panel-state' &&
     typeof (value as { isOpen?: unknown }).isOpen === 'boolean'
+  );
+}
+
+function isCaptureNavMessage(
+  value: unknown,
+): value is { type: 'bg:capture-nav'; key: CaptureNavKey; repeat: boolean } {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as { type?: unknown; key?: unknown; repeat?: unknown };
+  return (
+    v.type === 'bg:capture-nav' &&
+    (v.key === 'ArrowUp' || v.key === 'ArrowDown' || v.key === 'Enter' || v.key === 'Escape') &&
+    typeof v.repeat === 'boolean'
   );
 }

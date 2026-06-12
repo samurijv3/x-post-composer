@@ -37,6 +37,7 @@ import {
   isActiveTabOnX,
   pushToTabs,
   requestReplyContextFromActiveTab,
+  sendCaptureNavToActiveTab,
 } from './tabs';
 
 /**
@@ -136,6 +137,13 @@ export default defineBackground(() => {
 
     if (isMessageOfType(message, 'panel:add-manual-item')) {
       return handleManualAdd(message.text, message.itemType, message.bundleId);
+    }
+
+    if (isMessageOfType(message, 'panel:capture-nav')) {
+      // Fire-and-forget toward the active X tab; ack so the panel's
+      // promise resolves. Nothing to report back — the page reacts.
+      void sendCaptureNavToActiveTab(message.key, message.repeat);
+      return { type: 'bg:capture-ack', ok: true };
     }
 
     if (isMessageOfType(message, 'content:captured-tweet')) {

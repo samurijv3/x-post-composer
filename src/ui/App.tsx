@@ -6,9 +6,12 @@ import {
   bindDocumentTheme,
   getThemePreference,
   setThemePreference,
+  subscribeCaptureMode,
   subscribeTheme,
   type ThemePreference,
 } from '../storage';
+import type { ActiveCaptureMode } from '../storage/captureMode';
+import type { CaptureNavKey } from '../messaging';
 import { ComposeScreen } from './ComposeScreen';
 import { VoiceScreen, type FlashRow } from './VoiceScreen';
 import { OptionsPage } from './OptionsPage';
@@ -62,6 +65,44 @@ function PanelShell() {
     // Matches the 2.3s flash animations in styles.css.
     flashTimer.current = window.setTimeout(() => setFlashRow(null), 2300);
   }, []);
+
+  // Forward nav keys (↑/↓/Enter/Esc) to the X page while a capture
+  // mode is armed: keystrokes land in the FOCUSED document — this
+  // panel, right after the user flips the toggle — so without
+  // forwarding, the keys are dead until the user clicks the page once.
+  // Guards: plain keys only, and never from elements where the key has
+  // a native job (typing, caret movement, button activation). The
+  // mode's own toggle switch is exempt — arrows/Enter do nothing on a
+  // focused checkbox, and it's exactly where focus sits after arming.
+  const [captureMode, setCaptureMode] = useState<ActiveCaptureMode>('none');
+  useEffect(() => subscribeCaptureMode(setCaptureMode), []);
+  useEffect(() => {
+    if (captureMode === 'none') return;
+    function onKey(e: KeyboardEvent): void {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.isComposing) return;
+      const key = e.key;
+      if (key !== 'ArrowUp' && key !== 'ArrowDown' && key !== 'Enter' && key !== 'Escape') return;
+      const target = e.target;
+      if (target instanceof Element) {
+        const isSwitch = target instanceof HTMLInputElement && target.type === 'checkbox';
+        if (
+          !isSwitch &&
+          target.closest(
+            'input, textarea, select, button, a, [contenteditable="true"], [role="button"], [role="combobox"], [role="listbox"]',
+          ) !== null
+        ) {
+          return;
+        }
+      }
+      e.preventDefault();
+      const nav: CaptureNavKey = key;
+      sendToBackground({ type: 'panel:capture-nav', key: nav, repeat: e.repeat }).catch(() => {
+        // The page reacts (or doesn't); nothing to surface here.
+      });
+    }
+    window.addEventListener('keydown', onKey, { capture: true });
+    return () => window.removeEventListener('keydown', onKey, { capture: true });
+  }, [captureMode]);
 
   const fireToast = useCallback((message: string, action?: ToastData['action']) => {
     setToast({ message, action, stamp: Date.now() });
