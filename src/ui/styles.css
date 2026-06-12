@@ -34,6 +34,8 @@
   --on-accent: oklch(0.99 0.005 250);
 
   --ok: oklch(0.56 0.1 155);
+  --ok-hover: oklch(0.5 0.11 155);
+  --ok-press: oklch(0.45 0.11 155);
   --ok-weak: oklch(0.94 0.04 155);
   --warn: oklch(0.62 0.11 75);
   --warn-weak: oklch(0.95 0.05 85);
@@ -99,6 +101,8 @@
   --on-accent: oklch(0.15 0.02 250);
 
   --ok: oklch(0.72 0.12 155);
+  --ok-hover: oklch(0.78 0.12 155);
+  --ok-press: oklch(0.68 0.12 155);
   --ok-weak: oklch(0.32 0.06 155);
   --warn: oklch(0.78 0.12 80);
   --warn-weak: oklch(0.34 0.06 80);
@@ -438,6 +442,21 @@ textarea::placeholder {
 }
 .btn.primary:active {
   background: var(--accent-press);
+}
+/* The success-toned primary — the Done exit. Same weight as .primary,
+   green instead of accent: completion should look like a happy click,
+   not just the next action. --ok-hover/--ok-press mirror each theme's
+   accent direction (light darkens on hover, dark lightens). */
+.btn.primary.ok {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+.btn.primary.ok:hover:not(:disabled) {
+  background: var(--ok-hover);
+  border-color: var(--ok-hover);
+}
+.btn.primary.ok:active {
+  background: var(--ok-press);
 }
 .btn.block {
   width: 100%;

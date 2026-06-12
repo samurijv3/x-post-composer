@@ -388,7 +388,7 @@ export function DraftState({
                 <>
                   <button
                     type="button"
-                    className="btn primary lg"
+                    className="btn primary ok lg"
                     onClick={onDone}
                     disabled={busy}
                     title="Wrap up — clear the bench for the next one (Undo for a few seconds)"
