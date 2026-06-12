@@ -523,3 +523,59 @@ describe('threads (multi-post drafts)', () => {
     expect(undone.content?.posts[0]?.copied).toBe(true); // snapshot kept the flag
   });
 });
+
+describe('post-replaced (scoped thread refines)', () => {
+  const activeThread = () =>
+    run(
+      { type: 'generation-started', seq: 1 },
+      { type: 'generation-succeeded', seq: 1, draft: threadDraft(['one', 'two', 'three']) },
+    );
+  const replacement = (seq: number, postIndex: number, text: string): DraftEvent => ({
+    type: 'post-replaced',
+    seq,
+    postIndex,
+    post: { text, residualViolations: [span()] },
+    wasRepaired: false,
+  });
+
+  it('replaces exactly one post; only ITS copied flag resets', () => {
+    const partlyCopied = [
+      { type: 'post-copied', postIndex: 0 } as const,
+      { type: 'post-copied', postIndex: 1 } as const,
+      { type: 'refine-started', seq: 2 } as const,
+    ].reduce(reduceDraftLifecycle, activeThread());
+    const out = reduceDraftLifecycle(partlyCopied, replacement(2, 1, 'two, rewritten'));
+    expect(out.phase).toBe('active');
+    expect(out.content?.posts.map((p) => p.text)).toEqual(['one', 'two, rewritten', 'three']);
+    expect(out.content?.posts[0]?.copied).toBe(true); // untouched
+    expect(out.content?.posts[1]?.copied).toBe(false); // text changed
+    expect(out.content?.posts[1]?.residualViolations).toHaveLength(1);
+  });
+
+  it('is stale-gated like generation-succeeded', () => {
+    const racing = [
+      { type: 'refine-started', seq: 2 } as const,
+      { type: 'refine-started', seq: 3 } as const,
+    ].reduce(reduceDraftLifecycle, activeThread());
+    expect(reduceDraftLifecycle(racing, replacement(2, 0, 'stale'))).toBe(racing);
+    const landed = reduceDraftLifecycle(racing, replacement(3, 0, 'fresh'));
+    expect(landed.content?.posts[0]?.text).toBe('fresh');
+  });
+
+  it('an out-of-range index still resolves the request, draft untouched', () => {
+    const refining = reduceDraftLifecycle(activeThread(), { type: 'refine-started', seq: 2 });
+    const out = reduceDraftLifecycle(refining, replacement(2, 9, 'nowhere'));
+    expect(out.phase).toBe('active');
+    expect(out.content?.posts.map((p) => p.text)).toEqual(['one', 'two', 'three']);
+    expect(out.pendingSeq).toBeNull();
+  });
+
+  it('the global one-level Undo reverses a scoped refine exactly', () => {
+    const refined = [
+      { type: 'refine-started', seq: 2 } as const,
+      replacement(2, 2, 'three, but different'),
+    ].reduce(reduceDraftLifecycle, activeThread());
+    const undone = reduceDraftLifecycle(refined, { type: 'refine-undone' });
+    expect(undone.content?.posts.map((p) => p.text)).toEqual(['one', 'two', 'three']);
+  });
+});

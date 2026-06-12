@@ -139,6 +139,18 @@ export type DraftEvent =
   | { type: 'generation-succeeded'; seq: number; draft: ModelDraft; seedBundleId?: string | null }
   /** The pipeline errored for request `seq`. */
   | { type: 'generation-failed'; seq: number }
+  /** A SCOPED thread refine landed: fresh model output for exactly one
+   *  post (rewrite / aimed chip / aimed steer). Replaces that post —
+   *  its copied flag resets, every other post (text, violations,
+   *  copied) is untouched. The splice is code-enforced here, never
+   *  trusted to the model. */
+  | {
+      type: 'post-replaced';
+      seq: number;
+      postIndex: number;
+      post: { text: string; residualViolations: Span[] };
+      wasRepaired: boolean;
+    }
   /** The user typed/deleted/pasted in one post's editor. */
   | { type: 'hand-edited'; postIndex: number; text: string }
   /** One post was copied to the clipboard. When EVERY post is copied,
@@ -241,6 +253,34 @@ export function reduceDraftLifecycle(
         pendingSeq: null,
         pendingKind: null,
       };
+
+    case 'post-replaced': {
+      // Same stale gate as generation-succeeded.
+      if (state.phase !== 'generating' || event.seq !== state.pendingSeq) return state;
+      const base = {
+        ...state,
+        phase: 'active' as const,
+        pendingSeq: null,
+        pendingKind: null,
+      };
+      // An index that no longer exists (defensive — the stale gate
+      // should make this unreachable) still resolves the request; the
+      // draft is left as it was.
+      if (state.content === null || state.content.posts[event.postIndex] === undefined) {
+        return { ...base, phase: state.content !== null ? 'active' : 'empty' };
+      }
+      const posts = state.content.posts.map((p, i) =>
+        i === event.postIndex ? { ...event.post, copied: false } : p,
+      );
+      return {
+        ...base,
+        content: {
+          ...state.content,
+          posts,
+          wasRepaired: state.content.wasRepaired || event.wasRepaired,
+        },
+      };
+    }
 
     case 'hand-edited': {
       if (state.content === null || state.phase === 'generating' || state.phase === 'empty') {
