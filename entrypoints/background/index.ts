@@ -145,7 +145,13 @@ export default defineBackground(() => {
     if (isMessageOfType(message, 'content:capture-failed')) {
       const kind = failureReasonToSaveResultKind(message.reason);
       if (kind) {
-        await broadcastNotice({ type: 'bg:save-result', kind });
+        await broadcastNotice({
+          type: 'bg:save-result',
+          kind,
+          ...(message.truncatedOrdinals !== undefined && {
+            truncatedOrdinals: message.truncatedOrdinals,
+          }),
+        });
       }
       return { type: 'bg:capture-ack', ok: false };
     }

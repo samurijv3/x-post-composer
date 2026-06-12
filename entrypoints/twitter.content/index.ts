@@ -388,8 +388,11 @@ export default defineContentScript({
         // spine of one falls through to the single path, byte-for-byte.
         const spine = collectSelfThreadSpine(article);
         if (spine.length >= 2) {
-          if (spine.some(isTweetTruncated)) {
-            sendOneWay({ type: 'content:capture-failed', reason: 'truncated' });
+          const truncatedOrdinals = spine.flatMap((segment, index) =>
+            isTweetTruncated(segment) ? [index + 1] : [],
+          );
+          if (truncatedOrdinals.length > 0) {
+            sendOneWay({ type: 'content:capture-failed', reason: 'truncated', truncatedOrdinals });
             return;
           }
           const thread = extractThread(spine);

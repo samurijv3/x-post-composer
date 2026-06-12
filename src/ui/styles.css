@@ -1560,36 +1560,36 @@ code {
 }
 /* ---- thread mode (Phase 10) ---- */
 
-/* Thread rows in the library: connected segment blocks when expanded. */
+/* Thread rows in the library: each post a clearly-separated block —
+   hairline dividers and a prominent ordinal, not a faint run-on. */
 .thread-segs {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   list-style: none;
-  margin: 0;
+  margin: 4px 0 0;
   padding: 0;
 }
 .ts-seg {
-  position: relative;
   display: flex;
-  gap: 7px;
-  align-items: baseline;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 0;
 }
-.ts-seg + .ts-seg::before {
-  content: '';
-  position: absolute;
-  left: 7px;
-  top: -8px;
-  height: 7px;
-  width: 2px;
-  background: var(--accent-line);
+.ts-seg:first-child {
+  padding-top: 2px;
+}
+.ts-seg + .ts-seg {
+  border-top: 1px solid var(--hairline);
 }
 .ts-ordinal {
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  color: var(--text-3);
   flex: 0 0 auto;
+  min-width: 24px;
+  padding-top: 1px;
+  font-size: var(--fs-sm);
+  font-weight: 750;
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 .tn-type-chip.thread {
   white-space: nowrap;

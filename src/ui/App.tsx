@@ -125,6 +125,7 @@ function PanelShell() {
           duplicateOfSource: notice.duplicateOfSource,
           itemType: notice.itemType,
           threadSegmentCount: notice.threadSegmentCount,
+          truncatedOrdinals: notice.truncatedOrdinals,
           filedIntoBundleName: notice.filedIntoBundleName,
           stamp: stampRef.current,
         });

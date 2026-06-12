@@ -69,7 +69,13 @@ export type ContentToBackground =
   // A captured self-reply spine (thread capture, Phase 10) — the
   // visible chain walked from the thread root on its /status/ page.
   | { type: 'content:captured-thread'; payload: RawThreadCapture }
-  | { type: 'content:capture-failed'; reason: CaptureFailureReason }
+  | {
+      type: 'content:capture-failed';
+      reason: CaptureFailureReason;
+      /** Thread capture: WHICH posts are collapsed (1-based), so the
+       *  banner can point instead of making the user hunt. */
+      truncatedOrdinals?: number[];
+    }
   // Initial read on content-script load. Content scripts cannot reach
   // `chrome.storage.session` directly (kept trusted-only so the user's
   // "Session only" API-key choice keeps its isolation), so they ask the
@@ -172,6 +178,8 @@ export type BackgroundNotice =
       /** Present on thread captures — the banner reports the honest
        *  rendered-segment count ("Saved as a thread · N posts"). */
       threadSegmentCount?: number;
+      /** Thread truncation failures: the collapsed posts (1-based). */
+      truncatedOrdinals?: number[];
       /** Present when a capture-mode bundle target filed the saved
        *  item — the banner says so; the side effect is never silent. */
       filedIntoBundleName?: string;

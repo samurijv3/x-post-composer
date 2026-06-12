@@ -19,6 +19,8 @@ export interface SaveResult {
   itemType?: 'post' | 'reply' | undefined;
   /** Present on thread captures — the honest rendered-segment count. */
   threadSegmentCount?: number | undefined;
+  /** Thread truncation failures: WHICH posts are collapsed (1-based). */
+  truncatedOrdinals?: number[] | undefined;
   /** Set when a capture-mode bundle target filed the saved item — the
    *  banner states the side effect; it is never silent. */
   filedIntoBundleName?: string | undefined;
@@ -133,6 +135,17 @@ export function SaveResultBanner({ result, handle, onDismiss, onShowDup }: Props
       <>
         X may have changed its markup. Try again after a refresh, or paste the text in with{' '}
         <strong>Add manually</strong> on the Voice screen.
+      </>
+    );
+  } else if (result.truncatedOrdinals && result.truncatedOrdinals.length > 0) {
+    const ordinals = result.truncatedOrdinals;
+    title = 'Not saved — part of this thread is cut off';
+    msg = (
+      <>
+        {ordinals.length === 1 ? 'Post' : 'Posts'} <strong>{ordinals.join(', ')}</strong>{' '}
+        {ordinals.length === 1 ? 'is' : 'are'} collapsed. Click <strong>“Show more”</strong> on{' '}
+        {ordinals.length === 1 ? 'it' : 'each'}, then capture the thread again — we only save the
+        full text.
       </>
     );
   } else {
