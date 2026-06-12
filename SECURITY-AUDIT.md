@@ -2,8 +2,8 @@
 
 Verification of the codebase against the hard rules in [`CLAUDE.md`](./CLAUDE.md) §6.
 
-**Audited tree:** branch `chore/codebase-hardening`, post-remediation (Phase 2 of the 2026-06 hardening pass; see `AUDIT.md`).
-**Date:** 2026-06-10.
+**Audited tree:** branch `feat/context-bundles` (Phase 6). Boundary checks 1–6, 11, and 13 re-run after the messaging/generation changes — every claim below held unchanged (one `getApiKey` caller, one `fetch`, zero injection sinks, no key on any message, content script clean). Prior stamp: `chore/codebase-hardening`, post-remediation (Phase 2 of the 2026-06 hardening pass; see `AUDIT.md`).
+**Date:** 2026-06-11.
 **Staleness rule:** this document describes the tree at the commit that last touched it. If file paths it cites don't exist, the audit is stale — re-run it (every check below is a one-command grep or a build inspection) and re-stamp it. Re-running this audit is part of the release checklist.
 
 ## Method

@@ -45,7 +45,7 @@ How Margin is put together on this branch. Decisions and intent live in `design.
 
 ## Brain / shell split
 
-All consequential logic is pure and framework-free in `src/lib/` (no React, no `chrome.*`, no `fetch`, no DOM): exclusion engine, prompt engine + assembly, sampling, counting, screening, voice validation/classification, formatting, the overlay render policy, the on-X URL predicate. The shells compose it.
+All consequential logic is pure and framework-free in `src/lib/` (no React, no `chrome.*`, no `fetch`, no DOM): exclusion engine, prompt engine + assembly, sampling, bundle resolution, counting, screening, voice validation/classification, formatting, the draft lifecycle, library dedupe, the reply-context merge, the overlay render policy, the on-X URL predicate. The shells compose it.
 
 **One deliberate exception:** `entrypoints/twitter.content/extract.ts` is consequential logic that necessarily reads DOM (`Element → data`). It lives inside the content entrypoint, not `lib/`, and gets the lib treatment anyway: pure functions of their arguments, every X-markup assumption pinned by DOM-fixture tests (`extract.test.ts`).
 
@@ -75,6 +75,8 @@ GenerationResult { draft.posts[0], appliedAutoFixes, residualViolations, wasRepa
 panel: renderWithHighlights(draft, residual) ──▶ user edits/refines ──▶ Copy → clipboard
 ```
 
+Bundle-seeded generation (Phase 6) rides the same path: `GenerationRequest.bundleId` resolves in the background (`getBundle` — a deleted bundle is an honest `bad-request`, never a silent fallback) and the member ids pass through the same `selectExamples` seam, whose resolved members then replace the sampled voice pool verbatim. On commit, `panel:draft-committed.bundleId` lets `capture.ts` auto-file the saved item back into the bundle (`bg:bundles-changed`).
+
 Hard property: **≤ 3 Anthropic calls per generate/refine invocation** (initial + optional repair + optional tighten). Refine is the same pipeline minus sampling — it reshapes `previousDraftText` from the panel. Every call in the pipeline — chip/more-less refine, repair, tighten — renders through `assembleRefinePrompt` (the one refine template) and so carries the same system voice anchor (role + precedence + style guide + exclusions) as generation; repair and tighten get code-supplied instructions (`buildRepairInstruction`, `TIGHTEN_INSTRUCTION`).
 
 ## Messaging
@@ -97,21 +99,21 @@ Single source of truth: `src/messaging/contracts.ts` — five discriminated unio
 
 ## Storage
 
-| Store                    | Key / name                                            | Contents                                         | Lifetime                |
-| ------------------------ | ----------------------------------------------------- | ------------------------------------------------ | ----------------------- |
-| `chrome.storage.local`   | `settings:v1`                                         | `Settings` (merged over defaults on read)        | persistent              |
-|                          | `themePreference:v1`                                  | `'light' \| 'dark'`                              | persistent              |
-|                          | `apiKey:v1` (when mode = `local`)                     | the key, write-only from UI                      | persistent              |
-| `chrome.storage.session` | `apiKey:v1` (when mode = `session`)                   | the key                                          | until full browser quit |
-|                          | `activeCaptureMode:v1`                                | `'none' \| 'library' \| 'reply-context'`         | session                 |
-|                          | `replyContextLock:v1`                                 | `ReplyContext`                                   | session                 |
-|                          | `lastPrompt:v2`                                       | per-call prompt records (`calls[]`) + response   | session                 |
-|                          | `autoReplyCapture:v1`                                 | one-shot shortcut stamp (consumed on read)       | seconds                 |
-| IndexedDB                | db `x-post-composer`, store `items`, `DB_VERSION = 4` | `LibraryItem` rows, keyPath `id`, index `byType` | persistent              |
+| Store                    | Key / name                             | Contents                                                                                                       | Lifetime                |
+| ------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `chrome.storage.local`   | `settings:v1`                          | `Settings` (merged over defaults on read)                                                                      | persistent              |
+|                          | `themePreference:v1`                   | `'light' \| 'dark'`                                                                                            | persistent              |
+|                          | `apiKey:v1` (when mode = `local`)      | the key, write-only from UI                                                                                    | persistent              |
+| `chrome.storage.session` | `apiKey:v1` (when mode = `session`)    | the key                                                                                                        | until full browser quit |
+|                          | `activeCaptureMode:v1`                 | `'none' \| 'library' \| 'reply-context'`                                                                       | session                 |
+|                          | `replyContextLock:v1`                  | `ReplyContext`                                                                                                 | session                 |
+|                          | `lastPrompt:v2`                        | per-call prompt records (`calls[]`) + response                                                                 | session                 |
+|                          | `autoReplyCapture:v1`                  | one-shot shortcut stamp (consumed on read)                                                                     | seconds                 |
+| IndexedDB                | db `x-post-composer`, `DB_VERSION = 5` | store `items`: `LibraryItem` rows, keyPath `id`, index `byType` · store `bundles`: `Bundle` rows, keyPath `id` | persistent              |
 
 `chrome.storage.sync` is forbidden (CLAUDE.md §6). Content scripts cannot read `storage.session` (Chrome default trusted-only) — they mirror state via messaging, which is also what keeps the session-mode key out of their reach.
 
-**IndexedDB migration path** (`src/storage/corpus.ts`): one migration-pass FUNCTION per schema version, registered for `oldVersion < N` and run **sequentially** — v1 created the store+index, v2 backfilled `authorDisplayName`/`authorAvatarUrl`, v3 collapsed the source taxonomy (`capture`→`manual`, `import`→`archive`; `shipped` added), v4 backfilled `favorite: false` (the Star tier). Sequential is load-bearing: two concurrent cursors interleave and `cursor.update` writes the full row each cursor read, so the later pass's stale read erases the earlier pass's fields. Rule: bump `DB_VERSION`, **add** a new pass function, never edit an existing one, add a migration test that seeds the old shape (pattern in `corpus.test.ts`). `EXPORT_SCHEMA_VERSION` is derived from `DB_VERSION`.
+**IndexedDB migration path** (`src/storage/corpus.ts`): one migration-pass FUNCTION per schema version, registered for `oldVersion < N` and run **sequentially** — v1 created the store+index, v2 backfilled `authorDisplayName`/`authorAvatarUrl`, v3 collapsed the source taxonomy (`capture`→`manual`, `import`→`archive`; `shipped` added), v4 backfilled `favorite: false` (the Star tier), v5 added the `bundles` object store (store creation is synchronous in the versionchange tx, so it needs no pass function — only row-rewriting versions get one). Sequential is load-bearing: two concurrent cursors interleave and `cursor.update` writes the full row each cursor read, so the later pass's stale read erases the earlier pass's fields. Rule: bump `DB_VERSION`, **add** a new pass function, never edit an existing one, add a migration test that seeds the old shape (pattern in `corpus.test.ts`). `EXPORT_SCHEMA_VERSION` is derived from `DB_VERSION`; exports carry `items` + `bundles` since v5. Bundle CRUD lives in `src/storage/bundles.ts` against the same connection (`openCorpus` owns versioning); `clearAllItems` wipes both stores in one transaction.
 
 `getSettings()` merges stored values over `DEFAULT_SETTINGS` per-field (nested merges for `temperature`/`structuralRules`; per-template merge resets legacy single-body or blanked templates to the current defaults — the v1→v2 template migration, see roadmap.md Build Decisions Log) — so adding a settings field needs no migration, just a default. `setSettings` is read-merge-write with a documented single-writer-per-field assumption.
 

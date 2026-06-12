@@ -13,8 +13,9 @@ This repo is public, MIT-licensed, and ships no telemetry of any kind.
 ## What it does
 
 - **Capture** your own tweets from x.com with a click-to-save mode that hard-filters on your handle.
-- **Generate** post and reply drafts in your voice using sampled examples from your captured library + a style guide + your bullets.
-- **Refine** the on-screen draft via chips (Shorter / Warmer / Punchier — all editable) or "more / less" steering fields.
+- **Generate** post and reply drafts in your voice using sampled examples from your captured library + a style guide + your bullets. Starred examples are guaranteed into every prompt as "you at your best."
+- **Bundle** specific tweets as a reusable voice seed (e.g. a "day X" series): the bundle's members become the exact voice examples for that draft, and shipped drafts file back into the bundle automatically.
+- **Refine** the on-screen draft via chips (Shorter / Longer / Warmer / Punchier — all editable) or a freeform feedback box in your own words.
 - **Regenerate** to reshuffle examples and bump temperature when a draft doesn't land.
 - **Enforce** deterministic output rules: em dashes auto-fix to commas, smart quotes auto-fix to straight, staccato runs and a do-not-say banlist trigger one repair re-prompt and highlight residue.
 - **Count** characters with X's official `twitter-text` weighting (URLs always weigh 23, some characters weigh 2). Over-280 drafts get one automatic Tighten pass.
@@ -85,8 +86,15 @@ Then open the panel (toolbar icon), click the gear to open **Settings**, and in 
 
 1. Open the side panel on x.com and switch to the **Voice** screen.
 2. Turn on **Save tweets from X**. Hovering tweets shows a highlight; clicking one of **your own** tweets saves it (the author must match your configured handle — anyone else's is rejected).
-3. Manage entries in Voice: edit text inline, override post/reply, delete.
+3. Manage entries in Voice: edit text inline, override post/reply, delete, star your best ("you at your best" — guaranteed into every prompt).
 4. Or paste text via the **+** (Add manually) form, ticking "This is my own writing."
+
+### Bundles (seed a draft from specific tweets)
+
+1. In Voice, hit **New bundle**, tap tweets in the order you want them (the numbers are the stored order), name it, save.
+2. In Compose, the **Voice seed** picker appears once a bundle exists: pick a bundle and its members become the _exact_ voice examples for that generation — no sampling, no topping up. Starred examples still ride on top. The inspector labels the call `generate (bundle: …)`.
+3. When you copy a bundle-seeded draft (with "save shipped drafts" on), the shipped example **auto-files into the bundle** — a "day X" bundle grows itself with every entry you ship.
+4. Manage bundles in Voice: rename, remove members, delete. Deleted library items show as "missing" in their bundles and are simply skipped when seeding.
 
 ### Compose
 
@@ -99,8 +107,8 @@ Then open the panel (toolbar icon), click the gear to open **Settings**, and in 
 
 The draft appears with an X-weighted character counter. Reshape it without reshuffling:
 
-- **Chips** (Shorter / Warmer / Punchier — editable in the Prompts section): one tap rewrites the current draft per the chip's stored instruction. Tapping the same chip again escalates it.
-- **More / less** steering fields: describe what you want more and less of (140 chars each), then **Apply** (⌘↵).
+- **Chips** (Shorter / Longer / Warmer / Punchier — editable in the Prompts section): one tap rewrites the current draft per the chip's stored instruction. Tapping the same chip again escalates it.
+- **Steer it**: type what to change in your own words, then **Apply** (⌘↵).
 - **Regenerate**: fresh samples + higher temperature. Use when a draft "didn't land" and you want a different angle.
 - **Undo**: one level back.
 - **Inspect last prompt** (bottom of Compose): every Anthropic call in the last invocation — generate/refine plus any repair or tighten pass — as the exact System/User text sent, with the raw response, all copyable.
@@ -131,8 +139,14 @@ src/
     counting/            twitter-text weightedLength wrapper.
     exclusion/           Structural + do-not-say detectors, auto-fix, check.
     prompt/              Templates (single source of defaults), slot engine, assembly.
-    sampling/            selectExamples (the CLAUDE.md §8 retrieval seam).
-    screening/           Quality predicates (dormant until Phase-2 import).
+    sampling/            selectExamples (the CLAUDE.md §8 retrieval seam; bundles seed it).
+    bundles/             Bundle member resolution + append (honest missing counts).
+    draft/               The draft lifecycle state machine + the commit event.
+    library/             Corpus dedupe (id/text identity, source precedence).
+    replyContext/        Same-tweet merge for X's metadata-poor re-renderings.
+    overlay/             The on-page render-visibility policy.
+    url/                 isXPageUrl (off-X detection without the "tabs" permission).
+    screening/           Quality predicates (dormant until archive import).
     voice/               validateAuthor (hard filter), classifyType.
     format/              relative timestamps, x.com style.
   api/anthropic.ts       The fetch wrapper. Imported by background/generation.ts only.
@@ -153,7 +167,7 @@ src/
 
 ### Tests
 
-255 tests across 17 files cover every load-bearing piece of deterministic logic: exclusion detectors (em-dash, smart quotes, staccato boundary 2-vs-3 + word-count edges), the do-not-say whole-word matcher, mechanical auto-fix, twitter-text weighted counting, the prompt engine (slot rendering/validation, the system/user role boundary, default-template consistency), prompt assembly (slot population, intent-shape framing, refine voice anchor, violation summaries, chip escalation), `selectExamples`, screening predicates, `validateAuthor`, `classifyType`, the settings merge + template migration, the Anthropic client (header/body shape, full error-mapping table, key never echoed — all against a stubbed `fetch`), the IndexedDB corpus incl. the v1→v2 migration, and the X-markup extraction layer via DOM fixtures (so when X drifts, the failing test names the assumption that died).
+386 tests across 26 files cover every load-bearing piece of deterministic logic: exclusion detectors (em-dash, smart quotes, staccato boundary 2-vs-3 + word-count edges, the narrow label-colon rule), the do-not-say whole-word matcher, mechanical auto-fix, twitter-text weighted counting, the prompt engine (slot rendering/validation, the system/user role boundary, default-template consistency), prompt assembly (slot population, intent-shape framing, refine voice anchor, violation summaries, chip escalation), `selectExamples` (stars, tiers, bundle seeding), bundle member resolution, the draft lifecycle state machine (both undo scopes, stale-request gating, the bundle-seed provenance), library dedupe, the reply-context merge, screening predicates, `validateAuthor`, `classifyType`, the settings merge + template migration, the Anthropic client (header/body shape, full error-mapping table, key never echoed — all against a stubbed `fetch`), the IndexedDB corpus + bundles stores incl. every seeded schema migration (v1 through v5), and the X-markup extraction layer via DOM fixtures (so when X drifts, the failing test names the assumption that died).
 
 Per CLAUDE.md §5 there is no coverage-percentage gate. Behavior that matters is tested; UI glue and `chrome.*` wrappers aren't filler-tested.
 
