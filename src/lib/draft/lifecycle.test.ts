@@ -5,6 +5,7 @@ import {
   reduceDraftLifecycle,
   type DraftEvent,
   type DraftLifecycleState,
+  type ModelDraft,
 } from './lifecycle';
 
 function span(): Span {
@@ -16,11 +17,23 @@ function run(...events: DraftEvent[]): DraftLifecycleState {
   return events.reduce(reduceDraftLifecycle, INITIAL_DRAFT_LIFECYCLE);
 }
 
-const modelDraft = (text: string, violations: Span[] = []) => ({
-  text,
-  residualViolations: violations,
+/** Single-post model output (the N=1 case). */
+const modelDraft = (text: string, violations: Span[] = []): ModelDraft => ({
+  kind: 'single',
+  posts: [{ text, residualViolations: violations }],
   wasRepaired: false,
+  targetCount: null,
 });
+
+/** Thread model output. */
+const threadDraft = (texts: string[], targetCount: number | null = texts.length): ModelDraft => ({
+  kind: 'thread',
+  posts: texts.map((text) => ({ text, residualViolations: [] })),
+  wasRepaired: false,
+  targetCount,
+});
+
+const firstText = (s: DraftLifecycleState): string | undefined => s.content?.posts[0]?.text;
 
 /** empty → generating → active with one draft in hand. */
 function activeWith(text = 'first draft', violations: Span[] = []): DraftLifecycleState {
@@ -42,8 +55,9 @@ describe('generation', () => {
       draft: modelDraft('hello'),
     });
     expect(active.phase).toBe('active');
-    expect(active.content?.text).toBe('hello');
+    expect(firstText(active)).toBe('hello');
     expect(active.content?.handEdited).toBe(false);
+    expect(active.content?.posts[0]?.copied).toBe(false);
     // First draft replaced nothing — no timed-undo window.
     expect(active.replaced).toBeNull();
   });
@@ -62,7 +76,7 @@ describe('generation', () => {
       seq: 2,
       draft: modelDraft('fresh'),
     });
-    expect(after2.content?.text).toBe('fresh');
+    expect(firstText(after2)).toBe('fresh');
 
     // seq 1 resolving even later is equally dead.
     const lateStale = reduceDraftLifecycle(after2, {
@@ -94,7 +108,7 @@ describe('generation', () => {
       { type: 'generation-failed', seq: 2 },
     );
     expect(fromActive.phase).toBe('active');
-    expect(fromActive.content?.text).toBe('keep me');
+    expect(firstText(fromActive)).toBe('keep me');
   });
 
   it('a regenerate keeps the outgoing draft visible, then opens the timed-undo window', () => {
@@ -103,15 +117,15 @@ describe('generation', () => {
       seq: 2,
     });
     expect(regenerating.phase).toBe('generating');
-    expect(regenerating.content?.text).toBe('old'); // still on screen
+    expect(firstText(regenerating)).toBe('old'); // still on screen
 
     const replaced = reduceDraftLifecycle(regenerating, {
       type: 'generation-succeeded',
       seq: 2,
       draft: modelDraft('new'),
     });
-    expect(replaced.content?.text).toBe('new');
-    expect(replaced.replaced?.content.text).toBe('old'); // undo can bring it back
+    expect(firstText(replaced)).toBe('new');
+    expect(replaced.replaced?.content.posts[0]?.text).toBe('old'); // undo can bring it back
     expect(replaced.replaced?.workbench).toBeNull(); // regenerate keeps angle + lock on screen
   });
 });
@@ -120,10 +134,11 @@ describe('hand edits', () => {
   it('clear residual violations and mark the draft hand-edited — exclusions are bypassed', () => {
     const edited = reduceDraftLifecycle(activeWith('draft — text', [span()]), {
       type: 'hand-edited',
+      postIndex: 0,
       text: 'my own words',
     });
-    expect(edited.content?.text).toBe('my own words');
-    expect(edited.content?.residualViolations).toEqual([]);
+    expect(firstText(edited)).toBe('my own words');
+    expect(edited.content?.posts[0]?.residualViolations).toEqual([]);
     expect(edited.content?.handEdited).toBe(true);
     expect(edited.phase).toBe('active');
   });
@@ -136,14 +151,24 @@ describe('hand edits', () => {
       { type: 'generation-succeeded', seq: 2, draft: modelDraft('new') },
     );
     expect(replaced.replaced).not.toBeNull();
-    const touched = reduceDraftLifecycle(replaced, { type: 'hand-edited', text: 'new + me' });
+    const touched = reduceDraftLifecycle(replaced, {
+      type: 'hand-edited',
+      postIndex: 0,
+      text: 'new + me',
+    });
     expect(touched.replaced).toBeNull();
   });
 
   it('un-commit a committed draft — edits ride through the next copy', () => {
-    const committed = reduceDraftLifecycle(activeWith(), { type: 'committed' });
-    const edited = reduceDraftLifecycle(committed, { type: 'hand-edited', text: 'revised' });
+    const committed = reduceDraftLifecycle(activeWith(), { type: 'post-copied', postIndex: 0 });
+    expect(committed.phase).toBe('committed');
+    const edited = reduceDraftLifecycle(committed, {
+      type: 'hand-edited',
+      postIndex: 0,
+      text: 'revised',
+    });
     expect(edited.phase).toBe('active');
+    expect(edited.content?.posts[0]?.copied).toBe(false); // clipboard is stale now
   });
 
   it('do NOT clear the one-level refine snapshot (it must survive)', () => {
@@ -153,18 +178,28 @@ describe('hand edits', () => {
       { type: 'refine-started', seq: 2 },
       { type: 'generation-succeeded', seq: 2, draft: modelDraft('refined') },
     );
-    const edited = reduceDraftLifecycle(refined, { type: 'hand-edited', text: 'refined + me' });
-    expect(edited.refineSnapshot?.text).toBe('original');
+    const edited = reduceDraftLifecycle(refined, {
+      type: 'hand-edited',
+      postIndex: 0,
+      text: 'refined + me',
+    });
+    expect(edited.refineSnapshot?.posts[0]?.text).toBe('original');
 
     const undone = reduceDraftLifecycle(edited, { type: 'refine-undone' });
-    expect(undone.content?.text).toBe('original');
+    expect(firstText(undone)).toBe('original');
     expect(undone.refineSnapshot).toBeNull();
   });
 
-  it('are no-ops while generating or empty', () => {
-    expect(run({ type: 'hand-edited', text: 'x' }).phase).toBe('empty');
+  it('are no-ops while generating or empty, and for unknown post indexes', () => {
+    expect(run({ type: 'hand-edited', postIndex: 0, text: 'x' }).phase).toBe('empty');
     const generating = run({ type: 'generation-started', seq: 1 });
-    expect(reduceDraftLifecycle(generating, { type: 'hand-edited', text: 'x' })).toBe(generating);
+    expect(reduceDraftLifecycle(generating, { type: 'hand-edited', postIndex: 0, text: 'x' })).toBe(
+      generating,
+    );
+    const active = activeWith('one post');
+    expect(reduceDraftLifecycle(active, { type: 'hand-edited', postIndex: 5, text: 'x' })).toBe(
+      active,
+    );
   });
 });
 
@@ -176,9 +211,9 @@ describe('refine (one-level undo scope)', () => {
       { type: 'refine-started', seq: 2 },
       { type: 'generation-succeeded', seq: 2, draft: modelDraft('refined') },
     );
-    expect(refined.content?.text).toBe('refined');
+    expect(firstText(refined)).toBe('refined');
     expect(refined.replaced).toBeNull(); // not a replacement
-    expect(refined.refineSnapshot?.text).toBe('original');
+    expect(refined.refineSnapshot?.posts[0]?.text).toBe('original');
   });
 
   it('refining a just-replaced draft adopts it (timed undo drops at refine start)', () => {
@@ -218,7 +253,7 @@ describe('timed undo (replacement scope)', () => {
     );
     const undone = reduceDraftLifecycle(replaced, { type: 'replacement-undone' });
     expect(undone.phase).toBe('active');
-    expect(undone.content?.text).toBe('old');
+    expect(firstText(undone)).toBe('old');
     expect(undone.replaced).toBeNull();
   });
 
@@ -231,7 +266,7 @@ describe('timed undo (replacement scope)', () => {
     );
     const expired = reduceDraftLifecycle(replaced, { type: 'replacement-expired' });
     expect(expired.replaced).toBeNull();
-    expect(expired.content?.text).toBe('new');
+    expect(firstText(expired)).toBe('new');
   });
 
   it('both undo scopes coexist on one draft', () => {
@@ -243,7 +278,7 @@ describe('timed undo (replacement scope)', () => {
       { type: 'refine-started', seq: 2 },
       { type: 'generation-succeeded', seq: 2, draft: modelDraft('v2') },
     );
-    expect(refined.refineSnapshot?.text).toBe('v1'); // refine undo live
+    expect(refined.refineSnapshot?.posts[0]?.text).toBe('v1'); // refine undo live
     const regenerated = run(
       { type: 'generation-started', seq: 1 },
       { type: 'generation-succeeded', seq: 1, draft: modelDraft('v1') },
@@ -252,7 +287,7 @@ describe('timed undo (replacement scope)', () => {
       { type: 'generation-started', seq: 3 },
       { type: 'generation-succeeded', seq: 3, draft: modelDraft('v3') },
     );
-    expect(regenerated.replaced?.content.text).toBe('v2'); // timed undo live
+    expect(regenerated.replaced?.content.posts[0]?.text).toBe('v2'); // timed undo live
     expect(regenerated.refineSnapshot).toBeNull(); // refine chain ended
   });
 });
@@ -276,14 +311,14 @@ describe('new context', () => {
     });
     expect(cleared.phase).toBe('empty');
     expect(cleared.content).toBeNull();
-    expect(cleared.replaced?.content.text).toBe('reply to old tweet');
+    expect(cleared.replaced?.content.posts[0]?.text).toBe('reply to old tweet');
     // One Undo restores the whole workbench: draft, angle, and lock.
     expect(cleared.replaced?.workbench?.bullets).toBe('my angle for the old tweet');
     expect(cleared.replaced?.workbench?.replyContext).toBe(oldContext);
 
     const undone = reduceDraftLifecycle(cleared, { type: 'replacement-undone' });
     expect(undone.phase).toBe('active');
-    expect(undone.content?.text).toBe('reply to old tweet');
+    expect(firstText(undone)).toBe('reply to old tweet');
   });
 
   it('invalidates an in-flight generation — its result was for the old context', () => {
@@ -323,7 +358,11 @@ describe('bundle seed (rides the draft to commit)', () => {
   });
 
   it('a hand edit keeps the seed — editing does not change provenance', () => {
-    const edited = reduceDraftLifecycle(seeded, { type: 'hand-edited', text: 'day 12 + me' });
+    const edited = reduceDraftLifecycle(seeded, {
+      type: 'hand-edited',
+      postIndex: 0,
+      text: 'day 12 + me',
+    });
     expect(edited.content?.seedBundleId).toBe('b1');
   });
 
@@ -338,39 +377,149 @@ describe('bundle seed (rides the draft to commit)', () => {
   });
 });
 
-describe('commit and discard', () => {
-  it('commit moves active → committed and resolves both undo scopes', () => {
+describe('commit (post-copied) and discard', () => {
+  it('a single commits on its one copy, resolving both undo scopes', () => {
     const withBoth = run(
       { type: 'generation-started', seq: 1 },
       { type: 'generation-succeeded', seq: 1, draft: modelDraft('v1') },
       { type: 'refine-started', seq: 2 },
       { type: 'generation-succeeded', seq: 2, draft: modelDraft('v2') },
     );
-    const committed = reduceDraftLifecycle(withBoth, { type: 'committed' });
+    const committed = reduceDraftLifecycle(withBoth, { type: 'post-copied', postIndex: 0 });
     expect(committed.phase).toBe('committed');
     expect(committed.replaced).toBeNull();
     expect(committed.refineSnapshot).toBeNull();
-    expect(committed.content?.text).toBe('v2');
+    expect(firstText(committed)).toBe('v2');
   });
 
-  it('commit is a no-op outside active', () => {
-    expect(run({ type: 'committed' })).toEqual(INITIAL_DRAFT_LIFECYCLE);
+  it('post-copied is a no-op outside active/committed and for unknown indexes', () => {
+    expect(run({ type: 'post-copied', postIndex: 0 })).toEqual(INITIAL_DRAFT_LIFECYCLE);
     const generating = run({ type: 'generation-started', seq: 1 });
-    expect(reduceDraftLifecycle(generating, { type: 'committed' })).toBe(generating);
+    expect(reduceDraftLifecycle(generating, { type: 'post-copied', postIndex: 0 })).toBe(
+      generating,
+    );
+    const active = activeWith();
+    expect(reduceDraftLifecycle(active, { type: 'post-copied', postIndex: 3 })).toBe(active);
   });
 
   it('a committed draft can be regenerated, with the timed undo guarding it', () => {
-    const committed = reduceDraftLifecycle(activeWith('shipped'), { type: 'committed' });
+    const committed = reduceDraftLifecycle(activeWith('shipped'), {
+      type: 'post-copied',
+      postIndex: 0,
+    });
     const replaced = reduceDraftLifecycle(
       reduceDraftLifecycle(committed, { type: 'generation-started', seq: 9 }),
       { type: 'generation-succeeded', seq: 9, draft: modelDraft('next take') },
     );
-    expect(replaced.content?.text).toBe('next take');
-    expect(replaced.replaced?.content.text).toBe('shipped');
+    expect(firstText(replaced)).toBe('next take');
+    expect(replaced.replaced?.content.posts[0]?.text).toBe('shipped');
   });
 
   it('discard resets everything', () => {
     const discarded = reduceDraftLifecycle(activeWith(), { type: 'discarded' });
     expect(discarded).toEqual(INITIAL_DRAFT_LIFECYCLE);
+  });
+});
+
+describe('threads (multi-post drafts)', () => {
+  const activeThread = (texts = ['one', 'two', 'three']) =>
+    run(
+      { type: 'generation-started', seq: 1 },
+      { type: 'generation-succeeded', seq: 1, draft: threadDraft(texts) },
+    );
+
+  it('lands as kind thread with per-post content and the target', () => {
+    const t = activeThread();
+    expect(t.content?.kind).toBe('thread');
+    expect(t.content?.posts).toHaveLength(3);
+    expect(t.content?.targetCount).toBe(3);
+    expect(t.content?.posts.every((p) => !p.copied)).toBe(true);
+  });
+
+  it('hand-editing one post touches only that post', () => {
+    const before = activeThread();
+    const edited = reduceDraftLifecycle(before, {
+      type: 'hand-edited',
+      postIndex: 1,
+      text: 'two, but mine',
+    });
+    expect(edited.content?.posts[1]?.text).toBe('two, but mine');
+    expect(edited.content?.posts[0]?.text).toBe('one');
+    expect(edited.content?.handEdited).toBe(true);
+  });
+
+  it('commits only when EVERY post has been copied', () => {
+    const one = reduceDraftLifecycle(activeThread(), { type: 'post-copied', postIndex: 0 });
+    expect(one.phase).toBe('active');
+    const two = reduceDraftLifecycle(one, { type: 'post-copied', postIndex: 2 });
+    expect(two.phase).toBe('active');
+    const all = reduceDraftLifecycle(two, { type: 'post-copied', postIndex: 1 });
+    expect(all.phase).toBe('committed');
+    expect(all.replaced).toBeNull();
+    expect(all.refineSnapshot).toBeNull();
+  });
+
+  it('editing a copied post un-copies it — commit needs a fresh copy of that post', () => {
+    const partly = [
+      { type: 'post-copied', postIndex: 0 } as const,
+      { type: 'post-copied', postIndex: 1 } as const,
+      { type: 'hand-edited', postIndex: 0, text: 'one, revised' } as const,
+      { type: 'post-copied', postIndex: 2 } as const,
+    ].reduce(reduceDraftLifecycle, activeThread());
+    expect(partly.phase).toBe('active'); // post 0's copy went stale
+    const done = reduceDraftLifecycle(partly, { type: 'post-copied', postIndex: 0 });
+    expect(done.phase).toBe('committed');
+  });
+
+  it('fresh model output (a refine) resets every copied flag', () => {
+    const reshaped = (
+      [
+        { type: 'post-copied', postIndex: 0 },
+        { type: 'refine-started', seq: 2 },
+        {
+          type: 'generation-succeeded',
+          seq: 2,
+          draft: threadDraft(['one!', 'two!', 'three!'], null),
+        },
+      ] as DraftEvent[]
+    ).reduce(reduceDraftLifecycle, activeThread());
+    expect(reshaped.content?.posts.every((p) => !p.copied)).toBe(true);
+  });
+
+  it('a non-repack refine keeps the draft’s own target; a repack updates it', () => {
+    const base = activeThread(['a', 'b', 'c', 'd']); // target 4
+    const polished = (
+      [
+        { type: 'refine-started', seq: 2 },
+        {
+          type: 'generation-succeeded',
+          seq: 2,
+          draft: threadDraft(['a!', 'b!', 'c!', 'd!'], null),
+        },
+      ] as DraftEvent[]
+    ).reduce(reduceDraftLifecycle, base);
+    expect(polished.content?.targetCount).toBe(4); // carried over
+
+    const repacked = (
+      [
+        { type: 'refine-started', seq: 3 },
+        { type: 'generation-succeeded', seq: 3, draft: threadDraft(['ab', 'cd'], 2) },
+      ] as DraftEvent[]
+    ).reduce(reduceDraftLifecycle, polished);
+    expect(repacked.content?.targetCount).toBe(2);
+  });
+
+  it('the refine undo restores the pre-refine thread, copies and all', () => {
+    const before = reduceDraftLifecycle(activeThread(), { type: 'post-copied', postIndex: 0 });
+    const reshaped = (
+      [
+        { type: 'refine-started', seq: 2 },
+        { type: 'generation-succeeded', seq: 2, draft: threadDraft(['merged into one'], null) },
+      ] as DraftEvent[]
+    ).reduce(reduceDraftLifecycle, before);
+    expect(reshaped.content?.posts).toHaveLength(1);
+    const undone = reduceDraftLifecycle(reshaped, { type: 'refine-undone' });
+    expect(undone.content?.posts).toHaveLength(3);
+    expect(undone.content?.posts[0]?.copied).toBe(true); // snapshot kept the flag
   });
 });

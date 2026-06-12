@@ -4,6 +4,7 @@ import { emitDraftCommit, onDraftCommit, type DraftCommit } from './commit';
 function commit(overrides: Partial<DraftCommit> = {}): DraftCommit {
   return {
     text: 'shipped text',
+    segments: null,
     mode: 'post',
     handEdited: false,
     seedBundleId: null,

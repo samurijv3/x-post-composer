@@ -14,9 +14,12 @@
  */
 
 export interface DraftCommit {
-  /** The exact text copied to the clipboard — hand edits included. */
+  /** The committed text, hand edits included. For threads this is the
+   *  segments JOINED in the canonical wire format (lib/thread). */
   text: string;
-  mode: 'post' | 'reply';
+  /** Thread segments in order; null for single posts/replies. */
+  segments: string[] | null;
+  mode: 'post' | 'reply' | 'thread';
   /** Whether the user hand-edited the model's output before shipping. */
   handEdited: boolean;
   /** The bundle that seeded this draft (lifecycle `seedBundleId`), or

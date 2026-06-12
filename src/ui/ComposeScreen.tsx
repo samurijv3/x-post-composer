@@ -240,7 +240,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
 
   const hasContext = replyContext !== null;
   const content = lifecycle.content;
-  const draft = content?.text ?? '';
+  const draft = content?.posts[0]?.text ?? '';
   const hasDraft = lifecycle.phase !== 'empty';
   const busy = lifecycle.phase === 'generating';
 
@@ -383,10 +383,18 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     dispatchDraft({
       type: 'generation-succeeded',
       seq,
+      // Single-post mapping (threads land with the thread compose UI):
+      // one post carrying the draft text and its violations.
       draft: {
-        text: result.draft.posts[0]?.text ?? '',
-        residualViolations: result.residualViolations,
+        kind: 'single',
+        posts: [
+          {
+            text: result.draft.posts[0]?.text ?? '',
+            residualViolations: result.residualViolations,
+          },
+        ],
         wasRepaired: result.wasRepaired,
+        targetCount: null,
       },
       seedBundleId,
     });
@@ -426,7 +434,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     if (!next || busy) return;
     const lc = lifecycleRef.current;
     if (lc.phase !== 'active' || lc.content === null) return;
-    if (weightedLength(lc.content.text) <= X_HARD_LIMIT) return; // already fits
+    if (weightedLength(lc.content.posts[0]?.text ?? '') <= X_HARD_LIMIT) return; // already fits
     // REFIT, never regenerate: the draft's content is the fixed point.
     onToast('Refitting to \u2264280 \u2014 same draft, shorter');
     void runRefine({ type: 'refit' }, true);
@@ -436,7 +444,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     const myId = ++requestSeq.current;
     // Refine reshapes the CURRENT text — hand edits included. Only the
     // model's output gets re-checked; the user's words went in as-is.
-    const previousDraftText = lifecycleRef.current.content?.text ?? '';
+    const previousDraftText = lifecycleRef.current.content?.posts[0]?.text ?? '';
     dispatchDraft({ type: 'refine-started', seq: myId });
     const request: RefineRequest = {
       mode: hasContext ? 'reply' : 'post',
@@ -466,22 +474,24 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   }
 
   function editDraft(text: string): void {
-    dispatchDraft({ type: 'hand-edited', text });
+    dispatchDraft({ type: 'hand-edited', postIndex: 0, text });
   }
 
   const copy = useCallback(async (): Promise<void> => {
     const current = lifecycleRef.current;
     if (current.content === null || current.phase === 'generating') return;
     try {
-      await navigator.clipboard.writeText(current.content.text);
+      const text = current.content.posts[0]?.text ?? '';
+      await navigator.clipboard.writeText(text);
       setCopied(true);
-      // Copy signals two separate facts: the lifecycle state flips to
-      // committed (resolving the timed undo), and the corpus EVENT
-      // fires — nothing listens in v1; Phase 4's shipped-tweet loop
+      // Copy signals two separate facts: post-copied(0) commits a
+      // single immediately (the N=1 case of the all-copied rule), and
+      // the corpus EVENT fires — Phase 4's shipped-tweet loop
       // subscribes via onDraftCommit.
-      dispatchDraft({ type: 'committed' });
+      dispatchDraft({ type: 'post-copied', postIndex: 0 });
       emitDraftCommit({
-        text: current.content.text,
+        text,
+        segments: null,
         mode: replyContextRef.current !== null ? 'reply' : 'post',
         handEdited: current.content.handEdited,
         // Explicit provenance, read from the draft itself — never
@@ -503,6 +513,10 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   useEffect(() => {
     const unsub = onDraftCommit((commit) => {
       if (!saveShippedDefaultRef.current || !shipToVoiceRef.current) return;
+      // Thread commits ride once the contract carries segments (the
+      // pipeline commit, next) — no thread draft can exist before the
+      // thread compose UI lands anyway.
+      if (commit.mode === 'thread') return;
       sendToBackground({
         type: 'panel:draft-committed',
         text: commit.text,
@@ -627,7 +641,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   };
   const draftView: DraftView = {
     text: draft,
-    residualViolations: content?.residualViolations ?? [],
+    residualViolations: content?.posts[0]?.residualViolations ?? [],
     refined: lifecycle.refineSnapshot !== null,
     handEdited: content?.handEdited ?? false,
     committed: lifecycle.phase === 'committed',

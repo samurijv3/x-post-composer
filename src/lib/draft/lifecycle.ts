@@ -8,6 +8,14 @@
  * decided here and tested: stale-generation gating, the two coexisting
  * undo scopes, hand-edit semantics, and what commit resolves.
  *
+ * MULTI-POST (roadmap Phase 10): a draft is `posts[]` — length 1 for
+ * single posts/replies, N for threads. Each post carries its own text,
+ * violation spans (offsets into THAT post), and a `copied` flag. The
+ * ONE commit rule: a draft is committed when EVERY post has been
+ * copied since its text last changed — single mode is just the N=1
+ * case (its one Copy commits immediately). Editing a post resets that
+ * post's `copied` flag and re-opens the draft.
+ *
  * The two undo scopes (deliberately separate):
  *   - `replaced` — the TIMED undo (~5 s, Gmail-undo-send convention).
  *     Guards draft REPLACEMENT: a generate/regenerate landing over an
@@ -19,25 +27,41 @@
  *     hand edits by design.
  *
  * Hand edits bypass exclusions: the user's text is ground truth, so a
- * hand edit clears residual violations and nothing recomputes them for
- * user-owned text. Only later MODEL output (a refine pass) carries
- * fresh violations.
+ * hand edit clears THAT post's residual violations and nothing
+ * recomputes them for user-owned text. Only later MODEL output (a
+ * refine pass) carries fresh violations.
  *
- * "Committed" is a lifecycle state, not a corpus event — copy signals
- * both, but they are separate facts (see lib/draft/commit.ts for the
- * event half).
+ * "Committed" is a lifecycle state, not a corpus event — the all-
+ * copied transition signals both, but they are separate facts (see
+ * lib/draft/commit.ts for the event half).
  */
 import type { Span } from '../exclusion';
 import type { ReplyContext } from '../../types';
 
 export type DraftPhase = 'empty' | 'generating' | 'active' | 'committed';
 
-export interface DraftContent {
+/** One post of the draft — the only post for singles. */
+export interface DraftPostContent {
   text: string;
+  /** Offsets into THIS post's text. */
   residualViolations: Span[];
+  /** Copied to the clipboard since this post's text last changed. */
+  copied: boolean;
+}
+
+export interface DraftContent {
+  /** 'single' renders the classic one-card draft; 'thread' renders
+   *  ordered cards. Decided by the generation that produced it. */
+  kind: 'single' | 'thread';
+  /** Length 1 when kind === 'single'. */
+  posts: DraftPostContent[];
+  /** The ≈N target that produced / last repacked a thread draft;
+   *  null for singles. Carried so the repack control can show and
+   *  adjust the draft's actual packaging target. */
+  targetCount: number | null;
   wasRepaired: boolean;
-  /** True once the user typed in the draft. Set by `hand-edited`,
-   *  reset only when fresh model output replaces the text. */
+  /** True once the user typed in ANY post. Set by `hand-edited`,
+   *  reset only when fresh model output replaces the draft. */
   handEdited: boolean;
   /** The bundle that seeded this draft's voice examples (roadmap
    *  Phase 6), or null when the general corpus was sampled. Threaded
@@ -91,11 +115,16 @@ export const INITIAL_DRAFT_LIFECYCLE: DraftLifecycleState = {
   replaced: null,
 };
 
-/** Model output as the pipeline returns it (always `handEdited: false`). */
+/** Model output as the pipeline returns it (every post fresh —
+ *  `copied: false`, `handEdited: false` draft-wide). */
 export interface ModelDraft {
-  text: string;
-  residualViolations: Span[];
+  kind: 'single' | 'thread';
+  posts: { text: string; residualViolations: Span[] }[];
   wasRepaired: boolean;
+  /** The ≈N target the generation/repack was asked for; null for
+   *  singles. Refines that don't repack leave the draft's own target
+   *  in place (the reducer carries it over). */
+  targetCount: number | null;
 }
 
 export type DraftEvent =
@@ -110,8 +139,11 @@ export type DraftEvent =
   | { type: 'generation-succeeded'; seq: number; draft: ModelDraft; seedBundleId?: string | null }
   /** The pipeline errored for request `seq`. */
   | { type: 'generation-failed'; seq: number }
-  /** The user typed/deleted/pasted in the draft editor. */
-  | { type: 'hand-edited'; text: string }
+  /** The user typed/deleted/pasted in one post's editor. */
+  | { type: 'hand-edited'; postIndex: number; text: string }
+  /** One post was copied to the clipboard. When EVERY post is copied,
+   *  the draft commits — singles commit on their one copy. */
+  | { type: 'post-copied'; postIndex: number }
   /** One-level refine undo. */
   | { type: 'refine-undone' }
   /** The timed-undo toast was clicked. */
@@ -123,8 +155,6 @@ export type DraftEvent =
    *  Carries the cleared workbench — the angle text and the previous
    *  lock — so the timed undo restores everything together. */
   | { type: 'new-context'; bullets: string; previousContext: ReplyContext | null }
-  /** Copy-to-X. Resolves the timed undo and the refine snapshot. */
-  | { type: 'committed' }
   /** Explicit discard ("start over"). */
   | { type: 'discarded' };
 
@@ -165,8 +195,17 @@ export function reduceDraftLifecycle(
       // draft back.
       if (state.phase !== 'generating' || event.seq !== state.pendingSeq) return state;
       const fresh: DraftContent = {
-        ...event.draft,
+        kind: event.draft.kind,
+        posts: event.draft.posts.map((p) => ({ ...p, copied: false })),
+        wasRepaired: event.draft.wasRepaired,
         handEdited: false,
+        // A repack (refine) supplies a fresh target; other refines
+        // leave the draft's own target standing. Generates take the
+        // event's value (null for singles).
+        targetCount:
+          state.pendingKind === 'refine'
+            ? (event.draft.targetCount ?? state.content?.targetCount ?? null)
+            : event.draft.targetCount,
         // A generate stamps the seed from its request; a refine
         // reshapes the SAME draft, so its seed carries over.
         seedBundleId:
@@ -207,25 +246,52 @@ export function reduceDraftLifecycle(
       if (state.content === null || state.phase === 'generating' || state.phase === 'empty') {
         return state;
       }
+      const post = state.content.posts[event.postIndex];
+      if (post === undefined) return state;
+      const posts = state.content.posts.map((p, i) =>
+        i === event.postIndex
+          ? {
+              text: event.text,
+              // Hand edits bypass exclusions — the model-output
+              // violations no longer map onto user-owned text (offsets
+              // shifted, and the user's words are ground truth anyway).
+              residualViolations: [],
+              // The clipboard no longer holds this text.
+              copied: false,
+            }
+          : p,
+      );
       return {
         ...state,
         // Editing a committed draft un-commits it: there are now
         // uncopied changes, and they should ride through the next copy.
         phase: 'active',
-        content: {
-          text: event.text,
-          // Hand edits bypass exclusions — the model-output violations
-          // no longer map onto user-owned text (offsets shifted, and
-          // the user's words are ground truth anyway).
-          residualViolations: [],
-          wasRepaired: state.content.wasRepaired,
-          handEdited: true,
-          // Editing doesn't change where the draft came from.
-          seedBundleId: state.content.seedBundleId,
-        },
+        content: { ...state.content, posts, handEdited: true },
         // Touching the new draft adopts it; the replacement stands.
         replaced: null,
         // The refine snapshot deliberately survives hand edits.
+      };
+    }
+
+    case 'post-copied': {
+      if (state.content === null || state.phase === 'generating' || state.phase === 'empty') {
+        return state;
+      }
+      const post = state.content.posts[event.postIndex];
+      if (post === undefined) return state;
+      const posts = state.content.posts.map((p, i) =>
+        i === event.postIndex ? { ...p, copied: true } : p,
+      );
+      const allCopied = posts.every((p) => p.copied);
+      // THE commit rule: every post copied since its last change ⇒
+      // committed (resolving both undo scopes). Singles are the N=1
+      // case. The corpus event is the caller's job — separate fact.
+      return {
+        ...state,
+        phase: allCopied ? 'committed' : state.phase,
+        content: { ...state.content, posts },
+        replaced: allCopied ? null : state.replaced,
+        refineSnapshot: allCopied ? null : state.refineSnapshot,
       };
     }
 
@@ -244,8 +310,8 @@ export function reduceDraftLifecycle(
         ...state,
         // Restored drafts come back active (editable) even if they were
         // committed before being replaced — they're work-in-hand again.
-        // (The shell reads `replaced.bullets` before dispatching to
-        // restore the cleared angle text alongside.)
+        // (The shell reads the snapshot's workbench before dispatching
+        // to restore the cleared angle text alongside.)
         phase: 'active',
         content: state.replaced.content,
         replaced: null,
@@ -273,17 +339,6 @@ export function reduceDraftLifecycle(
                 workbench: { bullets: event.bullets, replyContext: event.previousContext },
               }
             : state.replaced,
-      };
-
-    case 'committed':
-      if (state.phase !== 'active' || state.content === null) return state;
-      // Commit resolves the pending timed undo and ends the refine
-      // chain. (The corpus event is the caller's job — separate fact.)
-      return {
-        ...state,
-        phase: 'committed',
-        replaced: null,
-        refineSnapshot: null,
       };
 
     case 'discarded':
