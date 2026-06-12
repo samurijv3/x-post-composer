@@ -1653,6 +1653,10 @@ code {
   padding: 8px 10px 10px;
   background: var(--surface);
 }
+/* The per-card violation note sits under the card's editor. */
+.thread-card .tc-warn {
+  margin-top: 8px;
+}
 /* The connector line between cards — the thread visual. */
 .thread-card + .thread-card::before {
   content: '';

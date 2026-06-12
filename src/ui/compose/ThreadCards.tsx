@@ -2,6 +2,7 @@ import type { Span } from '../../lib/exclusion';
 import { X_HARD_LIMIT } from '../../lib/counting';
 import { IcCheck, IcCopy, IcRefresh, IcSliders } from '../icons';
 import { DraftEditor } from './DraftEditor';
+import { ViolationNote } from './ViolationNote';
 
 /** One post of a thread draft, as the cards render it. */
 export interface DraftPostViewModel {
@@ -109,6 +110,11 @@ export function ThreadCards({
             disabled={busy}
             onEdit={(text) => onEditPost(i, text)}
           />
+          {post.residualViolations.length > 0 && (
+            <div className="tc-warn">
+              <ViolationNote violations={post.residualViolations} />
+            </div>
+          )}
         </li>
       ))}
     </ol>

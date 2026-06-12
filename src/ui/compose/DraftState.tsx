@@ -19,6 +19,7 @@ import {
   IcX,
 } from '../icons';
 import { BundlePicker } from './BundlePicker';
+import { ViolationNote } from './ViolationNote';
 import { CapToggle } from './CapToggle';
 import { ErrorCard, type ErrorKind } from './ErrorCard';
 import { ReplyContextBanner } from './ReplyContextBanner';
@@ -375,6 +376,11 @@ export function DraftState({
                     by hand or regenerate.
                   </span>
                 </div>
+              </div>
+            )}
+            {!isThread && (first?.residualViolations.length ?? 0) > 0 && (
+              <div className="draft-warn">
+                <ViolationNote violations={first?.residualViolations ?? []} />
               </div>
             )}
             <div className="draft-actions">
