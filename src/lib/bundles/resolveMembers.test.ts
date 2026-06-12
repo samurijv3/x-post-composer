@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Bundle, LibraryItem } from '../../types';
-import { appendBundleMember, resolveBundleMembers } from './resolveMembers';
+import { appendBundleMember, moveBundleMember, resolveBundleMembers } from './resolveMembers';
 
 function item(id: string): LibraryItem {
   return {
@@ -67,5 +67,37 @@ describe('appendBundleMember', () => {
     const b = bundle(['a']);
     appendBundleMember(b, 'z');
     expect(b.memberIds).toEqual(['a']);
+  });
+});
+
+describe('moveBundleMember', () => {
+  const present = (...ids: string[]) => new Set(ids);
+
+  it('swaps with the adjacent member', () => {
+    const out = moveBundleMember(bundle(['a', 'b', 'c']), 'b', 'up', present('a', 'b', 'c'));
+    expect(out.memberIds).toEqual(['b', 'a', 'c']);
+    const down = moveBundleMember(bundle(['a', 'b', 'c']), 'b', 'down', present('a', 'b', 'c'));
+    expect(down.memberIds).toEqual(['a', 'c', 'b']);
+  });
+
+  it('skips over dangling ids — one visible step, not one stored slot', () => {
+    // 'gone' sits between a and b but no longer resolves; moving b up
+    // must land it ABOVE a, not invisibly inside the hole.
+    const out = moveBundleMember(bundle(['a', 'gone', 'b']), 'b', 'up', present('a', 'b'));
+    expect(out.memberIds).toEqual(['b', 'gone', 'a']);
+  });
+
+  it('returns the bundle by identity at the visible ends and for unknown ids', () => {
+    const b = bundle(['a', 'gone', 'b']);
+    const ids = present('a', 'b');
+    expect(moveBundleMember(b, 'a', 'up', ids)).toBe(b);
+    expect(moveBundleMember(b, 'b', 'down', ids)).toBe(b);
+    expect(moveBundleMember(b, 'nope', 'down', ids)).toBe(b);
+  });
+
+  it('never mutates the input bundle', () => {
+    const b = bundle(['a', 'b']);
+    moveBundleMember(b, 'b', 'up', present('a', 'b'));
+    expect(b.memberIds).toEqual(['a', 'b']);
   });
 });

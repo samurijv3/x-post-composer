@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Bundle, LibraryItem } from '../../types';
 import { resolveBundleMembers } from '../../lib/bundles';
-import { IcChevDown, IcChevR, IcEdit, IcPlus, IcTrash, IcX } from '../icons';
+import { IcChevDown, IcChevR, IcChevUp, IcEdit, IcPlus, IcTrash, IcX } from '../icons';
 
 interface BundleCreation {
   name: string;
@@ -28,6 +28,9 @@ interface BundleSectionProps {
   /** Reveal a member's row in Saved examples (scroll + flash) — the
    *  same path as the duplicate banner's "Show me". */
   onLocateMember: (itemId: string) => void;
+  /** Move a member one visible step (order shapes the prompt — the
+   *  members render as a numbered sequence). */
+  onMoveMember: (bundle: Bundle, itemId: string, direction: 'up' | 'down') => void;
   onDelete: (bundle: Bundle) => void;
 }
 
@@ -50,6 +53,7 @@ export function BundleSection({
   onRename,
   onRemoveMember,
   onLocateMember,
+  onMoveMember,
   onDelete,
 }: BundleSectionProps) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -134,6 +138,7 @@ export function BundleSection({
                 onRename={(name) => onRename(b, name)}
                 onRemoveMember={(itemId) => onRemoveMember(b, itemId)}
                 onLocateMember={onLocateMember}
+                onMoveMember={(itemId, dir) => onMoveMember(b, itemId, dir)}
                 onDelete={() => onDelete(b)}
               />
             ))}
@@ -152,6 +157,7 @@ interface BundleRowProps {
   onRename: (name: string) => void;
   onRemoveMember: (itemId: string) => void;
   onLocateMember: (itemId: string) => void;
+  onMoveMember: (itemId: string, direction: 'up' | 'down') => void;
   onDelete: () => void;
 }
 
@@ -163,6 +169,7 @@ function BundleRow({
   onRename,
   onRemoveMember,
   onLocateMember,
+  onMoveMember,
   onDelete,
 }: BundleRowProps) {
   const [renaming, setRenaming] = useState<boolean>(false);
@@ -247,6 +254,28 @@ function BundleRow({
                 onClick={() => onLocateMember(m.id)}
               >
                 {m.text}
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                style={{ width: 22, height: 22 }}
+                title="Move up"
+                aria-label="Move up"
+                disabled={idx === 0}
+                onClick={() => onMoveMember(m.id, 'up')}
+              >
+                <IcChevUp />
+              </button>
+              <button
+                type="button"
+                className="icon-btn"
+                style={{ width: 22, height: 22 }}
+                title="Move down"
+                aria-label="Move down"
+                disabled={idx === members.length - 1}
+                onClick={() => onMoveMember(m.id, 'down')}
+              >
+                <IcChevDown />
               </button>
               <button
                 type="button"

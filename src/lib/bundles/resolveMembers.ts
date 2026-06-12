@@ -45,3 +45,33 @@ export function appendBundleMember(bundle: Bundle, itemId: string): Bundle {
   if (bundle.memberIds.includes(itemId)) return bundle;
   return { ...bundle, memberIds: [...bundle.memberIds, itemId] };
 }
+
+/**
+ * Move a member one VISIBLE step up or down. The swap partner is the
+ * nearest neighbor that still resolves (`presentIds`), so a dangling
+ * id between two live members never swallows the move — dangling ids
+ * keep their own slots (they may be restored by a delete-undo).
+ * Returns the bundle BY IDENTITY when no move is possible (unknown id,
+ * or already at that end of the visible list).
+ */
+export function moveBundleMember(
+  bundle: Bundle,
+  itemId: string,
+  direction: 'up' | 'down',
+  presentIds: ReadonlySet<string>,
+): Bundle {
+  const ids = bundle.memberIds;
+  const from = ids.indexOf(itemId);
+  if (from === -1) return bundle;
+  const step = direction === 'up' ? -1 : 1;
+  for (let to = from + step; to >= 0 && to < ids.length; to += step) {
+    const neighbor = ids[to];
+    if (neighbor !== undefined && presentIds.has(neighbor)) {
+      const next = [...ids];
+      next[from] = neighbor;
+      next[to] = itemId;
+      return { ...bundle, memberIds: next };
+    }
+  }
+  return bundle;
+}

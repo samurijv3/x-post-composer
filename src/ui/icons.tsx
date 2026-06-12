@@ -89,6 +89,11 @@ export const IcChevDown = (p: SVGProps<SVGSVGElement>) => (
     <path d="m6 9 6 6 6-6" />
   </Svg>
 );
+export const IcChevUp = (p: SVGProps<SVGSVGElement>) => (
+  <Svg {...p}>
+    <path d="m6 15 6-6 6 6" />
+  </Svg>
+);
 export const IcPlus = (p: SVGProps<SVGSVGElement>) => (
   <Svg {...p}>
     <path d="M12 5v14M5 12h14" />

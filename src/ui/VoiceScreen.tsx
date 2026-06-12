@@ -11,6 +11,7 @@ import {
   updateItem,
 } from '../storage';
 import { isMessageOfType, onNotice, sendToBackground, type BackgroundReply } from '../messaging';
+import { moveBundleMember } from '../lib/bundles';
 import type { Bundle, LibraryItem } from '../types';
 import { IcChevDown, IcChevR, IcPlus, IcVoice } from './icons';
 import type { ToastData } from './Toast';
@@ -217,6 +218,23 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
     }
   }
 
+  async function moveMember(
+    bundle: Bundle,
+    itemId: string,
+    direction: 'up' | 'down',
+  ): Promise<void> {
+    // One visible step: the pure move skips dangling ids, so the swap
+    // partner is always the neighbor the user can actually see.
+    const moved = moveBundleMember(bundle, itemId, direction, new Set(items.map((i) => i.id)));
+    if (moved === bundle) return;
+    try {
+      await updateBundle(moved);
+      await refreshBundles();
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Could not reorder the bundle.');
+    }
+  }
+
   async function removeBundle(bundle: Bundle): Promise<void> {
     try {
       await deleteBundle(bundle.id);
@@ -290,6 +308,7 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
         onRename={(b, name) => void renameBundle(b, name)}
         onRemoveMember={(b, itemId) => void removeBundleMember(b, itemId)}
         onLocateMember={onLocateItem}
+        onMoveMember={(b, itemId, dir) => void moveMember(b, itemId, dir)}
         onDelete={(b) => void removeBundle(b)}
       />
 
