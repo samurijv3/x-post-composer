@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { ChipPreset } from '../../types';
 import { X_HARD_LIMIT } from '../../lib/counting';
 import { DraftEditor } from './DraftEditor';
@@ -18,7 +18,8 @@ import {
   IcWarn,
   IcX,
 } from '../icons';
-import { BundlePicker } from './BundlePicker';
+import { CountRing } from './CountRing';
+import { SeedLine } from './SeedLine';
 import { ViolationNote } from './ViolationNote';
 import { CapToggle } from './CapToggle';
 import { ErrorCard, type ErrorKind } from './ErrorCard';
@@ -72,9 +73,14 @@ interface DraftStateProps {
   brief: BriefControls;
   draft: DraftView;
   refine: RefineControls;
-  /** Null when no bundles exist. Shown in the expanded brief so a
-   *  regenerate can switch or drop the seed. */
+  /** Drives the NEXT generation's seed; rendered as the expanded
+   *  brief's "Sounding like …" line. */
   bundlePicker: BundlePickerControls;
+  /** Counts for the seed menu's honest subtitles. */
+  libraryCount: number;
+  guaranteedStars: number;
+  /** The user's @handle — the draft renders as their tweet. */
+  handle: string;
   /** Name of the bundle that seeded the CURRENT draft (its content's
    *  seedBundleId resolved by ComposeScreen), or null when sampled.
    *  Distinct from the picker, which drives the NEXT generation. */
@@ -112,13 +118,60 @@ interface DraftStateProps {
   onOpenOptions: () => void;
 }
 
-/** Draft state — input collapses to a brief; the draft is the focal point. */
+/** One-letter monogram for the user's avatar disc. */
+function monogram(handle: string): string {
+  const ch = handle.replace(/^@/, '').charAt(0);
+  return ch === '' ? '·' : ch.toUpperCase();
+}
+
+/**
+ * The on-copy consequence sentence: what copying will do (or, once
+ * committed, what it did) — the two switches live behind "change".
+ */
+function copySentence(
+  committed: boolean,
+  shipToVoice: boolean,
+  filesInto: string | null,
+): ReactNode {
+  if (committed) {
+    if (!shipToVoice) return <>Not saved to Voice (switched off for this draft) — done.</>;
+    return (
+      <>
+        Saved to Voice
+        {filesInto ? (
+          <>
+            {' '}
+            and filed into <b>“{filesInto}”</b>
+          </>
+        ) : null}{' '}
+        — done. Next draft clears the bench (Undo for a few seconds).
+      </>
+    );
+  }
+  if (!shipToVoice) return <>Copying won’t save this draft to Voice</>;
+  return (
+    <>
+      Copying saves to Voice
+      {filesInto ? (
+        <>
+          {' '}
+          and files into <b>“{filesInto}”</b>
+        </>
+      ) : null}
+    </>
+  );
+}
+
+/** Draft state — the draft IS a tweet; everything else stays quiet. */
 export function DraftState({
   reply,
   brief,
   draft,
   refine,
   bundlePicker,
+  libraryCount,
+  guaranteedStars,
+  handle,
   seedBundleName,
   fileToBundle,
   onToggleFileToBundle,
@@ -143,55 +196,53 @@ export function DraftState({
   onOpenOptions,
 }: DraftStateProps) {
   const hasContext = reply.replyContext !== null;
-  const mode: 'post' | 'reply' = hasContext ? 'reply' : 'post';
   const isThread = draft.kind === 'thread';
-  const badgeText = isThread ? 'thread' : mode;
   const first = draft.posts[0];
   const copiedCount = draft.posts.filter((p) => p.copied).length;
   const nextUncopied = draft.posts.findIndex((p) => !p.copied);
   // Peek at the tweet being replied to: the draft dominates the canvas,
-  // but the full context card (exactly as it looked pre-draft) is one
-  // click away — from the collapsed bar's "to @handle" or the expanded
-  // card's "Replying to" row.
+  // but the full context card stays one click away.
   const [contextOpen, setContextOpen] = useState<boolean>(false);
+  // The on-copy switches, folded behind the sentence's "change" link.
+  const [changeOpen, setChangeOpen] = useState<boolean>(false);
   const peekTitle = contextOpen
     ? "Hide the tweet you're replying to"
     : "Show the tweet you're replying to";
+
+  const ringLimit = brief.charCap ? X_HARD_LIMIT : brief.softCapChars;
+  const filesInto = shipToVoice !== null && fileToBundle ? seedBundleName : null;
+
   return (
     <>
+      {/* BRIEF — one quiet hairline row; opens in place */}
       {!expanded ? (
         <>
-          <div className="brief">
-            {/* One chip, not two: in reply mode the mode IS "reply to
-                @handle", and the whole chip is the context peek. While
-                the peek is open, the chip yields — the card directly
-                below IS the expanded version of it (one header, two
-                sizes, never both). */}
-            {hasContext && !contextOpen ? (
+          <div className="briefbar">
+            {hasContext && (
               <button
                 type="button"
-                className="brief-peek"
+                className="bb-to"
                 title={peekTitle}
-                aria-expanded={false}
-                onClick={() => setContextOpen(true)}
+                aria-expanded={contextOpen}
+                onClick={() => setContextOpen((v) => !v)}
               >
-                reply to @{reply.replyContext?.targetAuthorHandle ?? '—'}
+                @{reply.replyContext?.targetAuthorHandle ?? '—'}
               </button>
-            ) : !hasContext ? (
-              <span className={`badge ${isThread ? 'reply' : mode}`}>{badgeText}</span>
-            ) : null}
+            )}
             <button
               type="button"
-              className="brief-main"
+              className="bb-main"
               onClick={() => setExpanded(true)}
               title="Edit your brief"
             >
-              <span className="brief-text">{briefText}</span>
-              <IcEdit className="brief-edit" />
+              <span className="bb-text">
+                <b>{briefText}</b>
+              </span>
+              <IcEdit className="bb-edit" />
             </button>
             <button
               type="button"
-              className="icon-btn brief-discard"
+              className="icon-btn bb-trash"
               title="Discard and start over"
               aria-label="Discard and start over"
               onClick={onDiscard}
@@ -208,10 +259,8 @@ export function DraftState({
           )}
         </>
       ) : (
-        <div className="card inset" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="editbrief">
           {hasContext && reply.replyContext ? (
-            // The compact row and the full card are the SAME header in
-            // two sizes: opening replaces one with the other.
             contextOpen ? (
               <ReplyContextCard
                 context={reply.replyContext}
@@ -219,10 +268,10 @@ export function DraftState({
                 onCollapse={() => setContextOpen(false)}
               />
             ) : (
-              <div className="brief-ctx">
+              <div className="eb-ctx">
                 <button
                   type="button"
-                  className="brief-ctx-toggle"
+                  className="eb-ctx-toggle"
                   title={peekTitle}
                   aria-expanded={false}
                   onClick={() => setContextOpen(true)}
@@ -251,289 +300,304 @@ export function DraftState({
               onToggle={reply.onToggleReplyContextMode}
             />
           )}
-          {/* Same grounding cluster as PreDraftState: the seed sits
-              with the context, above the angle. */}
-          <BundlePicker picker={bundlePicker} />
-          <label className="fld">
-            <span className="fld-label">
-              {hasContext ? 'Your angle' : 'What do you want to say?'}
-            </span>
-            <textarea
-              rows={3}
-              value={brief.bullets}
-              onKeyDown={brief.onGenKey}
-              onChange={(e) => brief.setBullets(e.target.value)}
-            />
-          </label>
-          <CapToggle charCap={brief.charCap} setCharCap={brief.setCharCap} />
+          <textarea
+            className="eb-input"
+            rows={3}
+            value={brief.bullets}
+            onKeyDown={brief.onGenKey}
+            onChange={(e) => brief.setBullets(e.target.value)}
+            placeholder={hasContext ? "What's your angle?" : 'What do you want to say?'}
+          />
+          <SeedLine picker={bundlePicker} libraryCount={libraryCount} starCount={guaranteedStars} />
           {threadControls && <ModeControls controls={threadControls} />}
-          <div className="pillrow">
-            <button type="button" className="btn primary" onClick={onRegenerate}>
-              <IcRefresh /> Regenerate
-            </button>
+          <div className="eb-row">
+            <CapToggle charCap={brief.charCap} setCharCap={brief.setCharCap} />
+            {!brief.charCap && <span className="hint">soft cap {brief.softCapChars}</span>}
+            <span className="head-spacer" />
             <button type="button" className="btn ghost" onClick={() => setExpanded(false)}>
               Cancel
             </button>
+            <button type="button" className="btn primary" onClick={onRegenerate}>
+              <IcRefresh /> Regenerate
+            </button>
           </div>
         </div>
-      )}
-
-      {/* Pure provenance — the compose UI states plainly when a bundle
-          drove the current draft's examples. What copying DOES with it
-          lives in the "On copy" row below, beside its sibling switch. */}
-      {seedBundleName && (
-        <p className="help bundle-note">Voice examples from bundle “{seedBundleName}”.</p>
       )}
 
       {error && <ErrorCard kind={error} onRetry={onRetry} onSettings={onOpenOptions} />}
 
-      {/* DRAFT CARD — focal point */}
-      <div className="draft">
-        <div className="draft-head">
-          <span className="eyebrow">{isThread ? 'Your thread' : 'Your draft'}</span>
-          {draft.refined && !busy && <span className="badge reply">refined</span>}
-          {draft.handEdited && !busy && (
-            <span className="badge" title="You've edited this draft — your text is kept as-is">
-              edited
-            </span>
-          )}
-          {draft.committed && !busy && (
-            <span className="badge ok" title="Copied to X — edits after this re-open the draft">
-              copied
-            </span>
-          )}
-          <span className="head-spacer" />
-          <button
-            type="button"
-            className={`minitoggle ${brief.charCap ? 'on' : 'off'}`}
-            title={
-              brief.charCap
-                ? '≤280 cap is ON — click to switch to uncapped'
-                : draft.posts.some((p) => p.over || p.count > X_HARD_LIMIT)
-                  ? 'Uncapped — click to REFIT this draft to ≤280 (content preserved, never regenerated)'
-                  : 'Uncapped — click to enforce ≤280'
-            }
-            onClick={() => brief.setCharCap(!brief.charCap)}
-          >
-            ≤280
-          </button>
-          {busy && draft.posts.length > 0 ? (
-            <span className="upd">
-              <span className="upd-dot" />
-              updating…
-            </span>
+      {/* THE DRAFT, rendered as a tweet */}
+      <div className={`draftwrap ${expanded ? 'is-behind' : ''}`}>
+        {!isThread && <span className="avatar av-40">{monogram(handle)}</span>}
+        <div className="draft-body">
+          {busy && draft.posts.length === 0 ? (
+            <>
+              <div className="tw-head">
+                <span className="tw-meta">@{handle || '—'} · drafting</span>
+              </div>
+              <div className="drafting">
+                <div className="shim" style={{ width: '92%' }} />
+                <div className="shim" style={{ width: '100%' }} />
+                <div className="shim" style={{ width: '64%' }} />
+              </div>
+              <p className="drafting-line">
+                <span className="pulse-dot" /> Drafting in your voice…
+              </p>
+            </>
           ) : isThread ? (
-            <span className="count" title="Posts copied so far — copying every post commits">
-              {copiedCount}/{draft.posts.length} copied
-            </span>
+            <>
+              <div className="threadbar">
+                <span className="tb-title">Thread</span>
+                {threadControls && <ModeControls controls={threadControls} compact />}
+                <span className="head-spacer" />
+                <span className="count" title="Posts copied so far — copying every post commits">
+                  {copiedCount}/{draft.posts.length} copied
+                </span>
+              </div>
+              <ThreadCards
+                posts={draft.posts}
+                charCap={brief.charCap}
+                busy={busy}
+                aimedPost={refine.scope}
+                onEditPost={onEditPost}
+                onCopyPost={onCopyPost}
+                onRewritePost={onRewritePost}
+                onAimPost={refine.onAimPost}
+              />
+            </>
           ) : (
-            <span
-              className={`count ${(first?.over ?? false) ? 'over' : ''}`}
-              title="X-weighted count — URLs always count as 23, some characters as 2"
-            >
-              {first?.count ?? 0}
-              {brief.charCap ? ` / ${X_HARD_LIMIT}` : ' chars'}
-            </span>
-          )}
-        </div>
-        {busy && draft.posts.length === 0 ? (
-          <div className="drafting">
-            <div className="shim" style={{ width: '92%' }} />
-            <div className="shim" style={{ width: '100%' }} />
-            <div className="shim" style={{ width: '64%' }} />
-          </div>
-        ) : (
-          <>
-            {isThread ? (
-              <div className="draft-body">
-                <ThreadCards
-                  posts={draft.posts}
-                  charCap={brief.charCap}
-                  busy={busy}
-                  aimedPost={refine.scope}
-                  onEditPost={onEditPost}
-                  onCopyPost={onCopyPost}
-                  onRewritePost={onRewritePost}
-                  onAimPost={refine.onAimPost}
-                />
+            <>
+              <div className="tw-head">
+                <span className="tw-meta">@{handle || '—'} · draft</span>
+                <span className="head-spacer" />
+                <span className="draft-tags">
+                  {draft.committed && !busy ? (
+                    <span
+                      className="ok-tag"
+                      title="Copied to X — edits after this re-open the draft"
+                    >
+                      ✓ copied
+                    </span>
+                  ) : (
+                    <>
+                      {draft.refined && !busy && 'refined'}
+                      {draft.refined && draft.handEdited && !busy && ' · '}
+                      {draft.handEdited && !busy && 'edited'}
+                    </>
+                  )}
+                  {busy && (
+                    <span className="upd">
+                      <span className="pulse-dot" /> updating…
+                    </span>
+                  )}
+                </span>
               </div>
-            ) : (
-              <div className="draft-body">
-                <DraftEditor
-                  text={first?.text ?? ''}
-                  violations={first?.residualViolations ?? []}
-                  disabled={busy}
-                  onEdit={(text) => onEditPost(0, text)}
+              <DraftEditor
+                text={first?.text ?? ''}
+                violations={first?.residualViolations ?? []}
+                disabled={busy}
+                onEdit={(text) => onEditPost(0, text)}
+              />
+              <div className="draft-foot">
+                <CountRing
+                  count={first?.count ?? 0}
+                  limit={ringLimit}
+                  over={first?.over ?? false}
+                  committed={draft.committed && !busy}
                 />
+                <span className={`count ${(first?.over ?? false) ? 'over' : ''}`}>
+                  {first?.count ?? 0}
+                  {brief.charCap ? ` / ${String(X_HARD_LIMIT)}` : ' chars'}
+                </span>
               </div>
-            )}
-            {!isThread && (first?.over ?? false) && (
-              <div className="draft-warn">
+              {(first?.over ?? false) && (
                 <div className="callout warn">
                   <IcWarn />
                   <span>
-                    Over by {(first?.count ?? 0) - X_HARD_LIMIT}. A tighten pass already ran — trim
-                    by hand or regenerate.
+                    <strong>Over by {(first?.count ?? 0) - X_HARD_LIMIT}.</strong> A tighten pass
+                    already ran — trim by hand or regenerate.
                   </span>
                 </div>
-              </div>
-            )}
-            {!isThread && (first?.residualViolations.length ?? 0) > 0 && (
-              <div className="draft-warn">
+              )}
+              {(first?.residualViolations.length ?? 0) > 0 && (
                 <ViolationNote violations={first?.residualViolations ?? []} />
-              </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ACTIONS — pill + round ghost icons; kbd hints in tooltips */}
+      <div className="draft-actions">
+        {draft.committed && !busy ? (
+          <>
+            <button
+              type="button"
+              className="btn dark lg done-btn"
+              onClick={onDone}
+              title="Wrap up — clear the bench for the next one (Undo for a few seconds)"
+            >
+              <IcCheck className="done-check" /> Done — next draft
+            </button>
+            <span className="head-spacer" />
+            {!isThread && (
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={onCopy}
+                title="Copy again"
+                aria-label="Copy again"
+              >
+                <IcCopy />
+              </button>
             )}
-            <div className="draft-actions">
-              {/* The two exits mean what they look like: the trash up in
-                  the brief bar abandons (destructive), Done completes.
-                  Once committed the draft is already saved/filed, so the
-                  primary action becomes the clean-bench exit; re-copy
-                  stays one click away (singles keep a copy button,
-                  thread cards each have their own). */}
-              {draft.committed ? (
+            <button
+              type="button"
+              className="icon-btn"
+              title="Regenerate — same brief, fresh take"
+              aria-label="Regenerate"
+              onClick={onRegenerate}
+            >
+              <IcRefresh />
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="btn primary lg"
+              onClick={onCopy}
+              disabled={busy || (isThread && nextUncopied === -1)}
+              title={
+                isThread
+                  ? 'Copy the next post — Ctrl+Shift+Enter while the panel is focused'
+                  : 'Copy the draft — Ctrl+Shift+Enter while the panel is focused'
+              }
+            >
+              {isThread ? (
+                nextUncopied === -1 ? (
+                  <>
+                    <IcCheck /> All copied
+                  </>
+                ) : (
+                  <>
+                    Copy {nextUncopied + 1} of {draft.posts.length}
+                  </>
+                )
+              ) : draft.copied ? (
                 <>
-                  <button
-                    type="button"
-                    className="btn primary ok lg"
-                    onClick={onDone}
-                    disabled={busy}
-                    title="Wrap up — clear the bench for the next one (Undo for a few seconds)"
-                  >
-                    <IcCheck /> Done — next draft
-                  </button>
-                  {!isThread && (
-                    <button
-                      type="button"
-                      className="btn lg"
-                      onClick={onCopy}
-                      disabled={busy}
-                      title="Copy again"
-                      aria-label="Copy again"
-                    >
-                      <IcCopy />
-                    </button>
-                  )}
+                  <IcCheck /> Copied
                 </>
               ) : (
-                <button
-                  type="button"
-                  className="btn primary lg"
-                  onClick={onCopy}
-                  disabled={busy || (isThread && nextUncopied === -1)}
-                  title={
-                    isThread
-                      ? 'Copy the next post — Ctrl+Shift+Enter while the panel is focused'
-                      : 'Copy the draft — Ctrl+Shift+Enter while the panel is focused'
-                  }
-                >
-                  {isThread ? (
-                    nextUncopied === -1 ? (
-                      <>
-                        <IcCheck /> All copied
-                      </>
-                    ) : (
-                      <>
-                        <IcCopy /> Copy {nextUncopied + 1}/{draft.posts.length}{' '}
-                        <span className="kbd kbd-on">⌃⇧↵</span>
-                      </>
-                    )
-                  ) : draft.copied ? (
-                    <>
-                      <IcCheck /> Copied
-                    </>
-                  ) : (
-                    <>
-                      <IcCopy /> Copy to X <span className="kbd kbd-on">⌃⇧↵</span>
-                    </>
-                  )}
-                </button>
+                <>Copy to X</>
               )}
-              <button
-                type="button"
-                className="btn lg"
-                title="Polish — one tightening pass, voice and meaning preserved"
-                aria-label="Polish the draft"
-                onClick={onPolish}
-                disabled={busy}
-              >
-                <IcSparkle />
-              </button>
-              <button
-                type="button"
-                className="btn lg"
-                title="Regenerate — same brief, fresh take"
-                aria-label="Regenerate"
-                onClick={onRegenerate}
-                disabled={busy}
-              >
-                <IcRefresh />
-              </button>
-              <button
-                type="button"
-                className="btn lg"
-                title="Undo last change"
-                aria-label="Undo"
-                disabled={!draft.canUndo || busy}
-                onClick={onUndo}
-              >
-                <IcUndo />
-              </button>
-            </div>
-            {/* Copy's side effects, stated in one place. The bundle
-                switch depends on the voice switch (no save → nothing
-                to file) — shown disabled, not hidden, so the
-                dependency is visible. */}
-            {shipToVoice !== null && (
-              <div className="copy-effects">
-                <span className="ce-label">On copy</span>
-                <label
-                  className="voice-toggle"
-                  title={
-                    shipToVoice
-                      ? "Copying saves this draft to Voice as a 'shipped' example — click to keep this one out"
-                      : "This draft won't be saved to Voice on copy — click to include it"
-                  }
-                >
-                  <span className="switch sm">
-                    <input type="checkbox" checked={shipToVoice} onChange={onToggleShipToVoice} />
-                    <span className="track" />
-                  </span>
-                  <span>save to Voice</span>
-                </label>
-                {seedBundleName && (
-                  <label
-                    className={`voice-toggle ${!shipToVoice ? 'dep-off' : ''}`}
-                    title={
-                      !shipToVoice
-                        ? 'Saving to Voice is off for this draft — nothing to file into the bundle'
-                        : fileToBundle
-                          ? 'The shipped example also joins the bundle — click to keep this one out'
-                          : 'This draft won’t be filed into the bundle — click to include it'
-                    }
-                  >
-                    <span className="switch sm">
-                      <input
-                        type="checkbox"
-                        checked={shipToVoice && fileToBundle}
-                        disabled={!shipToVoice}
-                        onChange={onToggleFileToBundle}
-                      />
-                      <span className="track" />
-                    </span>
-                    <span className="ce-name">file into “{seedBundleName}”</span>
-                  </label>
-                )}
-              </div>
-            )}
+            </button>
+            <span className="head-spacer" />
+            <button
+              type="button"
+              className="icon-btn"
+              title="Polish — one tightening pass, voice and meaning preserved"
+              aria-label="Polish the draft"
+              onClick={onPolish}
+              disabled={busy}
+            >
+              <IcSparkle />
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              title="Regenerate — same brief, fresh take"
+              aria-label="Regenerate"
+              onClick={onRegenerate}
+              disabled={busy}
+            >
+              <IcRefresh />
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              title="Undo last change"
+              aria-label="Undo"
+              disabled={!draft.canUndo || busy}
+              onClick={onUndo}
+            >
+              <IcUndo />
+            </button>
           </>
         )}
       </div>
 
-      {/* REFINE — chips + steer */}
-      <div className={`refine ${busy ? 'is-busy' : ''}`} aria-disabled={busy}>
+      {/* The on-copy consequence sentence; switches behind "change". */}
+      {shipToVoice !== null && (
+        <div className="copyline">
+          <p className="hint">
+            {copySentence(draft.committed && !busy, shipToVoice, filesInto)}
+            {!(draft.committed && !busy) && (
+              <>
+                {' · '}
+                <button
+                  type="button"
+                  className="textlink"
+                  aria-expanded={changeOpen}
+                  onClick={() => setChangeOpen((v) => !v)}
+                >
+                  change
+                </button>
+              </>
+            )}
+          </p>
+          {changeOpen && !(draft.committed && !busy) && (
+            <div className="copy-effects">
+              <label
+                className="voice-toggle"
+                title={
+                  shipToVoice
+                    ? "Copying saves this draft to Voice as a 'shipped' example — click to keep this one out"
+                    : "This draft won't be saved to Voice on copy — click to include it"
+                }
+              >
+                <span className="switch sm">
+                  <input type="checkbox" checked={shipToVoice} onChange={onToggleShipToVoice} />
+                  <span className="track" />
+                </span>
+                <span>save to Voice</span>
+              </label>
+              {seedBundleName && (
+                <label
+                  className={`voice-toggle ${!shipToVoice ? 'dep-off' : ''}`}
+                  title={
+                    !shipToVoice
+                      ? 'Saving to Voice is off for this draft — nothing to file into the bundle'
+                      : fileToBundle
+                        ? 'The shipped example also joins the bundle — click to keep this one out'
+                        : 'This draft won’t be filed into the bundle — click to include it'
+                  }
+                >
+                  <span className="switch sm">
+                    <input
+                      type="checkbox"
+                      checked={shipToVoice && fileToBundle}
+                      disabled={!shipToVoice}
+                      onChange={onToggleFileToBundle}
+                    />
+                    <span className="track" />
+                  </span>
+                  <span className="ce-name">file into “{seedBundleName}”</span>
+                </label>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* REFINE — chips + steer, no eyebrows; dims once committed */}
+      <div
+        className={`refine ${busy ? 'is-busy' : ''} ${draft.committed && !busy ? 'is-done' : ''}`}
+        aria-disabled={busy}
+      >
         {refine.scope !== null && (
           <div className="refine-scope" role="status">
-            Aimed at post {refine.scope + 1} — chips and steering change only it
+            Refining post {refine.scope + 1} only
             <button
               type="button"
               className="icon-btn"
@@ -547,31 +611,26 @@ export function DraftState({
           </div>
         )}
         {refine.chips.length > 0 && (
-          <div className="refine-block">
-            <span className="eyebrow">Quick refine</span>
-            <div className="pillrow">
-              {refine.chips.map((c) => {
-                const n = refine.chipCounts[c.id] ?? 0;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={`chip ${refine.flash === c.id ? 'flash' : ''}`}
-                    title={c.instruction}
-                    disabled={busy}
-                    onClick={() => refine.onApplyChip(c)}
-                  >
-                    {c.label}
-                    {n >= 2 && <span className="chip-x">×{n}</span>}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="help">Tap to apply. Tap again to push the same direction further.</p>
+          <div className="chiprow">
+            {refine.chips.map((c) => {
+              const n = refine.chipCounts[c.id] ?? 0;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`chip ${refine.flash === c.id ? 'flash' : ''}`}
+                  title={`${c.instruction} — tap again to push further`}
+                  disabled={busy}
+                  onClick={() => refine.onApplyChip(c)}
+                >
+                  {c.label}
+                  {n >= 2 && <span className="chip-x">×{n}</span>}
+                </button>
+              );
+            })}
           </div>
         )}
-        <div className="refine-block">
-          <span className="eyebrow">Steer it</span>
+        <div className="steer">
           <textarea
             rows={2}
             maxLength={FREEFORM_MAX}
@@ -579,17 +638,17 @@ export function DraftState({
             disabled={busy}
             onKeyDown={refine.onSteerKey}
             onChange={(e) => refine.setSteerText(e.target.value)}
-            placeholder="tell it what to change — lead with the joke, cut the hedge, more of the dry humor…"
+            placeholder="Tell it what to change — lead with the joke, cut the hedge…"
           />
-          <div className="steer-apply">
-            <span className="help">Type feedback in your own words, then apply.</span>
+          <div className="steer-row">
+            <span className="hint">⌘↵</span>
             <button
               type="button"
               className="btn primary sm"
               disabled={!refine.canApplySteer}
               onClick={refine.onApplySteer}
             >
-              Apply <span className="kbd kbd-on">⌘↵</span>
+              Apply
             </button>
           </div>
         </div>

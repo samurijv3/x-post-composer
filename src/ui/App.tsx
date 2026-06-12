@@ -242,7 +242,9 @@ function PanelShell() {
             )}
           </div>
         )}
-        {screen === 'compose' && <ComposeScreen onToast={fireToast} onOpenOptions={openOptions} />}
+        {screen === 'compose' && (
+          <ComposeScreen handle={handle} onToast={fireToast} onOpenOptions={openOptions} />
+        )}
         {screen === 'voice' && (
           <VoiceScreen
             onToast={fireToast}

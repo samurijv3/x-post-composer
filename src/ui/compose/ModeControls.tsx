@@ -11,8 +11,44 @@ export const THREAD_TARGET_MAX = 9;
  * only). Lives in the grounding cluster of both compose states; hidden
  * entirely while a reply context exists (posts-only threads in v1).
  */
-export function ModeControls({ controls }: { controls: ThreadModeControls }) {
+export function ModeControls({
+  controls,
+  compact = false,
+}: {
+  controls: ThreadModeControls;
+  /** Stepper only — the thread bar over an active thread draft. */
+  compact?: boolean;
+}) {
   const { composeMode, onSetMode, target, onSetTarget, busy } = controls;
+  if (compact) {
+    return (
+      <span
+        className="stepper"
+        title="A soft target — changing it over an active draft repacks the same content"
+      >
+        <button
+          type="button"
+          className="icon-btn tt-step"
+          aria-label="Fewer posts"
+          disabled={busy || target <= THREAD_TARGET_MIN}
+          onClick={() => onSetTarget(Math.max(THREAD_TARGET_MIN, target - 1))}
+        >
+          <IcChevDown />
+        </button>
+        <span className="n">≈{target}</span>
+        <button
+          type="button"
+          className="icon-btn tt-step"
+          aria-label="More posts"
+          disabled={busy || target >= THREAD_TARGET_MAX}
+          onClick={() => onSetTarget(Math.min(THREAD_TARGET_MAX, target + 1))}
+        >
+          <IcChevUp />
+        </button>
+        <span className="hint">posts</span>
+      </span>
+    );
+  }
   return (
     <div className="mode-controls">
       <div className="seg" style={{ flex: '0 0 auto' }}>

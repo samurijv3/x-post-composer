@@ -691,15 +691,13 @@ textarea::placeholder {
   display: none;
 }
 .switch .track {
-  width: 38px;
-  height: 22px;
+  width: 36px;
+  height: 20px;
   border-radius: 999px;
-  background: var(--surface-3);
-  border: 1px solid var(--border-strong);
+  background: var(--line-2);
+  border: 0;
   position: relative;
-  transition:
-    background 0.16s,
-    border-color 0.16s;
+  transition: background 0.15s;
   flex-shrink: 0;
 }
 .switch .track::after {
@@ -710,36 +708,32 @@ textarea::placeholder {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.16s;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
 }
 .switch input:checked + .track {
   background: var(--accent);
-  border-color: var(--accent);
 }
 .switch input:checked + .track::after {
   transform: translateX(16px);
-  background: var(--on-accent);
 }
+/* The armed-capture variant keeps the same blue — green is status,
+   never a control fill (reskin). */
 .switch input:checked + .track.track-ok {
-  background: var(--ok);
-  border-color: var(--ok);
+  background: var(--accent);
 }
-/* Compact switch — for quiet inline rows (the draft card's On-copy
-   footer), where the full 38px track overpowers its fs-xs label. */
+/* Compact switch — quiet inline rows. */
 .switch.sm .track {
-  width: 28px;
-  height: 16px;
+  width: 32px;
+  height: 18px;
 }
 .switch.sm .track::after {
-  top: 1px;
-  left: 1px;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 .switch.sm input:checked + .track::after {
-  transform: translateX(12px);
+  transform: translateX(14px);
 }
 
 .status {
@@ -2822,4 +2816,454 @@ code {
 }
 .star-btn.starred svg {
   fill: var(--accent);
+}
+
+/* ============================================================
+   Reskin phase 3 — compose: tweet anatomy, ring, brief bar,
+   seed line + menu, editbrief, copyline, refine.
+   ============================================================ */
+.avatar {
+  border-radius: 50%;
+  background: var(--field);
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+  user-select: none;
+}
+.avatar.av-40 {
+  width: 40px;
+  height: 40px;
+  font-size: var(--fs-base);
+}
+.avatar.av-36 {
+  width: 36px;
+  height: 36px;
+  font-size: var(--fs-md);
+}
+.avatar.av-30 {
+  width: 30px;
+  height: 30px;
+  font-size: var(--fs-sm);
+}
+.tw-head {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+.tw-name {
+  font-weight: 700;
+  font-size: var(--fs-base);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tw-meta {
+  color: var(--text-2);
+  font-size: var(--fs-base);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The collapsed brief — one quiet hairline row. */
+.briefbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 16px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  border-bottom: 1px solid var(--line);
+}
+.briefbar .bb-to {
+  font: inherit;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.briefbar .bb-to:hover {
+  text-decoration: underline;
+}
+.briefbar .bb-main {
+  font: inherit;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  cursor: pointer;
+  text-align: left;
+}
+.briefbar .bb-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.briefbar .bb-text b {
+  color: var(--text);
+  font-weight: 600;
+}
+.briefbar .bb-edit {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.briefbar .icon-btn {
+  width: 28px;
+  height: 28px;
+}
+.briefbar .icon-btn svg {
+  width: 15px;
+  height: 15px;
+}
+.briefbar .bb-trash:hover {
+  color: var(--danger);
+  background: var(--danger-weak);
+}
+
+/* The expanded brief — opens IN PLACE, no card-in-card. */
+.editbrief {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.editbrief .eb-ctx {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.editbrief .eb-input,
+.editbrief textarea.eb-input {
+  font: inherit;
+  font-size: var(--fs-md);
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  background: var(--field);
+  color: var(--text);
+  padding: 10px 14px;
+  resize: none;
+  outline: none;
+  line-height: 1.5;
+}
+.editbrief .eb-input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+  box-shadow: none;
+}
+.editbrief .eb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.editbrief .seedwrap {
+  padding: 0;
+}
+.editbrief .seedline {
+  margin: 0;
+}
+
+/* THE DRAFT as a tweet. */
+.draftwrap {
+  padding: 16px 16px 0;
+  display: flex;
+  gap: 12px;
+}
+.draftwrap.is-behind {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.draftwrap .draft-body {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 12px;
+}
+.draft-tags {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ok-tag {
+  color: var(--ok);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.draft-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.draft-foot .count {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.draft-foot .count.over {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* Count ring. */
+.ring {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.ring circle {
+  fill: none;
+  stroke-width: 2.2;
+}
+.ring .ring-track {
+  stroke: var(--line);
+}
+.ring .ring-bar {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  transition: stroke-dasharray 0.16s;
+}
+.ring.is-over .ring-bar {
+  stroke: var(--danger);
+}
+.ring.is-committed .ring-bar {
+  stroke: var(--ok);
+}
+
+/* Actions + copyline. */
+.draft-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px 6px;
+  border-top: 1px solid var(--line);
+}
+.done-btn .done-check {
+  color: var(--ok);
+}
+.copyline {
+  padding: 4px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.copyline .hint b {
+  color: var(--text);
+  font-weight: 600;
+}
+.copyline .textlink {
+  font: inherit;
+  font-size: inherit;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+}
+.copyline .textlink:hover {
+  text-decoration: underline;
+}
+
+/* Drafting skeleton — keeps the tweet anatomy. */
+.drafting-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-sm);
+  color: var(--accent);
+  margin: 10px 0 0;
+}
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: pulse 1.8s ease-in-out infinite;
+  box-shadow: 0 0 0 3px var(--accent-weak);
+}
+
+/* Thread bar over an active thread draft. */
+.threadbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0 10px;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.threadbar .tb-title {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--text);
+}
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.stepper .icon-btn {
+  width: 24px;
+  height: 24px;
+}
+.stepper .icon-btn svg {
+  width: 13px;
+  height: 13px;
+}
+.stepper .n {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--text);
+  min-width: 22px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Seed line + menu. */
+.seedwrap {
+  position: relative;
+  padding: 0 16px 10px;
+}
+.seedline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  padding: 3px 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.seedline svg {
+  width: 13px;
+  height: 13px;
+}
+.seedline:hover {
+  text-decoration: underline;
+}
+.seedmenu {
+  position: absolute;
+  left: 16px;
+  top: calc(100% - 4px);
+  width: min(300px, calc(100vw - 48px));
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: 30;
+}
+.sm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  cursor: pointer;
+  font-size: var(--fs-md);
+  font-family: inherit;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.sm-row:hover {
+  background: var(--hover);
+}
+.sm-row .t {
+  font-weight: 700;
+}
+.sm-row .c {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.sm-row .chk {
+  margin-left: auto;
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.sm-div {
+  height: 1px;
+  background: var(--line);
+}
+.sm-foot {
+  padding: 9px 14px 11px;
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.45;
+  border-top: 1px solid var(--line);
+}
+
+/* Refine, de-eyebrowed. */
+.refine.is-done {
+  opacity: 0.5;
+}
+.chiprow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.steer {
+  margin-top: 12px;
+}
+.steer textarea {
+  font: inherit;
+  font-size: var(--fs-md);
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: var(--field);
+  color: var(--text);
+  padding: 10px 14px;
+  resize: none;
+  outline: none;
+  line-height: 1.45;
+}
+.steer textarea:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+  box-shadow: none;
+}
+.steer-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* The captoggle row item. */
+.captoggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
 }

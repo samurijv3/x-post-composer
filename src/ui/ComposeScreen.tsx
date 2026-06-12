@@ -51,6 +51,8 @@ import type {
 interface Props {
   onToast: (msg: string, action?: ToastData['action']) => void;
   onOpenOptions: () => void;
+  /** The user's @handle — the draft renders as their tweet. */
+  handle: string;
 }
 
 /**
@@ -58,7 +60,7 @@ interface Props {
  * rendering lives in ./compose (PreDraftState before a draft exists,
  * DraftState after).
  */
-export function ComposeScreen({ onToast, onOpenOptions }: Props) {
+export function ComposeScreen({ onToast, onOpenOptions, handle }: Props) {
   // ---- settings + library counts (live) ----
   const [chips, setChips] = useState<ChipPreset[]>([]);
   const [charCap, setCharCap] = useState<boolean>(true);
@@ -77,12 +79,14 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
       setCharCap(s.charCapDefault);
       setSoftCapChars(s.softCapChars);
       setSaveShippedDefault(s.saveShippedDrafts);
+      setStarSettings({ starCount: s.starCount, poolSize: s.poolSize });
     }
     void loadSettings();
     const unsub = subscribeSettings((s) => {
       setChips(s.chips);
       setSoftCapChars(s.softCapChars);
       setSaveShippedDefault(s.saveShippedDrafts);
+      setStarSettings({ starCount: s.starCount, poolSize: s.poolSize });
     });
     return () => {
       cancelled = true;
@@ -106,17 +110,32 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   // Counts are RESOLVED member counts — what seeding would actually
   // send — so the picker never claims members that no longer exist.
   const [bundleOptions, setBundleOptions] = useState<BundleOption[]>([]);
+  const [starredCount, setStarredCount] = useState<number>(0);
+  const [starSettings, setStarSettings] = useState<{ starCount: number; poolSize: number }>({
+    starCount: 0,
+    poolSize: 20,
+  });
   const [seedBundleId, setSeedBundleId] = useState<string | null>(null);
   const refreshBundleOptions = useCallback(async () => {
     try {
       const [allBundles, allItems] = await Promise.all([getAllBundles(), getAllItems()]);
       allBundles.sort((a, b) => b.createdAt - a.createdAt);
       setBundleOptions(
-        allBundles.map((b) => ({
-          id: b.id,
-          name: b.name,
-          memberCount: resolveBundleMembers(b.memberIds, allItems).members.length,
-        })),
+        allBundles.map((b) => {
+          const resolved = resolveBundleMembers(b.memberIds, allItems);
+          return {
+            id: b.id,
+            name: b.name,
+            memberCount: resolved.members.length,
+            missingCount: resolved.missingCount,
+          };
+        }),
+      );
+      // The seed menu's honest "★ N guaranteed" — only starrable
+      // sources count, mirroring the sampler's boundary.
+      setStarredCount(
+        allItems.filter((i) => i.favorite && (i.source === 'manual' || i.source === 'shipped'))
+          .length,
       );
     } catch {
       setBundleOptions([]);
@@ -806,6 +825,13 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     selectedId: seedBundleId,
     onSelect: setSeedBundleId,
   };
+  // What the star pool would actually guarantee — the sampler's own
+  // cap math, so the seed menu never overpromises.
+  const guaranteedStars = Math.min(
+    starredCount,
+    starSettings.starCount,
+    Math.floor(starSettings.poolSize / 2),
+  );
   const seedBundleName =
     content?.seedBundleId != null
       ? (bundleOptions.find((b) => b.id === content.seedBundleId)?.name ?? null)
@@ -859,6 +885,9 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
           draft={draftView}
           refine={refineControls}
           bundlePicker={bundlePicker}
+          libraryCount={libraryCount}
+          guaranteedStars={guaranteedStars}
+          handle={handle}
           seedBundleName={seedBundleName}
           fileToBundle={fileToBundle}
           onToggleFileToBundle={() => setFileToBundle((v) => !v)}

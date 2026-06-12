@@ -46,6 +46,8 @@ export interface BundleOption {
   id: string;
   name: string;
   memberCount: number;
+  /** Dangling member ids — surfaced honestly in the seed menu. */
+  missingCount: number;
 }
 
 /** The voice-seed picker (Phase 6). Always rendered — with zero
