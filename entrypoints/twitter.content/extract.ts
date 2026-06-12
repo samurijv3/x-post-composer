@@ -8,7 +8,7 @@
  * extension. Each helper is exported so fixture tests can pin the
  * specific markup assumption it encodes.
  */
-import type { RawCapture } from '../../src/types/capture';
+import type { RawCapture, RawThreadCapture } from '../../src/types/capture';
 import type { ReplyContext } from '../../src/types';
 import { isTruncatedRenderingOf, normalizeTweetText } from '../../src/lib/replyContext';
 
@@ -117,6 +117,112 @@ export function findGrandparentArticle(article: Element): Element | null {
   const prevCell = cell.previousElementSibling;
   if (!prevCell) return null;
   return prevCell.querySelector('article[data-testid="tweet"]');
+}
+
+/**
+ * Collect the self-reply SPINE around a clicked tweet on a status
+ * detail page (thread capture, roadmap Phase 10).
+ *
+ * The walk: UP through previous `cellInnerDiv` siblings while each
+ * holds an article by the same author (a mid-spine click finds the
+ * root), then DOWN from that root collecting the contiguous
+ * same-author run. It stops at the first cell without an article or
+ * with a foreign author — which is exactly what excludes other
+ * people's replies AND the author's own replies-to-replies deeper in
+ * the conversation (those always render after some foreign article).
+ *
+ * A root that is itself a reply (the "Replying to" marker, or a
+ * foreign article in the directly-preceding cell) is a THREADED REPLY,
+ * not a thread — v1 threads are standalone posts, so the walk degrades
+ * to a single capture there.
+ *
+ * Virtualization caveat: only RENDERED segments exist in the DOM, so
+ * a long thread collects what's on screen — the caller reports the
+ * honest count. Returns `[article]` (a spine of one) anywhere the walk
+ * doesn't apply; never throws into the page.
+ */
+export function collectSelfThreadSpine(article: Element): Element[] {
+  const single = [article];
+  if (!/^\/[^/]+\/status\/\d+/.test(window.location.pathname)) return single;
+  const author = readAuthorHandle(article);
+  if (author === null || author === '') return single;
+  const startCell = article.closest('[data-testid="cellInnerDiv"]');
+  if (!startCell) return single;
+
+  const sameAuthorArticle = (cell: Element | null): Element | null => {
+    const candidate = cell?.querySelector('article[data-testid="tweet"]') ?? null;
+    if (!candidate) return null;
+    const handle = readAuthorHandle(candidate);
+    if (handle === null || handle.toLowerCase() !== author.toLowerCase()) return null;
+    return candidate;
+  };
+
+  // Up to the spine root.
+  let rootCell: Element = startCell;
+  while (sameAuthorArticle(rootCell.previousElementSibling)) {
+    const prev = rootCell.previousElementSibling;
+    if (prev === null) break;
+    rootCell = prev;
+  }
+
+  // A reply-root means this chain hangs under someone else's tweet.
+  const rootArticle = sameAuthorArticle(rootCell);
+  if (rootArticle === null) return single;
+  const prevCell = rootCell.previousElementSibling;
+  const foreignParentAbove =
+    prevCell?.querySelector('article[data-testid="tweet"]') != null &&
+    sameAuthorArticle(prevCell) === null;
+  if (detectReplyContext(rootArticle) || foreignParentAbove) return single;
+
+  // Down from the root, collecting the contiguous same-author run.
+  const spine: Element[] = [];
+  let cell: Element | null = rootCell;
+  while (cell !== null) {
+    const segment = sameAuthorArticle(cell);
+    if (segment === null) break;
+    spine.push(segment);
+    cell = cell.nextElementSibling;
+  }
+  return spine.length === 0 ? single : spine;
+}
+
+/**
+ * Read a collected spine into a thread payload. Every segment must
+ * carry readable text (the truncation gate runs in the caller, before
+ * this); the root article supplies the author fields. Mirrors
+ * `extractTweet`'s failure vocabulary.
+ */
+export function extractThread(
+  spine: Element[],
+): RawThreadCapture | 'missing-text' | 'missing-author' | 'media-only' {
+  const root = spine[0];
+  if (root === undefined) return 'missing-text';
+  const authorHandle = readAuthorHandle(root);
+  if (authorHandle === null || authorHandle === '') return 'missing-author';
+
+  const segments: { text: string; statusId: string | null }[] = [];
+  let anyMedia = false;
+  for (const article of spine) {
+    const articleHasMedia = hasMedia(article);
+    anyMedia = anyMedia || articleHasMedia;
+    const textRoot = article.querySelector('[data-testid="tweetText"]');
+    const text = textRoot ? readVisibleText(textRoot).trim() : '';
+    if (text === '') {
+      // A media-only segment can't enter a text-only corpus; missing
+      // text otherwise means X's markup drifted.
+      return articleHasMedia ? 'media-only' : 'missing-text';
+    }
+    segments.push({ text, statusId: readStatusId(article) });
+  }
+
+  return {
+    segments,
+    authorHandle,
+    authorDisplayName: readDisplayName(root),
+    authorAvatarUrl: readAvatarUrl(root),
+    timestamp: readTimestamp(root),
+    hasMedia: anyMedia,
+  };
 }
 
 /**

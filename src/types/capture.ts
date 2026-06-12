@@ -49,3 +49,21 @@ export type CaptureFailureReason =
   | 'truncated'
   | 'media-only'
   | 'unknown';
+
+/**
+ * A captured self-reply thread (roadmap Phase 10): the visible spine
+ * walked from the thread root on its /status/ page. Only RENDERED
+ * segments are read (X virtualizes long threads), so the banner
+ * reports the honest count. Author fields come from the root article.
+ */
+export interface RawThreadCapture {
+  /** Ordered segments, each with its own tweet identity when readable. */
+  segments: { text: string; statusId: string | null }[];
+  authorHandle: string;
+  authorDisplayName: string | null;
+  authorAvatarUrl: string | null;
+  /** ISO 8601 publish time of the ROOT tweet, when readable. */
+  timestamp: string | null;
+  /** True when ANY segment carried media we could not read. */
+  hasMedia: boolean;
+}

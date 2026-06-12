@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  collectSelfThreadSpine,
+  extractThread,
   detectReplyByDomStructure,
   detectReplyContext,
   extractReplyContextFromArticle,
@@ -468,5 +470,121 @@ describe('extractReplyContextFromComposer', () => {
   it('errors when the composer has no tweet above it', () => {
     document.body.append(fromHTML('<div data-testid="tweetTextarea_0"></div>'));
     expect(extractReplyContextFromComposer()).toHaveProperty('error');
+  });
+});
+
+describe('collectSelfThreadSpine (thread capture, Phase 10)', () => {
+  /** Assemble cells into a conversation container on the page. */
+  function conversation(...cells: HTMLElement[]): void {
+    const wrap = fromHTML('<div></div>');
+    for (const c of cells) wrap.appendChild(c);
+    document.body.appendChild(wrap);
+  }
+
+  const alice = (statusId: string, text = `tweet ${statusId}`) =>
+    tweetArticle({ handle: 'alice', statusId, text });
+  const bob = (statusId: string) => tweetArticle({ handle: 'bob', statusId });
+
+  it('collects the contiguous same-author run from the clicked root', () => {
+    setPath('/alice/status/100');
+    const a1 = alice('100');
+    const a2 = alice('101');
+    const a3 = alice('102');
+    conversation(cell(a1), cell(a2), cell(a3), cell(bob('200')));
+    const spine = collectSelfThreadSpine(a1);
+    expect(spine).toEqual([a1, a2, a3]);
+  });
+
+  it('a mid-spine click walks UP to the root first', () => {
+    setPath('/alice/status/101');
+    const a1 = alice('100');
+    const a2 = alice('101');
+    const a3 = alice('102');
+    conversation(cell(a1), cell(a2), cell(a3));
+    expect(collectSelfThreadSpine(a2)).toEqual([a1, a2, a3]);
+  });
+
+  it('the first foreign article stops the walk — replies-to-replies never join', () => {
+    setPath('/alice/status/100');
+    const a1 = alice('100');
+    const a2 = alice('101');
+    const lateAlice = alice('103'); // alice replying to bob, deeper down
+    conversation(cell(a1), cell(a2), cell(bob('200')), cell(lateAlice));
+    expect(collectSelfThreadSpine(a1)).toEqual([a1, a2]);
+  });
+
+  it('an empty spacer cell stops the walk (conversation boundary)', () => {
+    setPath('/alice/status/100');
+    const a1 = alice('100');
+    const stray = alice('300'); // unrelated tweet after a spacer
+    conversation(cell(a1), cell(null), cell(stray));
+    expect(collectSelfThreadSpine(a1)).toEqual([a1]);
+  });
+
+  it('a chain hanging under someone ELSE’s tweet is a threaded reply, not a thread', () => {
+    setPath('/bob/status/200');
+    const parent = bob('200');
+    const r1 = alice('101');
+    const r2 = alice('102');
+    conversation(cell(parent), cell(r1), cell(r2));
+    expect(collectSelfThreadSpine(r1)).toEqual([r1]);
+  });
+
+  it('a root wearing the Replying-to marker degrades to a single', () => {
+    setPath('/alice/status/101');
+    const r1 = tweetArticle({ handle: 'alice', statusId: '101', replyingTo: 'bob' });
+    const r2 = alice('102');
+    conversation(cell(r1), cell(r2));
+    expect(collectSelfThreadSpine(r1)).toEqual([r1]);
+  });
+
+  it('does nothing off /status/ pages (feeds stack unrelated tweets)', () => {
+    setPath('/home');
+    const a1 = alice('100');
+    const a2 = alice('101');
+    conversation(cell(a1), cell(a2));
+    expect(collectSelfThreadSpine(a1)).toEqual([a1]);
+  });
+
+  it('handle comparison is case-insensitive', () => {
+    setPath('/alice/status/100');
+    const a1 = tweetArticle({ handle: 'Alice', statusId: '100' });
+    const a2 = tweetArticle({ handle: 'alice', statusId: '101' });
+    conversation(cell(a1), cell(a2));
+    expect(collectSelfThreadSpine(a1)).toHaveLength(2);
+  });
+});
+
+describe('extractThread', () => {
+  const seg = (statusId: string, text: string, media = false) =>
+    tweetArticle({ handle: 'alice', statusId, text, media });
+
+  it('reads ordered segments with per-segment status ids; root supplies author fields', () => {
+    const out = extractThread([seg('100', 'first'), seg('101', 'second')]);
+    if (typeof out === 'string') throw new Error(`unexpected failure: ${out}`);
+    expect(out.segments).toEqual([
+      { text: 'first', statusId: '100' },
+      { text: 'second', statusId: '101' },
+    ]);
+    expect(out.authorHandle).toBe('alice');
+    expect(out.authorDisplayName).toBe('Alice Doe');
+  });
+
+  it('ORs media across segments', () => {
+    const out = extractThread([seg('100', 'first'), seg('101', 'second', true)]);
+    if (typeof out === 'string') throw new Error(`unexpected failure: ${out}`);
+    expect(out.hasMedia).toBe(true);
+  });
+
+  it('a text-less segment fails the whole capture honestly', () => {
+    expect(extractThread([seg('100', 'first'), tweetArticle({ handle: 'alice', text: '' })])).toBe(
+      'missing-text',
+    );
+    expect(
+      extractThread([
+        seg('100', 'first'),
+        tweetArticle({ handle: 'alice', text: '', media: true }),
+      ]),
+    ).toBe('media-only');
   });
 });
