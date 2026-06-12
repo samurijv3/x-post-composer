@@ -69,10 +69,11 @@ export function LibRow({
   return (
     <li
       ref={rowRef}
-      className={`lib-row ${hl} ${editing ? 'editing' : ''} ${selection ? 'pickable' : ''} ${picked ? 'picked' : ''}`}
+      className={`lib-row ${hl} ${editing ? 'editing' : ''} ${selection && !editing ? 'pickable' : ''} ${picked ? 'picked' : ''}`}
       // In selection mode the whole row is the pick target (the
-      // checkbox inside carries keyboard access).
-      onClick={selection ? selection.onToggle : undefined}
+      // checkbox inside carries keyboard access) — except while this
+      // row's inline editor is open, where clicks belong to the editor.
+      onClick={selection && !editing ? selection.onToggle : undefined}
     >
       {editing ? (
         <div className="lib-edit">
