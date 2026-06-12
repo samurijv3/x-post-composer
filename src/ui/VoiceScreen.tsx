@@ -239,6 +239,25 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
     }
   }
 
+  // Inline minting for the "+ New bundle…" option in the filing
+  // selects (capture banner, paste form): an empty bundle, ready to be
+  // a target. Returns the id so the caller can select it, null on
+  // failure (already toasted).
+  async function createEmptyBundle(name: string): Promise<string | null> {
+    const trimmed = name.trim();
+    if (trimmed === '') return null;
+    try {
+      const id = crypto.randomUUID();
+      await addBundle({ id, name: trimmed, memberIds: [], createdAt: Date.now() });
+      onToast(`Bundle “${trimmed}” created`);
+      await refreshBundles();
+      return id;
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Could not create the bundle.');
+      return null;
+    }
+  }
+
   async function renameBundle(bundle: Bundle, name: string): Promise<void> {
     try {
       await updateBundle({ ...bundle, name });
@@ -330,7 +349,7 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
         </p>
       </div>
 
-      <CaptureBanner handle={handle} bundles={bundles} />
+      <CaptureBanner handle={handle} bundles={bundles} onCreateBundle={createEmptyBundle} />
 
       <BundleSection
         bundles={bundles}
@@ -402,6 +421,7 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
           {adding && (
             <AddForm
               bundles={bundles}
+              onCreateBundle={createEmptyBundle}
               onAdd={(text, type, bundleId) => void manualAdd(text, type, bundleId)}
               onCancel={() => setAdding(false)}
             />

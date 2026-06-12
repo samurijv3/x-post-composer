@@ -7,9 +7,17 @@ import {
   subscribeCaptureMode,
 } from '../../storage';
 import type { Bundle } from '../../types';
+import { BundleTargetSelect } from './BundleTargetSelect';
+
+interface CaptureBannerProps {
+  handle: string;
+  bundles: Bundle[];
+  /** Mint an empty bundle inline (the select's "+ New bundle…"). */
+  onCreateBundle: (name: string) => Promise<string | null>;
+}
 
 /** The "Saving from X" capture-mode toggle at the top of the Voice screen. */
-export function CaptureBanner({ handle, bundles }: { handle: string; bundles: Bundle[] }) {
+export function CaptureBanner({ handle, bundles, onCreateBundle }: CaptureBannerProps) {
   const [mode, setMode] = useState<'none' | 'library' | 'reply-context'>('none');
   // The optional capture target (Phase 6): saves also file into this
   // bundle. Session storage, read by the background at capture time.
@@ -63,24 +71,14 @@ export function CaptureBanner({ handle, bundles }: { handle: string; bundles: Bu
           <span className="track track-ok" />
         </label>
       </div>
-      {on && bundles.length > 0 && (
-        <label className="bundle-pick cb-target">
-          <span className="fld-label">Also file into</span>
-          <select
-            value={target ?? ''}
-            onChange={(e) =>
-              void setCaptureBundleTarget(e.target.value === '' ? null : e.target.value)
-            }
-            title="Captured tweets also join this bundle — one pass on X builds the series"
-          >
-            <option value="">— just the library</option>
-            {bundles.map((b) => (
-              <option key={b.id} value={b.id}>
-                Bundle: {b.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      {on && (
+        <BundleTargetSelect
+          label="Also file into"
+          bundles={bundles}
+          value={target}
+          onChange={(id) => void setCaptureBundleTarget(id)}
+          onCreateBundle={onCreateBundle}
+        />
       )}
     </div>
   );
