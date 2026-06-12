@@ -286,12 +286,24 @@ export async function handleManualAdd(
   // instead of inserting a second copy.
   const existing = findLibraryDuplicate(await getAllItems(), { statusId: null, text: item.text });
   if (existing) {
+    // Read the source BEFORE merging — it decides the banner wording.
+    const preMergeSource = existing.source;
     const merged = mergeLibraryDuplicate(existing, item);
     if (merged !== existing) {
       await updateItem(merged);
       await broadcastNotice({ type: 'bg:library-changed' });
     }
     const filedInto = await fileIntoBundle(bundleId, existing.id);
+    // Manual adds share the capture flows' floating banner so every
+    // save outcome lands in the same slot — a fresh result (this one
+    // included) supersedes any lingering earlier banner.
+    await broadcastNotice({
+      type: 'bg:save-result',
+      kind: 'duplicate',
+      duplicateOfId: existing.id,
+      duplicateOfSource: preMergeSource,
+      ...(filedInto !== null ? { filedIntoBundleName: filedInto } : {}),
+    });
     return {
       type: 'bg:add-manual-result',
       ok: true,
@@ -305,6 +317,14 @@ export async function handleManualAdd(
   await addItem(item);
   await broadcastNotice({ type: 'bg:library-changed' });
   const filedInto = await fileIntoBundle(bundleId, item.id);
+  await broadcastNotice({
+    type: 'bg:save-result',
+    kind: 'success',
+    itemId: item.id,
+    itemType,
+    ...(segments !== null ? { threadSegmentCount: segments.length } : {}),
+    ...(filedInto !== null ? { filedIntoBundleName: filedInto } : {}),
+  });
   return {
     type: 'bg:add-manual-result',
     ok: true,

@@ -16,7 +16,9 @@ export interface SaveResult {
   /** The matched record's pre-merge source — decides the duplicate
    *  wording (a shipped match is a promotion, not a re-save). */
   duplicateOfSource?: 'manual' | 'shipped' | 'archive' | undefined;
-  itemType?: 'post' | 'reply' | undefined;
+  /** 'thread' only on manual thread pastes (exact count, no
+   *  scroll-into-view caveat); captured threads carry only the count. */
+  itemType?: 'post' | 'reply' | 'thread' | undefined;
   /** Present on thread captures — the honest rendered-segment count. */
   threadSegmentCount?: number | undefined;
   /** Thread truncation failures: WHICH posts are collapsed (1-based). */
@@ -73,16 +75,23 @@ export function SaveResultBanner({ result, handle, onDismiss, onShowDup }: Props
 
   if (result.kind === 'success') {
     title = 'Saved to your voice';
-    msg = result.threadSegmentCount ? (
-      <>
-        Saved as a <strong>thread · {result.threadSegmentCount} posts</strong> (every post visible
-        on screen — scroll a long thread fully into view before capturing).{filed}
-      </>
-    ) : (
-      <>
-        Added as a <strong>{result.itemType ?? 'post'}</strong>.{filed}
-      </>
-    );
+    // A pasted thread's count is exact; the scroll-into-view caveat
+    // only applies to captures, where virtualization bounds the count.
+    msg =
+      result.itemType === 'thread' && result.threadSegmentCount ? (
+        <>
+          Added as a <strong>thread · {result.threadSegmentCount} posts</strong>.{filed}
+        </>
+      ) : result.threadSegmentCount ? (
+        <>
+          Saved as a <strong>thread · {result.threadSegmentCount} posts</strong> (every post visible
+          on screen — scroll a long thread fully into view before capturing).{filed}
+        </>
+      ) : (
+        <>
+          Added as a <strong>{result.itemType ?? 'post'}</strong>.{filed}
+        </>
+      );
   } else if (result.kind === 'text-media') {
     title = 'Saved — text only';
     msg = (

@@ -18,7 +18,7 @@ New capture-quality logic (e.g. screening hints) slots into step 6, as pure pred
 
 ## 2. Add an example manually
 
-Voice → `+` → `voice/AddForm.tsx` (text + type incl. **Thread** — segments separated by a `---` line, <2 parsed segments is an honest error + "this is my own writing" gate + optional "Also file into" bundle select) → `sendToBackground({type:'panel:add-manual-item', bundleId})` → `capture.ts handleManualAdd` (empty-text / no-handle guards; **no** validateAuthor — the checkbox is the authorship gate here) → same `lib/library` dedupe as slice 1 (pasting already-present text refreshes the existing record in place) → `addItem` → optional `fileIntoBundle` (the reply message says "filed into …") → `bg:library-changed` → list refresh.
+Voice → `+` → `voice/AddForm.tsx` (text + type incl. **Thread** — segments separated by a `---` line, <2 parsed segments is an honest error + "this is my own writing" gate + optional "Also file into" bundle select) → `sendToBackground({type:'panel:add-manual-item', bundleId})` → `capture.ts handleManualAdd` (empty-text / no-handle guards; **no** validateAuthor — the checkbox is the authorship gate here) → same `lib/library` dedupe as slice 1 (pasting already-present text refreshes the existing record in place) → `addItem` → optional `fileIntoBundle` (the reply message says "filed into …") → `bg:library-changed` → list refresh, plus `bg:save-result` (success or duplicate) into the floating banner — same slot as captures, so a successful add supersedes a lingering capture error.
 
 ## 3. Pull in reply context (click-to-select)
 

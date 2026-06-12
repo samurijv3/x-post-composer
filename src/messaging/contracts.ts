@@ -154,8 +154,10 @@ export type BackgroundNotice =
   // mount instead). The timestamp matches the flag's so the panel can
   // dedupe the pair.
   | { type: 'bg:auto-reply-capture'; at: number }
-  // Result of a capture attempt, with enough detail for the floating
-  // save-result banner to show the right message.
+  // Result of a save-to-voice attempt — captures AND manual adds — with
+  // enough detail for the floating save-result banner to show the right
+  // message. Every save outcome flows through here so a fresh result
+  // always supersedes a lingering one (success retires a stale error).
   | {
       type: 'bg:save-result';
       kind:
@@ -167,7 +169,10 @@ export type BackgroundNotice =
         | 'media-only'
         | 'unreadable';
       itemId?: string;
-      itemType?: 'post' | 'reply';
+      /** 'thread' only on manual thread pastes — captured threads
+       *  identify via `threadSegmentCount` and capture-flavoured
+       *  wording instead. */
+      itemType?: 'post' | 'reply' | 'thread';
       rejectedAuthor?: string;
       duplicateOfId?: string;
       /** The existing record's source BEFORE the dedupe merge, on
