@@ -203,7 +203,7 @@ export default defineBackground(() => {
     }
 
     if (isMessageOfType(message, 'panel:draft-committed')) {
-      return handleShippedDraft(message.text, message.mode);
+      return handleShippedDraft(message.text, message.mode, message.bundleId);
     }
 
     if (isMessageOfType(message, 'panel:open-x-tab')) {

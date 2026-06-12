@@ -17,11 +17,12 @@ import {
   IcWarn,
   IcX,
 } from '../icons';
+import { BundlePicker } from './BundlePicker';
 import { CapToggle } from './CapToggle';
 import { ErrorCard, type ErrorKind } from './ErrorCard';
 import { ReplyContextBanner } from './ReplyContextBanner';
 import { ReplyContextCard } from './ReplyContextCard';
-import type { BriefControls, ReplyContextControls } from './types';
+import type { BriefControls, BundlePickerControls, ReplyContextControls } from './types';
 
 const FREEFORM_MAX = 280;
 
@@ -58,6 +59,13 @@ interface DraftStateProps {
   brief: BriefControls;
   draft: DraftView;
   refine: RefineControls;
+  /** Null when no bundles exist. Shown in the expanded brief so a
+   *  regenerate can switch or drop the seed. */
+  bundlePicker: BundlePickerControls | null;
+  /** Name of the bundle that seeded the CURRENT draft (its content's
+   *  seedBundleId resolved by ComposeScreen), or null when sampled.
+   *  Distinct from the picker, which drives the NEXT generation. */
+  seedBundleName: string | null;
   briefText: string;
   busy: boolean;
   expanded: boolean;
@@ -83,6 +91,8 @@ export function DraftState({
   brief,
   draft,
   refine,
+  bundlePicker,
+  seedBundleName,
   briefText,
   busy,
   expanded,
@@ -215,6 +225,7 @@ export function DraftState({
             />
           </label>
           <CapToggle charCap={brief.charCap} setCharCap={brief.setCharCap} />
+          {bundlePicker && <BundlePicker picker={bundlePicker} />}
           <div className="pillrow">
             <button type="button" className="btn primary" onClick={onRegenerate}>
               <IcRefresh /> Regenerate
@@ -224,6 +235,15 @@ export function DraftState({
             </button>
           </div>
         </div>
+      )}
+
+      {/* The compose UI states plainly when a bundle drove the current
+          draft's examples — and whether copying files it back in. */}
+      {seedBundleName && (
+        <p className="help bundle-note">
+          Voice examples from bundle “{seedBundleName}”
+          {shipToVoice ? ' — copying files this draft back into it.' : '.'}
+        </p>
       )}
 
       {error && <ErrorCard kind={error} onRetry={onRetry} onSettings={onOpenOptions} />}

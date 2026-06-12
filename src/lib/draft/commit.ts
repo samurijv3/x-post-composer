@@ -19,6 +19,10 @@ export interface DraftCommit {
   mode: 'post' | 'reply';
   /** Whether the user hand-edited the model's output before shipping. */
   handEdited: boolean;
+  /** The bundle that seeded this draft (lifecycle `seedBundleId`), or
+   *  null. When the shipped save persists, the new corpus item
+   *  auto-files into this bundle — the bundle is a living template. */
+  seedBundleId: string | null;
   /** Epoch ms, supplied by the caller (this module stays time-free). */
   committedAt: number;
 }

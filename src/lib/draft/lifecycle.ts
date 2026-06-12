@@ -39,6 +39,12 @@ export interface DraftContent {
   /** True once the user typed in the draft. Set by `hand-edited`,
    *  reset only when fresh model output replaces the text. */
   handEdited: boolean;
+  /** The bundle that seeded this draft's voice examples (roadmap
+   *  Phase 6), or null when the general corpus was sampled. Threaded
+   *  EXPLICITLY from the generation request through every reshaping of
+   *  the same draft (refines, hand edits) to commit, where auto-filing
+   *  reads it — never inferred from panel state at copy time. */
+  seedBundleId: string | null;
 }
 
 /**
@@ -97,8 +103,11 @@ export type DraftEvent =
   | { type: 'generation-started'; seq: number }
   /** A chip / steering refine left the panel. */
   | { type: 'refine-started'; seq: number }
-  /** The pipeline returned a draft for request `seq`. */
-  | { type: 'generation-succeeded'; seq: number; draft: ModelDraft }
+  /** The pipeline returned a draft for request `seq`. `seedBundleId`
+   *  is the bundle the GENERATE request was seeded with (absent/null =
+   *  sampled); it is ignored for refines, which reshape the same draft
+   *  and therefore keep its existing seed. */
+  | { type: 'generation-succeeded'; seq: number; draft: ModelDraft; seedBundleId?: string | null }
   /** The pipeline errored for request `seq`. */
   | { type: 'generation-failed'; seq: number }
   /** The user typed/deleted/pasted in the draft editor. */
@@ -155,7 +164,16 @@ export function reduceDraftLifecycle(
       // slow earlier generation resolving late must never flip a newer
       // draft back.
       if (state.phase !== 'generating' || event.seq !== state.pendingSeq) return state;
-      const fresh: DraftContent = { ...event.draft, handEdited: false };
+      const fresh: DraftContent = {
+        ...event.draft,
+        handEdited: false,
+        // A generate stamps the seed from its request; a refine
+        // reshapes the SAME draft, so its seed carries over.
+        seedBundleId:
+          state.pendingKind === 'refine'
+            ? (state.content?.seedBundleId ?? null)
+            : (event.seedBundleId ?? null),
+      };
       return {
         ...state,
         phase: 'active',
@@ -202,6 +220,8 @@ export function reduceDraftLifecycle(
           residualViolations: [],
           wasRepaired: state.content.wasRepaired,
           handEdited: true,
+          // Editing doesn't change where the draft came from.
+          seedBundleId: state.content.seedBundleId,
         },
         // Touching the new draft adopts it; the replacement stands.
         replaced: null,

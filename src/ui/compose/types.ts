@@ -23,3 +23,22 @@ export interface BriefControls {
   softCapChars: number;
   onGenKey: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
 }
+
+/** One bundle as the picker shows it — the count is the RESOLVED
+ *  member count (dangling ids excluded), i.e. exactly how many voice
+ *  examples seeding from it would send. */
+export interface BundleOption {
+  id: string;
+  name: string;
+  memberCount: number;
+}
+
+/** The voice-seed picker (Phase 6). ComposeScreen passes null when no
+ *  bundles exist, hiding the control entirely — a power feature stays
+ *  out of the default path. `selectedId` drives the NEXT generation;
+ *  an active draft's own seed is shown separately from its content. */
+export interface BundlePickerControls {
+  bundles: BundleOption[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}

@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { emitDraftCommit, onDraftCommit, type DraftCommit } from './commit';
 
 function commit(overrides: Partial<DraftCommit> = {}): DraftCommit {
-  return { text: 'shipped text', mode: 'post', handEdited: false, committedAt: 1, ...overrides };
+  return {
+    text: 'shipped text',
+    mode: 'post',
+    handEdited: false,
+    seedBundleId: null,
+    committedAt: 1,
+    ...overrides,
+  };
 }
 
 describe('draft commit hook', () => {

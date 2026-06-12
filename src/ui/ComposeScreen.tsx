@@ -2,6 +2,8 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import {
   consumeAutoReplyFlag,
   countItems,
+  getAllBundles,
+  getAllItems,
   getCaptureMode,
   getReplyContextLock,
   getSettings,
@@ -13,6 +15,7 @@ import {
 } from '../storage';
 import { isMessageOfType, onNotice, sendToBackground, type BackgroundReply } from '../messaging';
 import { weightedLength, X_HARD_LIMIT } from '../lib/counting';
+import { resolveBundleMembers } from '../lib/bundles';
 import { isSameTweet, mergeReplyContextSelection } from '../lib/replyContext';
 import {
   BULLET_PREFIX,
@@ -36,7 +39,12 @@ import type { ToastData } from './Toast';
 import { PreDraftState } from './compose/PreDraftState';
 import { DraftState, type DraftView, type RefineControls } from './compose/DraftState';
 import type { ErrorKind } from './compose/ErrorCard';
-import type { BriefControls, ReplyContextControls } from './compose/types';
+import type {
+  BriefControls,
+  BundleOption,
+  BundlePickerControls,
+  ReplyContextControls,
+} from './compose/types';
 
 interface Props {
   onToast: (msg: string, action?: ToastData['action']) => void;
@@ -91,6 +99,46 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   useEffect(() => {
     void refreshLibraryCount();
   }, [refreshLibraryCount]);
+
+  // ---- bundles (Phase 6): the voice-seed picker ----
+  // Counts are RESOLVED member counts — what seeding would actually
+  // send — so the picker never claims members that no longer exist.
+  const [bundleOptions, setBundleOptions] = useState<BundleOption[]>([]);
+  const [seedBundleId, setSeedBundleId] = useState<string | null>(null);
+  const refreshBundleOptions = useCallback(async () => {
+    try {
+      const [allBundles, allItems] = await Promise.all([getAllBundles(), getAllItems()]);
+      allBundles.sort((a, b) => b.createdAt - a.createdAt);
+      setBundleOptions(
+        allBundles.map((b) => ({
+          id: b.id,
+          name: b.name,
+          memberCount: resolveBundleMembers(b.memberIds, allItems).members.length,
+        })),
+      );
+    } catch {
+      setBundleOptions([]);
+    }
+  }, []);
+  useEffect(() => {
+    void refreshBundleOptions();
+    const unsub = onNotice((notice) => {
+      if (
+        isMessageOfType(notice, 'bg:bundles-changed') ||
+        isMessageOfType(notice, 'bg:library-changed')
+      ) {
+        void refreshBundleOptions();
+      }
+    });
+    return () => unsub();
+  }, [refreshBundleOptions]);
+  // A picked bundle that disappears (deleted in Voice) resets the
+  // picker to the default sample rather than silently misadvertising.
+  useEffect(() => {
+    if (seedBundleId !== null && !bundleOptions.some((b) => b.id === seedBundleId)) {
+      setSeedBundleId(null);
+    }
+  }, [bundleOptions, seedBundleId]);
 
   // ---- reply context lock ----
   const [replyContext, setReplyContext] = useState<ReplyContext | null>(null);
@@ -291,13 +339,16 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
       isRegenerate: opts.isRegenerate,
       // Derived, not a mode: any bullet line present = fragments signal.
       bulletedInput: hasBulletLines(bullets),
+      // The picker's selection seeds THIS generation; the background
+      // resolves it (and errors honestly if it was just deleted).
+      bundleId: seedBundleId,
     };
     try {
       const reply = await sendToBackground<
         Extract<BackgroundReply, { type: 'bg:generation-result' }>
       >({ type: 'panel:generate', request });
       if (myId !== requestSeq.current) return;
-      applyResult(reply.result, myId, replacesDraft);
+      applyResult(reply.result, myId, replacesDraft, request.bundleId ?? null);
       void refreshLibraryCount();
     } catch (err) {
       if (myId !== requestSeq.current) return;
@@ -307,7 +358,14 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     }
   }
 
-  function applyResult(result: GenerationResult, seq: number, replacesDraft: boolean): void {
+  function applyResult(
+    result: GenerationResult,
+    seq: number,
+    replacesDraft: boolean,
+    // The bundle that seeded a GENERATE; refines pass null and the
+    // reducer keeps the draft's existing seed.
+    seedBundleId: string | null = null,
+  ): void {
     if (!result.ok) {
       dispatchDraft({ type: 'generation-failed', seq });
       setError(result.kind);
@@ -322,6 +380,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
         residualViolations: result.residualViolations,
         wasRepaired: result.wasRepaired,
       },
+      seedBundleId,
     });
     if (replacesDraft) fireReplacementToast('Draft replaced');
   }
@@ -417,6 +476,9 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
         text: current.content.text,
         mode: replyContextRef.current !== null ? 'reply' : 'post',
         handEdited: current.content.handEdited,
+        // Explicit provenance, read from the draft itself — never
+        // inferred from the picker, which may have moved on.
+        seedBundleId: current.content.seedBundleId,
         committedAt: Date.now(),
       });
       onToast('Copied to clipboard');
@@ -437,6 +499,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
         type: 'panel:draft-committed',
         text: commit.text,
         mode: commit.mode,
+        bundleId: commit.seedBundleId,
       }).catch(() => {
         onToast('Copied — but saving it to Voice failed.');
       });
@@ -563,6 +626,19 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     copied,
     canUndo: lifecycle.refineSnapshot !== null,
   };
+  // The picker drives the NEXT generation; the note in DraftState
+  // describes the CURRENT draft's seed. A seed whose bundle was
+  // deleted resolves to null — the note hides, matching the fact that
+  // copying would no longer file anywhere.
+  const bundlePicker: BundlePickerControls | null =
+    bundleOptions.length === 0
+      ? null
+      : { bundles: bundleOptions, selectedId: seedBundleId, onSelect: setSeedBundleId };
+  const seedBundleName =
+    content?.seedBundleId != null
+      ? (bundleOptions.find((b) => b.id === content.seedBundleId)?.name ?? null)
+      : null;
+
   const refineControls: RefineControls = {
     chips,
     chipCounts,
@@ -581,6 +657,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
         <PreDraftState
           reply={reply}
           brief={brief}
+          bundlePicker={bundlePicker}
           busy={busy}
           libraryCount={libraryCount}
           error={error}
@@ -594,6 +671,8 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
           brief={brief}
           draft={draftView}
           refine={refineControls}
+          bundlePicker={bundlePicker}
+          seedBundleName={seedBundleName}
           briefText={briefText}
           busy={busy}
           expanded={expanded}

@@ -50,7 +50,14 @@ export type PanelToBackground =
   | { type: 'panel:open-x-tab' }
   // The Phase 4 corpus loop: a committed draft, sent by the panel's
   // onDraftCommit listener when the setting + per-draft override allow.
-  | { type: 'panel:draft-committed'; text: string; mode: 'post' | 'reply' };
+  // `bundleId` is the bundle that seeded the draft (null = sampled);
+  // when the shipped save persists, the item auto-files into it.
+  | {
+      type: 'panel:draft-committed';
+      text: string;
+      mode: 'post' | 'reply';
+      bundleId: string | null;
+    };
 
 /** Requests a content script sends to the background worker. */
 export type ContentToBackground =

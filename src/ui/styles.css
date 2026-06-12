@@ -1460,6 +1460,25 @@ code {
 .bundle-create .field-row {
   margin-top: 4px;
 }
+/* The compose-side voice-seed picker. */
+.bundle-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.bundle-pick .fld-label {
+  flex: 0 0 auto;
+}
+.bundle-pick select {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  padding: 6px 8px;
+}
+/* "This draft was seeded by bundle X" — quiet, but always stated. */
+.bundle-note {
+  margin: 0;
+}
 
 /* Floating save-result banner slot — sticks to the top of the panel
    body so the banner stays visible across screens and scroll

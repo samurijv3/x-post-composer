@@ -303,6 +303,41 @@ describe('new context', () => {
   });
 });
 
+describe('bundle seed (rides the draft to commit)', () => {
+  const seeded = run(
+    { type: 'generation-started', seq: 1 },
+    { type: 'generation-succeeded', seq: 1, draft: modelDraft('day 12'), seedBundleId: 'b1' },
+  );
+
+  it('a generate stamps the seed from its request; absent means sampled (null)', () => {
+    expect(seeded.content?.seedBundleId).toBe('b1');
+    expect(activeWith('sampled').content?.seedBundleId).toBeNull();
+  });
+
+  it('a refine keeps the seed — it reshapes the same draft (event value ignored)', () => {
+    const refined = [
+      { type: 'refine-started', seq: 2 } as const,
+      { type: 'generation-succeeded', seq: 2, draft: modelDraft('day 12, punchier') } as const,
+    ].reduce(reduceDraftLifecycle, seeded);
+    expect(refined.content?.seedBundleId).toBe('b1');
+  });
+
+  it('a hand edit keeps the seed — editing does not change provenance', () => {
+    const edited = reduceDraftLifecycle(seeded, { type: 'hand-edited', text: 'day 12 + me' });
+    expect(edited.content?.seedBundleId).toBe('b1');
+  });
+
+  it('a fresh unseeded generate clears it; the timed undo restores it with the draft', () => {
+    const replaced = [
+      { type: 'generation-started', seq: 2 } as const,
+      { type: 'generation-succeeded', seq: 2, draft: modelDraft('unrelated') } as const,
+    ].reduce(reduceDraftLifecycle, seeded);
+    expect(replaced.content?.seedBundleId).toBeNull();
+    const undone = reduceDraftLifecycle(replaced, { type: 'replacement-undone' });
+    expect(undone.content?.seedBundleId).toBe('b1');
+  });
+});
+
 describe('commit and discard', () => {
   it('commit moves active → committed and resolves both undo scopes', () => {
     const withBoth = run(

@@ -1,13 +1,16 @@
 import { IcSparkle } from '../icons';
+import { BundlePicker } from './BundlePicker';
 import { CapToggle } from './CapToggle';
 import { ErrorCard, type ErrorKind } from './ErrorCard';
 import { ReplyContextBanner } from './ReplyContextBanner';
 import { ReplyContextCard } from './ReplyContextCard';
-import type { BriefControls, ReplyContextControls } from './types';
+import type { BriefControls, BundlePickerControls, ReplyContextControls } from './types';
 
 interface PreDraftProps {
   reply: ReplyContextControls;
   brief: BriefControls;
+  /** Null when no bundles exist — the picker hides entirely. */
+  bundlePicker: BundlePickerControls | null;
   busy: boolean;
   libraryCount: number;
   error: ErrorKind | null;
@@ -20,6 +23,7 @@ interface PreDraftProps {
 export function PreDraftState({
   reply,
   brief,
+  bundlePicker,
   busy,
   libraryCount,
   error,
@@ -29,6 +33,7 @@ export function PreDraftState({
 }: PreDraftProps) {
   const hasContext = reply.replyContext !== null;
   const canGenerate = brief.bullets.trim() !== '' && !busy;
+  const seedBundle = bundlePicker?.bundles.find((b) => b.id === bundlePicker.selectedId) ?? null;
   return (
     <>
       {reply.replyContext !== null ? (
@@ -60,6 +65,8 @@ export function PreDraftState({
         {!brief.charCap && <span className="help">soft cap {brief.softCapChars}</span>}
       </div>
 
+      {bundlePicker && <BundlePicker picker={bundlePicker} />}
+
       <button
         type="button"
         className="btn primary lg block"
@@ -79,6 +86,15 @@ export function PreDraftState({
 
       {error ? (
         <ErrorCard kind={error} onRetry={onRetry} onSettings={onOpenOptions} />
+      ) : seedBundle ? (
+        <p className="help" style={{ textAlign: 'center', margin: '2px 0' }}>
+          Voice examples will be exactly the{' '}
+          <em>
+            {seedBundle.memberCount} {seedBundle.memberCount === 1 ? 'member' : 'members'} of “
+            {seedBundle.name}”
+          </em>{' '}
+          — not the usual sample. Starred examples still ride on top.
+        </p>
       ) : libraryCount === 0 ? (
         <p className="help" style={{ textAlign: 'center', margin: '2px 0' }}>
           No examples yet — add a few in <em>Voice</em> so drafts sound like you.

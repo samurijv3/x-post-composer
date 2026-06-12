@@ -4,10 +4,18 @@
  * touches the corpus; everything lands here first.
  */
 import { broadcastNotice, type BackgroundReply } from '../../src/messaging';
-import { addItem, getAllItems, getSettings, updateItem } from '../../src/storage';
+import {
+  addItem,
+  getAllItems,
+  getBundle,
+  getSettings,
+  updateBundle,
+  updateItem,
+} from '../../src/storage';
 import type { LibraryItem, RawCapture } from '../../src/types';
 import { classifyType, validateAuthor } from '../../src/lib/voice';
 import { findLibraryDuplicate, mergeLibraryDuplicate } from '../../src/lib/library';
+import { appendBundleMember } from '../../src/lib/bundles';
 
 export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
   const settings = await getSettings();
@@ -161,10 +169,17 @@ export async function handleManualAdd(
  * copy already succeeded; this is downstream bookkeeping). Dedupe: a
  * re-copy or an already-present text never inserts a second row, and
  * shipped never downgrades a manual record.
+ *
+ * Bundle auto-filing (Phase 6): when the draft was seeded by a bundle
+ * AND the shipped save persists (same eligibility — a skipped save
+ * files nothing), the saved item appends to that bundle, making it a
+ * living template for the series. A deduped re-copy files the EXISTING
+ * record's id; an already-member id is a no-op.
  */
 export async function handleShippedDraft(
   text: string,
   mode: 'post' | 'reply',
+  bundleId: string | null,
 ): Promise<BackgroundReply> {
   const settings = await getSettings();
   const trimmed = text.trim();
@@ -198,12 +213,31 @@ export async function handleShippedDraft(
       await updateItem(merged);
       await broadcastNotice({ type: 'bg:library-changed' });
     }
+    await fileIntoBundle(bundleId, existing.id);
     return { type: 'bg:capture-ack', ok: true };
   }
 
   await addItem(item);
   await broadcastNotice({ type: 'bg:library-changed' });
+  await fileIntoBundle(bundleId, item.id);
   return { type: 'bg:capture-ack', ok: true };
+}
+
+/**
+ * Append a freshly-shipped item to the bundle that seeded its draft. A
+ * deleted bundle skips silently (eligibility, not error — the copy and
+ * the shipped save both already succeeded; there is just nothing left
+ * to file into). Already-a-member is a no-op via `appendBundleMember`'s
+ * identity return.
+ */
+async function fileIntoBundle(bundleId: string | null, itemId: string): Promise<void> {
+  if (bundleId === null) return;
+  const bundle = await getBundle(bundleId);
+  if (bundle === null) return;
+  const grown = appendBundleMember(bundle, itemId);
+  if (grown === bundle) return;
+  await updateBundle(grown);
+  await broadcastNotice({ type: 'bg:bundles-changed' });
 }
 
 async function tryAddItem(item: LibraryItem): Promise<'added' | 'duplicate'> {
