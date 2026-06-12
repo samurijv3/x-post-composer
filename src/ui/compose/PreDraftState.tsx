@@ -36,14 +36,20 @@ export function PreDraftState({
   const seedBundle = bundlePicker?.bundles.find((b) => b.id === bundlePicker.selectedId) ?? null;
   return (
     <>
-      {reply.replyContext !== null ? (
-        <ReplyContextCard context={reply.replyContext} onClear={reply.onClearReplyContext} />
-      ) : (
-        <ReplyContextBanner
-          on={reply.captureModeIsReplyContext}
-          onToggle={reply.onToggleReplyContextMode}
-        />
-      )}
+      {/* The grounding cluster: what to react to (reply context) and
+          what to sound like (the voice seed) — both concrete anchors,
+          set together before the angle is typed. */}
+      <div className="grounding">
+        {reply.replyContext !== null ? (
+          <ReplyContextCard context={reply.replyContext} onClear={reply.onClearReplyContext} />
+        ) : (
+          <ReplyContextBanner
+            on={reply.captureModeIsReplyContext}
+            onToggle={reply.onToggleReplyContextMode}
+          />
+        )}
+        {bundlePicker && <BundlePicker picker={bundlePicker} />}
+      </div>
 
       <label className="fld compose-input">
         <span className="fld-label">{hasContext ? 'Your angle' : 'What do you want to say?'}</span>
@@ -64,8 +70,6 @@ export function PreDraftState({
         <CapToggle charCap={brief.charCap} setCharCap={brief.setCharCap} />
         {!brief.charCap && <span className="help">soft cap {brief.softCapChars}</span>}
       </div>
-
-      {bundlePicker && <BundlePicker picker={bundlePicker} />}
 
       <button
         type="button"

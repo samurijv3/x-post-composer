@@ -1496,6 +1496,13 @@ code {
 .bundle-create .field-row {
   margin-top: 4px;
 }
+/* The grounding cluster: reply context + voice seed, tighter than the
+   screen gap so the two anchors read as one group. */
+.grounding {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 /* The compose-side voice-seed picker. */
 .bundle-pick {
   display: flex;

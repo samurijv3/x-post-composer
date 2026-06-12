@@ -213,6 +213,9 @@ export function DraftState({
               onToggle={reply.onToggleReplyContextMode}
             />
           )}
+          {/* Same grounding cluster as PreDraftState: the seed sits
+              with the context, above the angle. */}
+          {bundlePicker && <BundlePicker picker={bundlePicker} />}
           <label className="fld">
             <span className="fld-label">
               {hasContext ? 'Your angle' : 'What do you want to say?'}
@@ -225,7 +228,6 @@ export function DraftState({
             />
           </label>
           <CapToggle charCap={brief.charCap} setCharCap={brief.setCharCap} />
-          {bundlePicker && <BundlePicker picker={bundlePicker} />}
           <div className="pillrow">
             <button type="button" className="btn primary" onClick={onRegenerate}>
               <IcRefresh /> Regenerate
