@@ -46,9 +46,13 @@ export function CaptureBanner({ handle, bundles, onCreateBundle }: CaptureBanner
   }, [target, bundles]);
 
   async function toggle(): Promise<void> {
-    // Mode and target live and die together — turning capture off
-    // clears the target so the next session starts plain.
-    if (on) await setCaptureBundleTarget(null);
+    // The target deliberately SURVIVES the toggle: browsing for
+    // examples means flipping capture off and on repeatedly, and
+    // re-picking the bundle every time was the friction (changed
+    // 2026-06-12; it used to clear here). Never silent when it
+    // matters — the banner shows the target whenever the switch is
+    // on, and every save states "Filed into …". It still dies with
+    // the browser session and resets if its bundle is deleted.
     await setCaptureMode(on ? 'none' : 'library');
   }
 
