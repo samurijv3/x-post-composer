@@ -122,6 +122,7 @@ function PanelShell() {
           kind: notice.kind,
           rejectedAuthor: notice.rejectedAuthor,
           duplicateOfId: notice.duplicateOfId,
+          duplicateOfSource: notice.duplicateOfSource,
           itemType: notice.itemType,
           filedIntoBundleName: notice.filedIntoBundleName,
           stamp: stampRef.current,

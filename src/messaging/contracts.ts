@@ -159,6 +159,11 @@ export type BackgroundNotice =
       itemType?: 'post' | 'reply';
       rejectedAuthor?: string;
       duplicateOfId?: string;
+      /** The existing record's source BEFORE the dedupe merge, on
+       *  'duplicate' results — lets the banner say what actually
+       *  happened ("matches the draft you shipped — now handpicked")
+       *  instead of a misleading "you saved this before". */
+      duplicateOfSource?: 'manual' | 'shipped' | 'archive';
       /** Present when a capture-mode bundle target filed the saved
        *  item — the banner says so; the side effect is never silent. */
       filedIntoBundleName?: string;

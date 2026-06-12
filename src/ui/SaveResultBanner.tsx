@@ -13,6 +13,9 @@ export interface SaveResult {
   kind: SaveResultKind;
   rejectedAuthor?: string | undefined;
   duplicateOfId?: string | undefined;
+  /** The matched record's pre-merge source — decides the duplicate
+   *  wording (a shipped match is a promotion, not a re-save). */
+  duplicateOfSource?: 'manual' | 'shipped' | 'archive' | undefined;
   itemType?: 'post' | 'reply' | undefined;
   /** Set when a capture-mode bundle target filed the saved item — the
    *  banner states the side effect; it is never silent. */
@@ -81,10 +84,22 @@ export function SaveResultBanner({ result, handle, onDismiss, onShowDup }: Props
     );
   } else if (result.kind === 'duplicate') {
     title = 'Already in your voice';
-    msg = filed ? (
-      <>You saved this one before — no second copy.{filed}</>
-    ) : (
-      'You saved this one before — no need to add it twice.'
+    // What "already" actually means depends on how the match got
+    // there: a shipped row wasn't saved BY the user — the loop saved
+    // it — and this handpick promotes it. Say that, don't scold.
+    const story =
+      result.duplicateOfSource === 'shipped' ? (
+        <>This matches a draft you shipped from Margin — it’s now marked as a handpicked example.</>
+      ) : result.duplicateOfSource === 'archive' ? (
+        <>This was in your archive import — your handpick promotes it to a curated example.</>
+      ) : (
+        <>You saved this one before — no second copy.</>
+      );
+    msg = (
+      <>
+        {story}
+        {filed}
+      </>
     );
     if (result.duplicateOfId) {
       const id = result.duplicateOfId;

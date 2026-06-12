@@ -18,6 +18,12 @@ import { classifyType, validateAuthor } from '../../src/lib/voice';
 import { findLibraryDuplicate, mergeLibraryDuplicate } from '../../src/lib/library';
 import { appendBundleMember } from '../../src/lib/bundles';
 
+/** A duplicate found within this window of the existing record's
+ *  creation is treated as the same save gesture (double-click) and
+ *  reported as the success it was. Comfortably above double-click
+ *  speed, comfortably below a deliberate re-capture. */
+const JUST_SAVED_GRACE_MS = 5000;
+
 export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
   const settings = await getSettings();
   if (settings.handle.trim() === '') {
@@ -74,6 +80,9 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
     text: capture.text,
   });
   if (existing) {
+    // The pre-merge source is what the banner explains ("matches your
+    // shipped draft"); the merge below may promote it to 'manual'.
+    const priorSource = existing.source;
     const merged = mergeLibraryDuplicate(existing, item);
     if (merged !== existing) {
       await updateItem(merged);
@@ -82,10 +91,25 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
     // Filing an already-saved tweet is the point of capturing with a
     // target — the promotion gesture grows the bundle.
     const filedInto = await fileIntoBundle(bundleTarget, existing.id);
+    // A capture landing seconds after the record was created is the
+    // same gesture twice (a double-click) — report the success it was,
+    // idempotently, instead of scolding "already in your voice" over a
+    // save that just worked.
+    if (Date.now() - existing.createdAt < JUST_SAVED_GRACE_MS) {
+      await broadcastNotice({
+        type: 'bg:save-result',
+        kind: capture.hasMedia ? 'text-media' : 'success',
+        itemId: existing.id,
+        itemType: merged.type,
+        ...(filedInto !== null && { filedIntoBundleName: filedInto }),
+      });
+      return;
+    }
     await broadcastNotice({
       type: 'bg:save-result',
       kind: 'duplicate',
       duplicateOfId: existing.id,
+      duplicateOfSource: priorSource,
       ...(filedInto !== null && { filedIntoBundleName: filedInto }),
     });
     return;
@@ -93,12 +117,15 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
 
   const outcome = await tryAddItem(item);
   if (outcome === 'duplicate') {
-    // Safety net: the id collided under a concurrent write the scan
-    // above didn't see.
+    // The id collided under a concurrent write the scan above didn't
+    // see — that only happens when the same tweet was inserted moments
+    // ago (an older row would have matched the scan by id), i.e. the
+    // double-click race. The tweet is saved; report success.
     await broadcastNotice({
       type: 'bg:save-result',
-      kind: 'duplicate',
-      duplicateOfId: item.id,
+      kind: capture.hasMedia ? 'text-media' : 'success',
+      itemId: item.id,
+      itemType,
     });
     return;
   }
