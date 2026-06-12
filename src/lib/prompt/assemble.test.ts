@@ -198,14 +198,14 @@ describe('assembleInitialPrompt', () => {
     expect(soft.user).toContain('700');
   });
 
-  it('numbers the sampled voice examples into the user body', () => {
+  it('renders the sampled voice examples as tagged items in the user body', () => {
     const out = assembleInitialPrompt(
       postRequest(),
       DEFAULT_SETTINGS,
       pools([item('first example'), item('second example')]),
     );
-    expect(out.user).toContain('1) first example');
-    expect(out.user).toContain('2) second example');
+    expect(out.user).toContain('<example>\nfirst example\n</example>');
+    expect(out.user).toContain('<example>\nsecond example\n</example>');
   });
 
   it('collapses the aspirational block when the pool is empty, renders it when filled', () => {

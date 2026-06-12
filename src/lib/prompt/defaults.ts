@@ -287,14 +287,18 @@ ${violationsSummary}
 Rewrite it without those patterns, keeping the same voice, length, and intent.`;
 }
 
-/** Format a list of library items as a numbered block for the
- *  {{voiceExamples}} slot. Cold-start (empty list) returns a one-line
+/** Format a list of library items for the {{voiceExamples}} slot —
+ *  each item in its own <example> tag. Tags, not numbering or blank
+ *  lines, mark the boundaries: tweets routinely contain blank lines
+ *  and their own list numbering ("1) …"), which would make weaker
+ *  delimiters ambiguous and silently corrupt the length/pacing signal
+ *  the examples carry. Cold-start (empty list) returns a one-line
  *  note so the surrounding template still reads naturally. */
 export function formatExamples(items: LibraryItem[]): string {
   if (items.length === 0) {
     return '(none captured yet — lean on the voice guide alone)';
   }
-  return items.map((item, idx) => `${String(idx + 1)}) ${item.text.trim()}`).join('\n\n');
+  return items.map((item) => `<example>\n${item.text.trim()}\n</example>`).join('\n');
 }
 
 /** Build the optional {{aspirationalExamples}} slot value — the user's
@@ -309,20 +313,21 @@ export function buildAspirationalBlock(items: LibraryItem[]): string {
 }
 
 /** Build the optional {{threadExamples}} slot value — complete threads
- *  the user has written, each rendered as ONE example with `1/ 2/ …`
- *  segment markers (the boundaries ARE the pacing signal; the joined
- *  flow is the throughline). Empty pool collapses to '' like the
- *  aspirational block. The pacing instruction lives in
- *  `THREAD_PRECEDENCE`, not here — precedence ranks the blocks. */
+ *  the user has written, each in its own <thread_example> tag with
+ *  `1/ 2/ …` segment markers inside (the segment boundaries ARE the
+ *  pacing signal; the tag is the indisputable thread boundary). Empty
+ *  pool collapses to '' like the aspirational block. The pacing
+ *  instruction lives in `THREAD_PRECEDENCE`, not here — precedence
+ *  ranks the blocks. */
 export function buildThreadExamplesBlock(items: LibraryItem[]): string {
   if (items.length === 0) return '';
   const rendered = items
-    .map((item, idx) => {
+    .map((item) => {
       const segments = item.segments?.map((s) => s.text) ?? [item.text];
       const marked = segments.map((text, i) => `${String(i + 1)}/ ${text.trim()}`).join('\n\n');
-      return `${String(idx + 1)})\n${marked}`;
+      return `<thread_example>\n${marked}\n</thread_example>`;
     })
-    .join('\n\n');
+    .join('\n');
   return `<thread_examples>\n${rendered}\n</thread_examples>\n\n`;
 }
 

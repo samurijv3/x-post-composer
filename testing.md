@@ -2,7 +2,7 @@
 
 Normative rule: CLAUDE.md §5 — every load-bearing piece of deterministic logic has a behavioral test; **no coverage-percentage gate, no filler tests**. This file is the how.
 
-Current state: **470 tests, 28 files**, all green via `npm run test`.
+Current state: **471 tests, 28 files**, all green via `npm run test`.
 
 ## Stack and config
 

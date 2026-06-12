@@ -137,10 +137,18 @@ function item(text: string): LibraryItem {
 }
 
 describe('formatExamples', () => {
-  it('numbers items starting at 1', () => {
+  it('wraps each item in its own example tag', () => {
     const out = formatExamples([item('first'), item('second')]);
-    expect(out).toContain('1) first');
-    expect(out).toContain('2) second');
+    expect(out).toBe('<example>\nfirst\n</example>\n<example>\nsecond\n</example>');
+  });
+
+  it('a multi-paragraph, self-numbered tweet stays ONE example — the tags are the boundary', () => {
+    // The case that motivated tags over numbering: blank lines and
+    // "N)" inside a tweet must not read as example boundaries.
+    const listicle = item('3 things:\n\n1) the first\n\n2) the second');
+    const out = formatExamples([listicle, item('next tweet')]);
+    expect(out.match(/<example>/g)).toHaveLength(2);
+    expect(out).toContain('2) the second\n</example>');
   });
 
   it('cold-start returns a single explanatory line', () => {
@@ -157,7 +165,7 @@ describe('buildAspirationalBlock', () => {
   it('wraps a non-empty pool in the aspirational_examples tags', () => {
     const out = buildAspirationalBlock([item('my best work')]);
     expect(out).toContain('<aspirational_examples>');
-    expect(out).toContain('1) my best work');
+    expect(out).toContain('<example>\nmy best work\n</example>');
     expect(out).toContain('</aspirational_examples>');
   });
 });
@@ -256,10 +264,10 @@ describe('thread prompt pieces (Phase 10)', () => {
     expect(buildThreadExamplesBlock([])).toBe('');
   });
 
-  it('renders each thread as ONE numbered example with segment markers', () => {
+  it('renders each thread as ONE tagged example with segment markers', () => {
     const block = buildThreadExamplesBlock([threadItem('t1', ['alpha', 'beta'])]);
     expect(block).toContain('<thread_examples>');
-    expect(block).toContain('1)\n1/ alpha\n\n2/ beta');
+    expect(block).toContain('<thread_example>\n1/ alpha\n\n2/ beta\n</thread_example>');
   });
 
   it('falls back to the joined text when segments are null (defensive)', () => {
