@@ -49,7 +49,8 @@ function PanelShell() {
   const [replyContextError, setReplyContextError] = useState<ReplyContextError | null>(null);
   const [handle, setHandle] = useState<string>('');
   // VoiceScreen reads this to flash a specific row: 'added' for a fresh
-  // save, 'dup' for the duplicate banner's "Show me" (which also
+  // save, 'locate' when something asks to reveal a specific row —
+  // the duplicate banner's "Show me" or a bundle-member click (which also
   // scrolls the row into view). Cleared after the flash window.
   const [flashRow, setFlashRow] = useState<FlashRow | null>(null);
   const flashTimer = useRef<number | null>(null);
@@ -171,7 +172,7 @@ function PanelShell() {
 
   function showDup(id: string): void {
     setScreen('voice');
-    fireFlash(id, 'dup');
+    fireFlash(id, 'locate');
   }
 
   return (
@@ -197,7 +198,13 @@ function PanelShell() {
           </div>
         )}
         {screen === 'compose' && <ComposeScreen onToast={fireToast} onOpenOptions={openOptions} />}
-        {screen === 'voice' && <VoiceScreen onToast={fireToast} flashRow={flashRow} />}
+        {screen === 'voice' && (
+          <VoiceScreen
+            onToast={fireToast}
+            flashRow={flashRow}
+            onLocateItem={(id) => fireFlash(id, 'locate')}
+          />
+        )}
       </div>
       {onX === false && !offXDismissed && (
         <div className="offx-overlay" role="status">

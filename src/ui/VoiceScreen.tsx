@@ -19,16 +19,21 @@ import { BundleSection } from './voice/BundleSection';
 import { CaptureBanner } from './voice/CaptureBanner';
 import { LibRow } from './voice/LibRow';
 
-/** Row App wants flashed: 'added' after a successful save, 'dup' when
- *  the user clicks "Show me" on the duplicate banner (scrolls too). */
+/** Row App wants flashed: 'added' after a successful save, 'locate'
+ *  when something asks to reveal a specific row — the duplicate
+ *  banner's "Show me" or a bundle-member link (scrolls too). */
 export interface FlashRow {
   id: string;
-  kind: 'added' | 'dup';
+  kind: 'added' | 'locate';
 }
 
 interface Props {
   onToast: (msg: string, action?: ToastData['action']) => void;
   flashRow: FlashRow | null;
+  /** Ask App (which owns the flash state) to reveal a library row.
+   *  Bundle-member links reuse the duplicate-banner "Show me" path:
+   *  scroll into view + flash; the filter widens below. */
+  onLocateItem: (id: string) => void;
 }
 
 type Filter = 'all' | 'post' | 'reply' | 'starred';
@@ -37,7 +42,7 @@ type Filter = 'all' | 'post' | 'reply' | 'starred';
  * Voice — the saved-examples library. Owns the list state and storage
  * round-trips; the banner, rows, and add-form live in ./voice.
  */
-export function VoiceScreen({ onToast, flashRow }: Props) {
+export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [handle, setHandle] = useState<string>('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -54,12 +59,15 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
   const [bundlesOpen, setBundlesOpen] = useState<boolean>(true);
   const [examplesOpen, setExamplesOpen] = useState<boolean>(true);
 
-  // "Show me" promised to show THE row — if a type filter would hide
-  // it, the flash would be invisible and the CTA would read as broken.
-  // Widen to All before the row renders. (Just-added flashes don't
-  // override the user's filter; they didn't ask to jump anywhere.)
+  // A locate promised to show THE row — if a type filter or a collapsed
+  // section would hide it, the flash would be invisible and the link
+  // would read as broken. Widen to All and open the section first.
+  // (Just-added flashes don't override either; they didn't ask to jump.)
   useEffect(() => {
-    if (flashRow?.kind === 'dup') setFilter('all');
+    if (flashRow?.kind === 'locate') {
+      setFilter('all');
+      setExamplesOpen(true);
+    }
   }, [flashRow]);
 
   const refresh = useCallback(async () => {
@@ -281,6 +289,7 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
         }
         onRename={(b, name) => void renameBundle(b, name)}
         onRemoveMember={(b, itemId) => void removeBundleMember(b, itemId)}
+        onLocateMember={onLocateItem}
         onDelete={(b) => void removeBundle(b)}
       />
 

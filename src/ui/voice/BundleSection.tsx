@@ -25,6 +25,9 @@ interface BundleSectionProps {
   creation: BundleCreation | null;
   onRename: (bundle: Bundle, name: string) => void;
   onRemoveMember: (bundle: Bundle, itemId: string) => void;
+  /** Reveal a member's row in Saved examples (scroll + flash) — the
+   *  same path as the duplicate banner's "Show me". */
+  onLocateMember: (itemId: string) => void;
   onDelete: (bundle: Bundle) => void;
 }
 
@@ -46,6 +49,7 @@ export function BundleSection({
   creation,
   onRename,
   onRemoveMember,
+  onLocateMember,
   onDelete,
 }: BundleSectionProps) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -129,6 +133,7 @@ export function BundleSection({
                 onToggle={() => setOpenId(openId === b.id ? null : b.id)}
                 onRename={(name) => onRename(b, name)}
                 onRemoveMember={(itemId) => onRemoveMember(b, itemId)}
+                onLocateMember={onLocateMember}
                 onDelete={() => onDelete(b)}
               />
             ))}
@@ -146,6 +151,7 @@ interface BundleRowProps {
   onToggle: () => void;
   onRename: (name: string) => void;
   onRemoveMember: (itemId: string) => void;
+  onLocateMember: (itemId: string) => void;
   onDelete: () => void;
 }
 
@@ -156,6 +162,7 @@ function BundleRow({
   onToggle,
   onRename,
   onRemoveMember,
+  onLocateMember,
   onDelete,
 }: BundleRowProps) {
   const [renaming, setRenaming] = useState<boolean>(false);
@@ -233,7 +240,14 @@ function BundleRow({
           {members.map((m, idx) => (
             <li key={m.id} className="bundle-member">
               <span className="pick-badge static">{idx + 1}</span>
-              <span className="bundle-member-text">{m.text}</span>
+              <button
+                type="button"
+                className="bundle-member-text"
+                title="Show this tweet in Saved examples"
+                onClick={() => onLocateMember(m.id)}
+              >
+                {m.text}
+              </button>
               <button
                 type="button"
                 className="icon-btn"

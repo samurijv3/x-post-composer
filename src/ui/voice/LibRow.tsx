@@ -7,7 +7,7 @@ import { formatRelativeTweetTime } from '../../lib/format/relativeTime';
 interface LibRowProps {
   item: LibraryItem;
   open: boolean;
-  highlight: 'added' | 'dup' | null;
+  highlight: 'added' | 'locate' | null;
   onToggle: () => void;
   onRemove: () => void;
   onSave: (patch: Partial<LibraryItem>) => void;
@@ -45,7 +45,7 @@ export function LibRow({
   // reads as "the button did nothing." Just-added flashes deliberately
   // don't scroll: the user may be mid-scroll and didn't ask to jump.
   useLayoutEffect(() => {
-    if (highlight === 'dup') {
+    if (highlight === 'locate') {
       rowRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
   }, [highlight]);
@@ -61,7 +61,7 @@ export function LibRow({
     setEditing(false);
   }
 
-  const hl = highlight === 'added' ? 'just-added' : highlight === 'dup' ? 'flash-dup' : '';
+  const hl = highlight === 'added' ? 'just-added' : highlight === 'locate' ? 'flash-locate' : '';
   const relTime = formatRelativeTweetTime(item.timestamp);
   const displayName = item.authorDisplayName ?? item.authorHandle;
   const picked = selection?.index != null;
