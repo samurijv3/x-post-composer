@@ -66,6 +66,11 @@ interface DraftStateProps {
    *  seedBundleId resolved by ComposeScreen), or null when sampled.
    *  Distinct from the picker, which drives the NEXT generation. */
   seedBundleName: string | null;
+  /** Per-draft auto-filing override (default on). Only rendered while
+   *  the draft is seeded AND the shipped save will happen — borrowing
+   *  a bundle's voice for a one-off shouldn't grow the series. */
+  fileToBundle: boolean;
+  onToggleFileToBundle: () => void;
   briefText: string;
   busy: boolean;
   expanded: boolean;
@@ -93,6 +98,8 @@ export function DraftState({
   refine,
   bundlePicker,
   seedBundleName,
+  fileToBundle,
+  onToggleFileToBundle,
   briefText,
   busy,
   expanded,
@@ -240,11 +247,28 @@ export function DraftState({
       )}
 
       {/* The compose UI states plainly when a bundle drove the current
-          draft's examples — and whether copying files it back in. */}
+          draft's examples — and whether copying files it back in. The
+          filing override only renders while it could apply (a save is
+          actually going to happen). */}
       {seedBundleName && (
         <p className="help bundle-note">
-          Voice examples from bundle “{seedBundleName}”
-          {shipToVoice ? ' — copying files this draft back into it.' : '.'}
+          <span>Voice examples from bundle “{seedBundleName}”.</span>
+          {shipToVoice === true && (
+            <label
+              className="voice-toggle"
+              title={
+                fileToBundle
+                  ? 'Copying files this draft back into the bundle — click to keep this one out'
+                  : 'This draft won’t be filed into the bundle on copy — click to include it'
+              }
+            >
+              <span className="switch">
+                <input type="checkbox" checked={fileToBundle} onChange={onToggleFileToBundle} />
+                <span className="track" />
+              </span>
+              <span>file back in on copy</span>
+            </label>
+          )}
         </p>
       )}
 

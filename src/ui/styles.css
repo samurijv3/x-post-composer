@@ -1518,8 +1518,13 @@ code {
   min-width: 0;
   padding: 6px 8px;
 }
-/* "This draft was seeded by bundle X" — quiet, but always stated. */
+/* "This draft was seeded by bundle X" — quiet, but always stated; the
+   filing override sits inline when a save is going to happen. */
 .bundle-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   margin: 0;
 }
 

@@ -220,6 +220,13 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   shipToVoiceRef.current = shipToVoice;
   const saveShippedDefaultRef = useRef(saveShippedDefault);
   saveShippedDefaultRef.current = saveShippedDefault;
+  // Per-draft override of bundle auto-filing — same pattern: a seeded
+  // draft files back into its bundle by default, but borrowing a
+  // bundle's voice for a one-off shouldn't grow the series. Resets ON
+  // per generation; consulted by the commit listener via ref.
+  const [fileToBundle, setFileToBundle] = useState<boolean>(true);
+  const fileToBundleRef = useRef(fileToBundle);
+  fileToBundleRef.current = fileToBundle;
 
   // Latest-call-wins coordination (the reducer's pendingSeq is the
   // authoritative gate; this ref numbers the requests and lets the
@@ -330,6 +337,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     const replacesDraft = lifecycleRef.current.content !== null;
     // A new draft gets a fresh per-draft loop decision.
     setShipToVoice(saveShippedDefaultRef.current);
+    setFileToBundle(true);
     dispatchDraft({ type: 'generation-started', seq: myId });
     const request: GenerationRequest = {
       mode: hasContext ? 'reply' : 'post',
@@ -499,7 +507,9 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
         type: 'panel:draft-committed',
         text: commit.text,
         mode: commit.mode,
-        bundleId: commit.seedBundleId,
+        // The per-draft filing override: off means the shipped example
+        // still saves but the bundle doesn't grow.
+        bundleId: fileToBundleRef.current ? commit.seedBundleId : null,
       }).catch(() => {
         onToast('Copied — but saving it to Voice failed.');
       });
@@ -673,6 +683,8 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
           refine={refineControls}
           bundlePicker={bundlePicker}
           seedBundleName={seedBundleName}
+          fileToBundle={fileToBundle}
+          onToggleFileToBundle={() => setFileToBundle((v) => !v)}
           briefText={briefText}
           busy={busy}
           expanded={expanded}
