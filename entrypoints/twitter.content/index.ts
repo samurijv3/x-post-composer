@@ -316,6 +316,14 @@ export default defineContentScript({
     let keyboardNavActive = false;
     let lastPointerX = -1;
     let lastPointerY = -1;
+    // Resume anchor: the last article the cursor occupied, kept when
+    // the cursor itself clears (Escape release, the mouse drifting off
+    // articles or out of the window). The first arrow press afterwards
+    // re-acquires THIS tweet — the user's place — and only the next
+    // press moves. Without it the press fell back to the viewport
+    // pick, which lands on the partially-visible tweet above/below
+    // (field bug: ↓ after a release outlined the tweet ABOVE).
+    let lastCursorArticle: Element | null = null;
 
     document.addEventListener('mousemove', (event) => {
       const moved = event.clientX !== lastPointerX || event.clientY !== lastPointerY;
@@ -352,6 +360,7 @@ export default defineContentScript({
       // by passing them through to X.
       if (article !== hoveredArticle) {
         hoveredArticle = article;
+        lastCursorArticle = article;
         applyOverlayState();
       }
     });
@@ -472,6 +481,16 @@ export default defineContentScript({
         // the passed-through native scroll fires echo mouseovers.
         keyboardNavActive = true;
         let cursor = hoveredArticle !== null && hoveredArticle.isConnected ? hoveredArticle : null;
+        if (cursor === null && currentLockTargetStillValid(lastCursorArticle)) {
+          // No cursor but a remembered place — the first press brings
+          // back the tweet the user was on (release/drift cleared it);
+          // the NEXT press is the one that moves. (The validity check
+          // is the generic connected-and-in-active-layer predicate.)
+          hoveredArticle = lastCursorArticle;
+          applyOverlayState();
+          nudgeArticleIntoView(lastCursorArticle, repeat);
+          return true;
+        }
         if (cursor === null && captureMode === 'reply-context') {
           // Nav resumes from the current selection — the locked
           // tweet — when it's rendered, rather than the viewport.
@@ -480,6 +499,7 @@ export default defineContentScript({
         const next = stepToAdjacentArticle(cursor, key === 'ArrowDown' ? 1 : -1);
         if (next === null) return false;
         hoveredArticle = next;
+        lastCursorArticle = next;
         applyOverlayState();
         nudgeArticleIntoView(next, repeat);
         return true;
