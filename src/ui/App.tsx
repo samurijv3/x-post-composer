@@ -1,15 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrandMark } from './BrandMark';
 import { Toast, type ToastData } from './Toast';
-import { IcCompose, IcMoon, IcSettings, IcSun, IcVoice } from './icons';
-import {
-  bindDocumentTheme,
-  getThemePreference,
-  setThemePreference,
-  subscribeCaptureMode,
-  subscribeTheme,
-  type ThemePreference,
-} from '../storage';
+import { IcSettings } from './icons';
+import { bindDocumentTheme, subscribeCaptureMode } from '../storage';
 import type { ActiveCaptureMode } from '../storage/captureMode';
 import type { CaptureNavKey } from '../messaging';
 import { ComposeScreen } from './ComposeScreen';
@@ -256,16 +249,21 @@ function PanelShell() {
       {onX === false && !offXDismissed && (
         <div className="offx-overlay" role="status">
           <div className="offx-card">
+            <BrandMark />
             <div className="offx-title">You’ve left X</div>
             <p className="help" style={{ margin: '4px 0 12px' }}>
-              Margin works alongside an x.com tab — capturing tweets and pulling in reply context
-              need you there.
+              Capturing tweets and pulling in reply context need an x.com tab. Composing from your
+              library still works.
             </p>
             <div className="offx-actions">
-              <button type="button" className="btn primary sm" onClick={openX}>
+              <button type="button" className="btn primary block" onClick={openX}>
                 Open x.com
               </button>
-              <button type="button" className="btn ghost sm" onClick={() => setOffXDismissed(true)}>
+              <button
+                type="button"
+                className="btn ghost block"
+                onClick={() => setOffXDismissed(true)}
+              >
                 Compose anyway
               </button>
             </div>
@@ -283,63 +281,47 @@ interface HeadProps {
   onOpenOptions: () => void;
 }
 
+/** Brand row + the labeled tab bar (X's tab pattern) — nav is
+ *  visible, labeled, and stateful; the tagline is retired. */
 function PanelHead({ screen, onSwitchScreen, onOpenOptions }: HeadProps) {
   return (
-    <div className="panel-head">
-      <div className="brand">
-        <BrandMark />
-        <div>
+    <>
+      <div className="panel-head">
+        <div className="brand">
+          <BrandMark />
           <div className="brand-name">Margin</div>
-          <div className="brand-sub">in the margin of X</div>
         </div>
+        <span className="head-spacer" />
+        <button
+          className="icon-btn"
+          type="button"
+          title="Settings"
+          aria-label="Open settings"
+          onClick={onOpenOptions}
+        >
+          <IcSettings />
+        </button>
       </div>
-      <span className="head-spacer" />
-      <button
-        className="icon-btn"
-        type="button"
-        title={screen === 'voice' ? 'Compose' : 'Voice'}
-        aria-label={screen === 'voice' ? 'Switch to Compose' : 'Switch to Voice'}
-        onClick={() => onSwitchScreen(screen === 'voice' ? 'compose' : 'voice')}
-      >
-        {screen === 'voice' ? <IcCompose /> : <IcVoice />}
-      </button>
-      <ThemeToggle />
-      <button
-        className="icon-btn"
-        type="button"
-        title="Settings"
-        aria-label="Open settings"
-        onClick={onOpenOptions}
-      >
-        <IcSettings />
-      </button>
-    </div>
-  );
-}
-
-/**
- * Binary theme toggle. Shows the icon of the *opposite* theme (the
- * one a click would switch to) — sun = "switch to light", moon =
- * "switch to dark." Matches every other extension's theme button.
- */
-function ThemeToggle() {
-  // INTERIM (reskin phase 1): the binary toggle cycles light ↔ Dim
-  // until phase 5 removes this button and phase 6/7 adds the four-way
-  // Theme row (Auto / Light / Dim / Lights Out) in Settings → Account.
-  const [pref, setPref] = useState<ThemePreference>('auto');
-  useEffect(() => {
-    void getThemePreference().then(setPref);
-    const unsub = subscribeTheme(setPref);
-    return () => unsub();
-  }, []);
-  const isDarkish = pref === 'dim' || pref === 'lights';
-  function toggle(): void {
-    void setThemePreference(isDarkish ? 'light' : 'dim');
-  }
-  const title = isDarkish ? 'Switch to light theme' : 'Switch to dark theme';
-  return (
-    <button className="icon-btn" type="button" title={title} aria-label={title} onClick={toggle}>
-      {isDarkish ? <IcSun /> : <IcMoon />}
-    </button>
+      <div className="tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={screen === 'compose'}
+          className={`tab ${screen === 'compose' ? 'active' : ''}`}
+          onClick={() => onSwitchScreen('compose')}
+        >
+          <span className="tab-in">Compose</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={screen === 'voice'}
+          className={`tab ${screen === 'voice' ? 'active' : ''}`}
+          onClick={() => onSwitchScreen('voice')}
+        >
+          <span className="tab-in">Voice</span>
+        </button>
+      </div>
+    </>
   );
 }
