@@ -86,7 +86,7 @@ Then open the panel (toolbar icon), click the gear to open **Settings**, and in 
 
 1. Open the side panel on x.com and switch to the **Voice** screen.
 2. Turn on **Save tweets from X**. Hovering tweets shows a highlight; clicking one of **your own** tweets saves it (the author must match your configured handle — anyone else's is rejected).
-3. Manage entries in Voice: edit text inline, override post/reply, delete, star your best ("you at your best" — guaranteed into every prompt).
+3. Manage entries in Voice: search as you type (composes with the filter pills), edit text inline, override post/reply, delete, star your best ("you at your best" — guaranteed into every prompt).
 4. Or paste text via the **+** (Add manually) form, ticking "This is my own writing."
 
 ### Bundles (seed a draft from specific tweets)

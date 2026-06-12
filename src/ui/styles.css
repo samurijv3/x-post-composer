@@ -1336,6 +1336,29 @@ code {
   color: var(--text-3);
 }
 
+/* Live search over the saved examples — composes with the pill filter. */
+.lib-search {
+  position: relative;
+}
+.lib-search .ls-icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.lib-search input {
+  padding: 7px 10px 7px 29px;
+  font-size: var(--fs-sm);
+}
+/* Chrome's native clear (×) handles resetting; Escape works too. */
+.lib-search input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
 /* ---- bundles (Phase 6) ---- */
 
 /* Bounded real estate: a pile of bundles scrolls internally instead of

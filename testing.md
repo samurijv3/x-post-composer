@@ -2,7 +2,7 @@
 
 Normative rule: CLAUDE.md §5 — every load-bearing piece of deterministic logic has a behavioral test; **no coverage-percentage gate, no filler tests**. This file is the how.
 
-Current state: **390 tests, 26 files**, all green via `npm run test`.
+Current state: **395 tests, 27 files**, all green via `npm run test`.
 
 ## Stack and config
 
@@ -26,7 +26,7 @@ Current state: **390 tests, 26 files**, all green via `npm run test`.
 | Formatting                                                     | `src/lib/format/relativeTime.test.ts`                        | User-visible timestamps incl. clock-skew behavior                                                                                                                                                         |
 | Overlay render policy                                          | `src/lib/overlay/visibility.test.ts`                         | Decides what may paint on x.com (panel/modal/navigation gates — the §6 disappear rules)                                                                                                                   |
 | Draft lifecycle + commit hook + bullet transforms              | `src/lib/draft/{lifecycle,commit,bullets}.test.ts`           | The draft state machine: stale-generation gating, both undo scopes, hand-edit semantics, commit resolution                                                                                                |
-| Library dedupe                                                 | `src/lib/library/dedupe.test.ts`                             | Concept A: id/text identity, manual > shipped > archive precedence, never-downgrade, in-place promotion                                                                                                   |
+| Library dedupe + search                                        | `src/lib/library/{dedupe,search}.test.ts`                    | Concept A: id/text identity, manual > shipped > archive precedence, never-downgrade, in-place promotion; the live-search predicate (token-AND, case folding, empty-query = all)                           |
 | Reply-context same-tweet merge                                 | `src/lib/replyContext/merge.test.ts`                         | Stops X's metadata-poor modal copies from degrading the lock (identity + field-wise enrichment)                                                                                                           |
 | On-X URL predicate                                             | `src/lib/url/isXPageUrl.test.ts`                             | Drives the panel's off-X overlay; "URL invisible to us" must read as off-X                                                                                                                                |
 | Settings merge + migration                                     | `src/storage/config.test.ts`                                 | Decides whether saved settings survive upgrades (blanked-template restore, nested merges, empty-banlist preservation)                                                                                     |

@@ -12,8 +12,9 @@ import {
 } from '../storage';
 import { isMessageOfType, onNotice, sendToBackground, type BackgroundReply } from '../messaging';
 import { moveBundleMember } from '../lib/bundles';
+import { matchesSearch } from '../lib/library';
 import type { Bundle, LibraryItem } from '../types';
-import { IcChevDown, IcChevR, IcPlus, IcVoice } from './icons';
+import { IcChevDown, IcChevR, IcPlus, IcSearch, IcVoice } from './icons';
 import type { ToastData } from './Toast';
 import { AddForm } from './voice/AddForm';
 import { BundleSection } from './voice/BundleSection';
@@ -47,6 +48,9 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [handle, setHandle] = useState<string>('');
   const [filter, setFilter] = useState<Filter>('all');
+  // Live search over the examples — filters as you type, composed with
+  // the pill filter (visible = pill ∩ query).
+  const [query, setQuery] = useState<string>('');
   const [adding, setAdding] = useState<boolean>(false);
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   // ---- bundles (roadmap Phase 6) ----
@@ -70,6 +74,7 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   useEffect(() => {
     if (flashRow?.kind === 'locate') {
       setFilter('all');
+      setQuery('');
       setExamplesOpen(true);
     }
   }, [flashRow]);
@@ -113,12 +118,16 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   // The visible count IS the control: it nudges toward a small canon
   // (Core Concept A) — deliberately no ranking or bulk tools.
   const starred = items.filter((i) => i.favorite).length;
-  const visible =
+  // Pills and search compose: the pill picks the slice, the query
+  // whittles it live. Pill counts stay whole-library on purpose — they
+  // are the stable overview; the list is the search feedback.
+  const pillFiltered =
     filter === 'all'
       ? items
       : filter === 'starred'
         ? items.filter((i) => i.favorite)
         : items.filter((i) => i.type === filter);
+  const visible = pillFiltered.filter((i) => matchesSearch(i.text, query));
 
   // The starred pill disappears when the last star is removed — don't
   // leave the filter stuck on a state with no control to escape it.
@@ -427,6 +436,22 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
             />
           )}
 
+          {items.length > 0 && (
+            <div className="lib-search">
+              <IcSearch className="ls-icon" />
+              <input
+                type="search"
+                placeholder="Search your examples"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setQuery('');
+                }}
+                aria-label="Search saved examples"
+              />
+            </div>
+          )}
+
           <div className="field-row">
             <div className="pillrow">
               <button
@@ -476,6 +501,16 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
             <IcVoice className="ei" />
             Nothing saved yet. Turn on saving above and click your own posts on x.com — or paste one
             in by hand.
+          </div>
+        ) : query.trim() !== '' ? (
+          // The search came up dry — name the query (and the narrowing
+          // pill, when one is on) so the fix is obvious.
+          <div className="empty">
+            <IcSearch className="ei" />
+            No matches for “{query.trim()}”{filter !== 'all' ? ' under this filter' : ''}.{' '}
+            <button type="button" className="lib-more" onClick={() => setQuery('')}>
+              Clear search
+            </button>
           </div>
         ) : (
           <div className="empty">
