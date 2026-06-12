@@ -200,3 +200,16 @@ export const IcMonitor = (p: SVGProps<SVGSVGElement>) => (
     <path d="M8 21h8M12 17v4" />
   </Svg>
 );
+
+/** Bullseye — the per-post "aim refines here" toggle. */
+export function IcTarget({
+  filled = false,
+  ...props
+}: SVGProps<SVGSVGElement> & { filled?: boolean }) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="2.5" fill={filled ? 'currentColor' : 'none'} />
+    </Svg>
+  );
+}

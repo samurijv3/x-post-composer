@@ -1,10 +1,12 @@
 import type { Span } from '../../lib/exclusion';
 import { X_HARD_LIMIT } from '../../lib/counting';
-import { IcCheck, IcCopy, IcRefresh, IcSliders } from '../icons';
+import { IcCheck, IcCopy, IcRefresh, IcTarget } from '../icons';
+import { CountRing } from './CountRing';
 import { DraftEditor } from './DraftEditor';
 import { ViolationNote } from './ViolationNote';
+import { monogram } from './monogram';
 
-/** One post of a thread draft, as the cards render it. */
+/** One post of a thread draft, as the segments render it. */
 export interface DraftPostViewModel {
   text: string;
   residualViolations: Span[];
@@ -18,7 +20,10 @@ export interface DraftPostViewModel {
 interface ThreadCardsProps {
   posts: DraftPostViewModel[];
   charCap: boolean;
+  softCapChars: number;
   busy: boolean;
+  /** The user's @handle — every segment wears their avatar. */
+  handle: string;
   /** The post the refine controls are aimed at (scope), or null. */
   aimedPost: number | null;
   onEditPost: (postIndex: number, text: string) => void;
@@ -30,93 +35,104 @@ interface ThreadCardsProps {
 }
 
 /**
- * A thread draft as ordered cards — mirroring how X's native thread
- * composer works, one post at a time. Each card is the same directly-
- * editable surface as a single draft (DraftEditor: real textarea +
- * violation backdrop) with its own ordinal, weighted count, and copy
- * button. Copying every card commits the draft (the lifecycle's
- * all-copied rule).
+ * A thread draft as X's own self-thread anatomy: avatar rail +
+ * connector, each segment directly editable (DraftEditor). Copied
+ * segments dim behind a green check; uncopied ones keep their ring,
+ * count, and per-post actions (copy / rewrite / aim). The aimed
+ * segment wears a 2px blue inset ring + tag — deliberately the same
+ * visual as the on-page lock overlay.
  */
 export function ThreadCards({
   posts,
   charCap,
+  softCapChars,
   busy,
+  handle,
   aimedPost,
   onEditPost,
   onCopyPost,
   onRewritePost,
   onAimPost,
 }: ThreadCardsProps) {
+  const ringLimit = charCap ? X_HARD_LIMIT : softCapChars;
   return (
-    <ol className="thread-cards">
+    <div className="tsegs">
       {posts.map((post, i) => (
-        <li
+        <div
           key={i}
-          className={`thread-card ${post.copied ? 'tc-copied' : ''} ${aimedPost === i ? 'tc-aimed' : ''}`}
+          className={`tseg ${post.copied ? 'copied' : ''} ${aimedPost === i ? 'aimed' : ''}`}
         >
-          <div className="tc-head">
-            <span className="tc-ordinal">
-              {i + 1}/{posts.length}
-            </span>
-            <span className="head-spacer" />
-            <span
-              className={`count ${post.over ? 'over' : ''}`}
-              title="X-weighted count — URLs always count as 23, some characters as 2"
-            >
-              {post.count}
-              {charCap ? ` / ${X_HARD_LIMIT}` : ' chars'}
-            </span>
-            <button
-              type="button"
-              className={`icon-btn tc-copy ${aimedPost === i ? 'is-on' : ''}`}
-              title={
-                aimedPost === i
-                  ? 'Chips & steering are aimed at this post — click to un-aim'
-                  : 'Aim chips & steering at this post only'
-              }
-              aria-label={`Aim refines at post ${String(i + 1)}`}
-              aria-pressed={aimedPost === i}
-              disabled={busy}
-              onClick={() => onAimPost(i)}
-            >
-              <IcSliders />
-            </button>
-            <button
-              type="button"
-              className="icon-btn tc-copy"
-              title="Rewrite this post — fresh take, same beat (the rest of the thread is untouched)"
-              aria-label={`Rewrite post ${String(i + 1)}`}
-              disabled={busy}
-              onClick={() => onRewritePost(i)}
-            >
-              <IcRefresh />
-            </button>
-            <button
-              type="button"
-              className={`icon-btn tc-copy ${post.copied ? 'is-on' : ''}`}
-              title={post.copied ? 'Copied — edit to re-arm' : `Copy post ${String(i + 1)}`}
-              aria-label={
-                post.copied ? `Post ${String(i + 1)} copied` : `Copy post ${String(i + 1)}`
-              }
-              disabled={busy}
-              onClick={() => onCopyPost(i)}
-            >
-              {post.copied ? <IcCheck /> : <IcCopy />}
-            </button>
+          {aimedPost === i && <span className="aimtag">aimed</span>}
+          <div className="tseg-rail">
+            <span className="avatar av-36">{monogram(handle)}</span>
+            {i < posts.length - 1 && <span className="conn" />}
           </div>
-          <DraftEditor
-            text={post.text}
-            violations={post.residualViolations}
-            disabled={busy}
-            onEdit={(text) => onEditPost(i, text)}
-          />
-          {post.residualViolations.length > 0 && (
-            <div className="tc-warn">
+          <div className="tseg-body">
+            <DraftEditor
+              text={post.text}
+              violations={post.residualViolations}
+              disabled={busy}
+              onEdit={(text) => onEditPost(i, text)}
+            />
+            {post.residualViolations.length > 0 && (
               <ViolationNote violations={post.residualViolations} />
+            )}
+            <div className="tseg-foot">
+              {post.copied ? (
+                <span className="done">
+                  <IcCheck /> copied
+                </span>
+              ) : (
+                <>
+                  <CountRing
+                    count={post.count}
+                    limit={ringLimit}
+                    over={post.over}
+                    committed={false}
+                  />
+                  <span className={`count ${post.over ? 'over' : ''}`}>{post.count}</span>
+                  <span className="head-spacer" />
+                  <button
+                    type="button"
+                    className="icon-btn sm"
+                    title={`Copy post ${String(i + 1)}`}
+                    aria-label={`Copy post ${String(i + 1)}`}
+                    disabled={busy}
+                    onClick={() => onCopyPost(i)}
+                  >
+                    <IcCopy />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn sm"
+                    title="Rewrite this post — fresh take, same beat (the rest of the thread is untouched)"
+                    aria-label={`Rewrite post ${String(i + 1)}`}
+                    disabled={busy}
+                    onClick={() => onRewritePost(i)}
+                  >
+                    <IcRefresh />
+                  </button>
+                  <button
+                    type="button"
+                    className={`icon-btn sm ${aimedPost === i ? 'is-aimed' : ''}`}
+                    title={
+                      aimedPost === i
+                        ? 'Refines aim here — click to clear'
+                        : 'Aim chips & steering at this post only'
+                    }
+                    aria-label={`Aim refines at post ${String(i + 1)}`}
+                    aria-pressed={aimedPost === i}
+                    disabled={busy}
+                    onClick={() => onAimPost(i)}
+                  >
+                    <IcTarget filled={aimedPost === i} />
+                  </button>
+                </>
+              )}
             </div>
-          )}
-        </li>
+          </div>
+        </div>
       ))}
-    </ol>
+    </div>
   );
 }

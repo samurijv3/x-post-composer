@@ -1670,15 +1670,17 @@ code {
 }
 /* The aim indicator above the refine blocks. */
 .refine-scope {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  border: 1px solid var(--accent-line);
+  gap: 6px;
+  padding: 4px 6px 4px 12px;
+  border: 0;
   border-radius: var(--r-pill);
   background: var(--accent-weak);
-  font-size: var(--fs-sm);
-  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 10px;
   width: fit-content;
 }
 .thread-card.tc-copied {
@@ -3419,4 +3421,110 @@ code {
 .foot-note {
   text-align: center;
   margin: 2px 16px 10px;
+}
+
+/* ============================================================
+   Reskin phase 3c — thread segments on the avatar rail.
+   ============================================================ */
+.tsegs {
+  display: flex;
+  flex-direction: column;
+}
+.tseg {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0 0;
+  position: relative;
+}
+.tseg-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 40px;
+  flex-shrink: 0;
+}
+.tseg-rail .conn {
+  width: 2px;
+  flex: 1;
+  background: var(--line-2);
+  margin-top: 4px;
+  min-height: 8px;
+}
+.tseg-body {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 10px;
+  position: relative;
+}
+.tseg-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+}
+.tseg-foot .count {
+  font-size: 12.5px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.tseg-foot .count.over {
+  color: var(--danger);
+  font-weight: 700;
+}
+.tseg-foot .done {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ok);
+  font-weight: 600;
+}
+.tseg-foot .done svg {
+  width: 13px;
+  height: 13px;
+}
+.tseg-foot .icon-btn.sm {
+  width: 28px;
+  height: 28px;
+}
+.tseg-foot .icon-btn.sm svg {
+  width: 15px;
+  height: 15px;
+}
+.tseg-foot .icon-btn.is-aimed {
+  color: var(--accent);
+}
+.tseg.copied .draft-editor-layer {
+  color: var(--text-2);
+}
+.tseg.aimed::after {
+  content: '';
+  position: absolute;
+  inset: 2px 8px 2px 8px;
+  border: 2px solid var(--accent);
+  border-radius: 16px;
+  pointer-events: none;
+}
+.aimtag {
+  position: absolute;
+  right: 16px;
+  top: -8px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--accent);
+  color: #fff;
+  padding: 2px 9px;
+  border-radius: var(--r-pill);
+  z-index: 1;
+}
+
+/* Editor metrics per surface: 17px tweet text for the single draft,
+   15px for thread segments (X's own sizes). */
+.draftwrap .draft-editor-layer {
+  font-size: var(--fs-lg);
+  line-height: 1.5;
+}
+.tseg .draft-editor-layer {
+  font-size: var(--fs-base);
+  line-height: 1.45;
 }

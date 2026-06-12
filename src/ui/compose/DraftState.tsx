@@ -127,6 +127,7 @@ function copySentence(
   committed: boolean,
   shipToVoice: boolean,
   filesInto: string | null,
+  threadCount: number | null,
 ): ReactNode {
   if (committed) {
     if (!shipToVoice) return <>Not saved to Voice (switched off for this draft) — done.</>;
@@ -146,7 +147,8 @@ function copySentence(
   if (!shipToVoice) return <>Copying won’t save this draft to Voice</>;
   return (
     <>
-      Copying saves to Voice
+      {threadCount !== null ? <>Copying all {threadCount} saves the thread</> : <>Copying saves</>}{' '}
+      to Voice
       {filesInto ? (
         <>
           {' '}
@@ -352,7 +354,9 @@ export function DraftState({
               <ThreadCards
                 posts={draft.posts}
                 charCap={brief.charCap}
+                softCapChars={brief.softCapChars}
                 busy={busy}
+                handle={handle}
                 aimedPost={refine.scope}
                 onEditPost={onEditPost}
                 onCopyPost={onCopyPost}
@@ -526,7 +530,12 @@ export function DraftState({
       {shipToVoice !== null && (
         <div className="copyline">
           <p className="hint">
-            {copySentence(draft.committed && !busy, shipToVoice, filesInto)}
+            {copySentence(
+              draft.committed && !busy,
+              shipToVoice,
+              filesInto,
+              isThread ? draft.posts.length : null,
+            )}
             {!(draft.committed && !busy) && (
               <>
                 {' · '}
