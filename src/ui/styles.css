@@ -3267,3 +3267,156 @@ code {
   color: var(--text-2);
   cursor: pointer;
 }
+
+/* ============================================================
+   Reskin phase 3b — the pre-draft reply composer + mode bar.
+   ============================================================ */
+.ctxblock {
+  padding-top: 14px;
+}
+.tweetblock {
+  display: flex;
+  gap: 12px;
+  padding: 0 16px;
+}
+.tw-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 40px;
+  flex-shrink: 0;
+}
+.tw-rail .conn {
+  width: 2px;
+  flex: 1;
+  background: var(--line-2);
+  margin-top: 4px;
+  min-height: 12px;
+}
+.tw-body {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 12px;
+}
+.tweetblock.ancestor .tw-body {
+  padding-bottom: 8px;
+}
+.tw-text {
+  margin: 2px 0 0;
+  font-size: var(--fs-base);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tw-text.tw-dim {
+  color: var(--text-2);
+  font-size: var(--fs-md);
+}
+.tw-x {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+.tw-x svg {
+  width: 15px;
+  height: 15px;
+}
+.tw-replyingto {
+  font-size: var(--fs-md);
+  color: var(--text-2);
+  margin: 6px 0 0;
+}
+.tw-replyingto b {
+  color: var(--accent);
+  font-weight: 400;
+}
+.tw-caveat {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  margin: 6px 0 0;
+}
+
+/* The composer — your avatar + the big borderless field. */
+.composer {
+  display: flex;
+  gap: 12px;
+  padding: 4px 16px 0;
+}
+.composer textarea {
+  font: inherit;
+  font-size: var(--fs-xl);
+  line-height: 1.4;
+  width: 100%;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 0 0;
+  min-height: 96px;
+  box-shadow: none;
+}
+.composer textarea:focus {
+  border: 0;
+  box-shadow: none;
+}
+.composer textarea::placeholder {
+  color: var(--text-2);
+  opacity: 0.8;
+}
+/* The seed line hangs off the composer's text column. */
+.composer + .seedwrap {
+  padding-left: 68px;
+}
+.composer + .seedwrap .seedmenu {
+  left: 68px;
+}
+
+/* Mode bar: Post ↔ Thread mini-seg + the ≈N stepper. */
+.modebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+}
+.editbrief .modebar {
+  border-top: 0;
+  padding: 0;
+}
+.miniseg {
+  display: inline-flex;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+.miniseg button {
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  padding: 5px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.miniseg button.active {
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+/* Pre-draft toolbar: cap switch · ⌘↵ · the Draft pill. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+}
+.foot-note {
+  text-align: center;
+  margin: 2px 16px 10px;
+}

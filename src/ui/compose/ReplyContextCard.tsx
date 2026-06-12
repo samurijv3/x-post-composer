@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReplyContext } from '../../types';
 import { Avatar } from '../Avatar';
-import { IcChevR, IcReply, IcX } from '../icons';
+import { IcChevR, IcX } from '../icons';
 import { formatRelativeTweetTime } from '../../lib/format/relativeTime';
 
 /**
@@ -51,82 +51,90 @@ function ClampedText({
 interface ReplyContextCardProps {
   context: ReplyContext;
   onClear: () => void;
-  /** When provided, the card's own header collapses it back to its
-   *  compact form (the draft view's peek) — the compact toggle and the
-   *  card are the SAME header in two sizes, never two stacked headers. */
+  /** When provided, a collapse chevron returns to the compact peek
+   *  (the draft view) — one header, two sizes, never both. */
   onCollapse?: () => void;
+  /** Continue the avatar rail down into the composer below (the
+   *  pre-draft reply anatomy — X's own reply-composer layout). */
+  connectsDown?: boolean;
 }
 
-/** The captured tweet, rendered X-native style, with a clear control. */
-export function ReplyContextCard({ context, onClear, onCollapse }: ReplyContextCardProps) {
+/**
+ * The captured tweet as a real tweet on the rail: ancestor (when the
+ * target was itself a reply) connects down to the target, which can
+ * connect on down to the user's composer. No card chrome.
+ */
+export function ReplyContextCard({
+  context,
+  onClear,
+  onCollapse,
+  connectsDown = false,
+}: ReplyContextCardProps) {
   const relTime = formatRelativeTweetTime(context.targetTimestamp);
+  const handle = context.targetAuthorHandle;
   return (
-    <div className="context-card">
-      <div className="ctx-top">
-        {onCollapse ? (
-          <button
-            type="button"
-            className="brief-ctx-toggle"
-            title="Hide the tweet you're replying to"
-            aria-expanded={true}
-            onClick={onCollapse}
-          >
-            <IcReply style={{ width: 15, height: 15, color: 'var(--accent)' }} />
-            <span className="eyebrow" style={{ color: 'var(--accent)' }}>
-              Replying to
-            </span>
-            <IcChevR className="ctx-chev open" />
-          </button>
-        ) : (
-          <>
-            <IcReply style={{ width: 15, height: 15, color: 'var(--accent)' }} />
-            <span className="eyebrow" style={{ color: 'var(--accent)' }}>
-              Replying to
-            </span>
-          </>
-        )}
-        <span className="head-spacer" />
-        <button
-          type="button"
-          className="icon-btn"
-          style={{ width: 26, height: 26 }}
-          title="Clear"
-          aria-label="Clear reply context"
-          onClick={onClear}
-        >
-          <IcX />
-        </button>
-      </div>
+    <div className="ctxblock">
       {context.grandparentText && (
-        <div className="ctx-grand">
-          <div className="ctx-thread-label">Earlier in thread</div>
-          <ClampedText text={context.grandparentText} lines={3} className="ctx-thread-text" />
+        <div className="tweetblock ancestor">
+          <div className="tw-rail">
+            <span className="avatar av-30">·</span>
+            <span className="conn" />
+          </div>
+          <div className="tw-body">
+            <ClampedText text={context.grandparentText} lines={3} className="tw-text tw-dim" />
+          </div>
         </div>
       )}
-      <div className="tweet-native">
-        <Avatar
-          src={context.targetAuthorAvatarUrl}
-          name={context.targetAuthorDisplayName ?? context.targetAuthorHandle}
-        />
-        <div className="tweet-native-body">
-          <div className="tweet-native-head">
+      <div className="tweetblock">
+        <div className="tw-rail">
+          <Avatar
+            src={context.targetAuthorAvatarUrl}
+            name={context.targetAuthorDisplayName ?? handle}
+          />
+          {connectsDown && <span className="conn" />}
+        </div>
+        <div className="tw-body">
+          <div className="tw-head">
             {context.targetAuthorDisplayName && (
-              <span className="tn-name">{context.targetAuthorDisplayName}</span>
+              <span className="tw-name">{context.targetAuthorDisplayName}</span>
             )}
-            {context.targetAuthorHandle && (
-              <span className="tn-handle">@{context.targetAuthorHandle}</span>
+            <span className="tw-meta">
+              {handle ? `@${handle}` : ''}
+              {handle && relTime ? ' · ' : ''}
+              {relTime ?? ''}
+            </span>
+            <span className="head-spacer" />
+            {onCollapse && (
+              <button
+                type="button"
+                className="icon-btn tw-x"
+                title="Hide the tweet you're replying to"
+                aria-label="Hide the tweet you're replying to"
+                aria-expanded={true}
+                onClick={onCollapse}
+              >
+                <IcChevR className="ctx-chev open" />
+              </button>
             )}
-            {relTime && (
-              <>
-                <span className="tn-dot">·</span>
-                <span className="tn-time">{relTime}</span>
-              </>
-            )}
+            <button
+              type="button"
+              className="icon-btn tw-x"
+              title="Clear reply context"
+              aria-label="Clear reply context"
+              onClick={onClear}
+            >
+              <IcX />
+            </button>
           </div>
-          <ClampedText text={context.targetText} lines={6} className="tn-text" />
+          <ClampedText text={context.targetText} lines={6} className="tw-text" />
           {context.hadUnreadableMedia && (
-            <p className="help" style={{ marginTop: 6 }}>
+            <p className="tw-caveat">
               Media (images / quoted posts) were present but not read — v1 captures text only.
+            </p>
+          )}
+          {handle && (
+            <p className="tw-replyingto">
+              Replying to <b>@{handle}</b>
             </p>
           )}
         </div>

@@ -50,13 +50,12 @@ export function ModeControls({
     );
   }
   return (
-    <div className="mode-controls">
-      <div className="seg" style={{ flex: '0 0 auto' }}>
+    <div className="modebar">
+      <div className="miniseg">
         <button
           type="button"
           className={composeMode === 'single' ? 'active' : ''}
           onClick={() => onSetMode('single')}
-          style={{ padding: '5px 12px' }}
         >
           Post
         </button>
@@ -65,39 +64,40 @@ export function ModeControls({
           className={composeMode === 'thread' ? 'active' : ''}
           title="Compose a thread — one post followed by successive posts"
           onClick={() => onSetMode('thread')}
-          style={{ padding: '5px 12px' }}
         >
           Thread
         </button>
       </div>
       {composeMode === 'thread' && (
-        <div
-          className="thread-target"
-          title="A soft target — the model aims for about this many posts; over an active draft, changing it repacks the same content"
-        >
-          <span className="fld-label">≈</span>
-          <button
-            type="button"
-            className="icon-btn tt-step"
-            aria-label="Fewer posts"
-            disabled={busy || target <= THREAD_TARGET_MIN}
-            onClick={() => onSetTarget(Math.max(THREAD_TARGET_MIN, target - 1))}
+        <>
+          <span
+            className="stepper"
+            title="A soft target — the model aims for about this many posts; over an active draft, changing it repacks the same content"
           >
-            <IcChevDown />
-          </button>
-          <span className="tt-count">{target}</span>
-          <button
-            type="button"
-            className="icon-btn tt-step"
-            aria-label="More posts"
-            disabled={busy || target >= THREAD_TARGET_MAX}
-            onClick={() => onSetTarget(Math.min(THREAD_TARGET_MAX, target + 1))}
-          >
-            <IcChevUp />
-          </button>
-          <span className="fld-label">posts</span>
-        </div>
+            <button
+              type="button"
+              className="icon-btn tt-step"
+              aria-label="Fewer posts"
+              disabled={busy || target <= THREAD_TARGET_MIN}
+              onClick={() => onSetTarget(Math.max(THREAD_TARGET_MIN, target - 1))}
+            >
+              <IcChevDown />
+            </button>
+            <span className="n">≈{target}</span>
+            <button
+              type="button"
+              className="icon-btn tt-step"
+              aria-label="More posts"
+              disabled={busy || target >= THREAD_TARGET_MAX}
+              onClick={() => onSetTarget(Math.min(THREAD_TARGET_MAX, target + 1))}
+            >
+              <IcChevUp />
+            </button>
+          </span>
+          <span className="hint">posts</span>
+        </>
       )}
+      <span className="head-spacer" />
     </div>
   );
 }

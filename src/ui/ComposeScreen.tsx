@@ -870,6 +870,8 @@ export function ComposeScreen({ onToast, onOpenOptions, handle }: Props) {
           reply={reply}
           brief={brief}
           bundlePicker={bundlePicker}
+          guaranteedStars={guaranteedStars}
+          handle={handle}
           threadControls={threadControls}
           busy={busy}
           libraryCount={libraryCount}

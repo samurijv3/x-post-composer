@@ -20,6 +20,7 @@ import {
 } from '../icons';
 import { CountRing } from './CountRing';
 import { SeedLine } from './SeedLine';
+import { monogram } from './monogram';
 import { ViolationNote } from './ViolationNote';
 import { CapToggle } from './CapToggle';
 import { ErrorCard, type ErrorKind } from './ErrorCard';
@@ -116,12 +117,6 @@ interface DraftStateProps {
   onDiscard: () => void;
   onRetry: () => void;
   onOpenOptions: () => void;
-}
-
-/** One-letter monogram for the user's avatar disc. */
-function monogram(handle: string): string {
-  const ch = handle.replace(/^@/, '').charAt(0);
-  return ch === '' ? '·' : ch.toUpperCase();
 }
 
 /**
