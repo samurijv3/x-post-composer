@@ -30,6 +30,12 @@ export const SOURCE_PRECEDENCE: Record<LibraryItem['source'], number> = {
  * first (when the candidate has one), then by normalized text. The
  * text fallback is what recognizes a shipped draft (uuid record) when
  * the published tweet is later handpicked (status id in hand).
+ *
+ * Threads count: a single-tweet candidate that matches one of a
+ * thread's SEGMENTS (by status id, else normalized text) finds the
+ * thread item — capturing "segment 3 of a saved thread" must never
+ * insert a second copy of that text. Identity tiers, strongest first:
+ * record id → segment id → whole-text → segment text.
  */
 export function findLibraryDuplicate(
   items: LibraryItem[],
@@ -38,10 +44,16 @@ export function findLibraryDuplicate(
   if (candidate.statusId !== null) {
     const byId = items.find((i) => i.id === candidate.statusId);
     if (byId) return byId;
+    const bySegmentId = items.find((i) =>
+      i.segments?.some((s) => s.statusId !== null && s.statusId === candidate.statusId),
+    );
+    if (bySegmentId) return bySegmentId;
   }
   const wanted = normalizeTweetText(candidate.text);
   if (wanted === '') return null;
-  return items.find((i) => normalizeTweetText(i.text) === wanted) ?? null;
+  const byText = items.find((i) => normalizeTweetText(i.text) === wanted);
+  if (byText) return byText;
+  return items.find((i) => i.segments?.some((s) => normalizeTweetText(s.text) === wanted)) ?? null;
 }
 
 /**
@@ -51,8 +63,19 @@ export function findLibraryDuplicate(
  * text win (the fresh read is authoritative), display metadata
  * enriches rather than erases, and id/createdAt/embedding stay with
  * the existing record.
+ *
+ * Thread rules: a SINGLE tweet can never merge into a thread — it is
+ * one segment of it, and "promoting" it would corrupt the entity —
+ * so existing-thread + single-incoming returns the existing thread by
+ * identity (the duplicate banner still points there). A thread
+ * incoming over a single existing (the root captured alone earlier)
+ * upgrades the record to the thread in place, id/createdAt/favorite
+ * stable. Thread-over-thread is the ordinary fresh-read-wins merge.
  */
 export function mergeLibraryDuplicate(existing: LibraryItem, incoming: LibraryItem): LibraryItem {
+  if (existing.type === 'thread' && incoming.type !== 'thread') {
+    return existing;
+  }
   if (SOURCE_PRECEDENCE[incoming.source] < SOURCE_PRECEDENCE[existing.source]) {
     return existing;
   }
@@ -61,6 +84,11 @@ export function mergeLibraryDuplicate(existing: LibraryItem, incoming: LibraryIt
     source: incoming.source,
     type: incoming.type,
     text: incoming.text,
+    // Fresh segments win (a re-captured thread may have grown); a
+    // single incoming carries null and must not erase anything — but
+    // single-into-thread already identity-returned above, so the only
+    // null-over-null case is single-into-single.
+    segments: incoming.segments ?? existing.segments,
     authorDisplayName: incoming.authorDisplayName ?? existing.authorDisplayName,
     authorAvatarUrl: incoming.authorAvatarUrl ?? existing.authorAvatarUrl,
     timestamp: incoming.timestamp,

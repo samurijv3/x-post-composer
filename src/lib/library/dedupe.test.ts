@@ -115,3 +115,69 @@ describe('mergeLibraryDuplicate', () => {
     expect(merged.authorAvatarUrl).toBe('https://pbs.twimg.com/a.jpg');
   });
 });
+
+describe('threads (Phase 10)', () => {
+  const thread = (overrides: Partial<LibraryItem> = {}) =>
+    item({
+      id: 'root-100',
+      type: 'thread',
+      text: 'first segment\n---\nsecond segment\n---\nthird segment',
+      segments: [
+        { text: 'first segment', statusId: 'root-100' },
+        { text: 'second segment', statusId: '101' },
+        { text: 'third segment', statusId: null },
+      ],
+      ...overrides,
+    });
+
+  it('a single capture matching a SEGMENT status id finds the thread', () => {
+    const t = thread();
+    expect(findLibraryDuplicate([t], { statusId: '101', text: 'whatever X rendered' })).toBe(t);
+  });
+
+  it('a single capture matching a SEGMENT text finds the thread (no id)', () => {
+    const t = thread();
+    expect(findLibraryDuplicate([t], { statusId: null, text: '  third   segment ' })).toBe(t);
+  });
+
+  it('record-id identity still wins first (the thread root)', () => {
+    const t = thread();
+    expect(findLibraryDuplicate([t], { statusId: 'root-100', text: 'anything' })).toBe(t);
+  });
+
+  it('a single tweet never merges INTO a thread — identity return, even for manual', () => {
+    const t = thread({ source: 'shipped' });
+    const single = item({ id: '101', text: 'second segment', source: 'manual' });
+    expect(mergeLibraryDuplicate(t, single)).toBe(t);
+  });
+
+  it('a captured thread upgrades a previously-captured single root in place', () => {
+    const single = item({ id: 'root-100', text: 'first segment', favorite: true, createdAt: 7 });
+    const incoming = thread();
+    const merged = mergeLibraryDuplicate(single, incoming);
+    expect(merged.type).toBe('thread');
+    expect(merged.segments).toHaveLength(3);
+    expect(merged.text).toContain('third segment');
+    // Identity and the user's judgments stay with the existing record.
+    expect(merged.id).toBe('root-100');
+    expect(merged.createdAt).toBe(7);
+    expect(merged.favorite).toBe(true);
+  });
+
+  it('a re-captured thread refreshes segments (fresh read wins)', () => {
+    const t = thread();
+    const grown = thread({
+      id: 'uuid-x',
+      text: 'first segment\n---\nsecond segment\n---\nthird segment\n---\nfourth',
+      segments: [...(thread().segments ?? []), { text: 'fourth', statusId: '103' }],
+    });
+    const merged = mergeLibraryDuplicate(t, grown);
+    expect(merged.segments).toHaveLength(4);
+    expect(merged.id).toBe('root-100');
+  });
+
+  it('a single-into-single merge never invents segments', () => {
+    const merged = mergeLibraryDuplicate(item(), item({ id: '999', text: 'fresh' }));
+    expect(merged.segments).toBeNull();
+  });
+});
