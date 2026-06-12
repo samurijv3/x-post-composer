@@ -91,10 +91,10 @@ Then open the panel (toolbar icon), click the gear to open **Settings**, and in 
 
 ### Bundles (seed a draft from specific tweets)
 
-1. In Voice, hit **New bundle**, tap tweets in the order you want them (the numbers are the stored order), name it, save.
-2. In Compose, the **Voice seed** picker appears once a bundle exists: pick a bundle and its members become the _exact_ voice examples for that generation — no sampling, no topping up. Starred examples still ride on top. The inspector labels the call `generate (bundle: …)`.
-3. When you copy a bundle-seeded draft (with "save shipped drafts" on), the shipped example **auto-files into the bundle** — a "day X" bundle grows itself with every entry you ship.
-4. Manage bundles in Voice: rename, remove members, delete. Deleted library items show as "missing" in their bundles and are simply skipped when seeding.
+1. In Voice's **Bundles** section, hit **+**, tap tweets in the order you want them (the numbers are the stored order), name it, save. Or build one straight from X: set the capture banner's **"Also file into"** target and every tweet you click files into the bundle as it saves (the paste form offers the same).
+2. In Compose, the **Voice seed** picker sits beside the reply context once a bundle exists: pick a bundle and its members become the _exact_ voice examples for that generation — no sampling, no topping up. Starred examples still ride on top. The inspector labels the call `generate (bundle: …)`.
+3. When you copy a bundle-seeded draft (with "save shipped drafts" on), the shipped example **auto-files into the bundle** — a "day X" bundle grows itself with every entry you ship. A per-draft switch next to the seed note opts a one-off out without touching the series.
+4. Manage bundles in Voice: rename, reorder members (↑/↓), remove members, delete; click a member to jump to its row in Saved examples. Deleted library items show as "missing" in their bundles and are simply skipped when seeding.
 
 ### Compose
 
@@ -167,7 +167,7 @@ src/
 
 ### Tests
 
-386 tests across 26 files cover every load-bearing piece of deterministic logic: exclusion detectors (em-dash, smart quotes, staccato boundary 2-vs-3 + word-count edges, the narrow label-colon rule), the do-not-say whole-word matcher, mechanical auto-fix, twitter-text weighted counting, the prompt engine (slot rendering/validation, the system/user role boundary, default-template consistency), prompt assembly (slot population, intent-shape framing, refine voice anchor, violation summaries, chip escalation), `selectExamples` (stars, tiers, bundle seeding), bundle member resolution, the draft lifecycle state machine (both undo scopes, stale-request gating, the bundle-seed provenance), library dedupe, the reply-context merge, screening predicates, `validateAuthor`, `classifyType`, the settings merge + template migration, the Anthropic client (header/body shape, full error-mapping table, key never echoed — all against a stubbed `fetch`), the IndexedDB corpus + bundles stores incl. every seeded schema migration (v1 through v5), and the X-markup extraction layer via DOM fixtures (so when X drifts, the failing test names the assumption that died).
+390 tests across 26 files cover every load-bearing piece of deterministic logic: exclusion detectors (em-dash, smart quotes, staccato boundary 2-vs-3 + word-count edges, the narrow label-colon rule), the do-not-say whole-word matcher, mechanical auto-fix, twitter-text weighted counting, the prompt engine (slot rendering/validation, the system/user role boundary, default-template consistency), prompt assembly (slot population, intent-shape framing, refine voice anchor, violation summaries, chip escalation), `selectExamples` (stars, tiers, bundle seeding), bundle member resolution, the draft lifecycle state machine (both undo scopes, stale-request gating, the bundle-seed provenance), library dedupe, the reply-context merge, screening predicates, `validateAuthor`, `classifyType`, the settings merge + template migration, the Anthropic client (header/body shape, full error-mapping table, key never echoed — all against a stubbed `fetch`), the IndexedDB corpus + bundles stores incl. every seeded schema migration (v1 through v5), and the X-markup extraction layer via DOM fixtures (so when X drifts, the failing test names the assumption that died).
 
 Per CLAUDE.md §5 there is no coverage-percentage gate. Behavior that matters is tested; UI glue and `chrome.*` wrappers aren't filler-tested.
 

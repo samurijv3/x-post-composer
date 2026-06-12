@@ -2,7 +2,7 @@
 
 Normative rule: CLAUDE.md §5 — every load-bearing piece of deterministic logic has a behavioral test; **no coverage-percentage gate, no filler tests**. This file is the how.
 
-Current state: **386 tests, 26 files**, all green via `npm run test`.
+Current state: **390 tests, 26 files**, all green via `npm run test`.
 
 ## Stack and config
 
@@ -19,7 +19,7 @@ Current state: **386 tests, 26 files**, all green via `npm run test`.
 | Exclusion engine (detectors, banlist matcher, auto-fix, check) | `src/lib/exclusion/*.test.ts` (4)                            | Decides what gets flagged/rewritten in every draft                                                                                                                                                        |
 | Prompt engine + defaults + assembly                            | `src/lib/prompt/{template,defaults,assemble}.test.ts`        | Decides the exact text sent to Anthropic; pins template invariants (single source, the system/user role boundary — per-call slots never in system — zero slot drift)                                      |
 | Sampling                                                       | `src/lib/sampling/selectExamples.test.ts`                    | The §8 seam — Concept A: guaranteed stars, the cap, tier fill/top-up, no-duplicates, empty edges (injected RNG); Phase 6 bundle seeding (verbatim members, run-lean, no mode filter, stars-minus-members) |
-| Bundles                                                        | `src/lib/bundles/resolveMembers.test.ts`                     | Member resolution order, honest missing counts, append-with-identity-return — what auto-filing and every bundle count in the UI rely on                                                                   |
+| Bundles                                                        | `src/lib/bundles/resolveMembers.test.ts`                     | Member resolution order, honest missing counts, append- and move-with-identity-return (reorder skips dangling slots) — what auto-filing, reorder, and every bundle count in the UI rely on                |
 | Counting                                                       | `src/lib/counting/twitter.test.ts`                           | The 280 gate must agree with X (URL = 23, emoji weights)                                                                                                                                                  |
 | Voice                                                          | `src/lib/voice/{validateAuthor,classifyType}.test.ts`        | The capture hard-filter and post/reply classification                                                                                                                                                     |
 | Screening (dormant)                                            | `src/lib/screening/predicates.test.ts`                       | Kept load-bearing so Phase-2 import bolts onto tested filters                                                                                                                                             |

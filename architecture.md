@@ -106,6 +106,7 @@ Single source of truth: `src/messaging/contracts.ts` — five discriminated unio
 |                          | `apiKey:v1` (when mode = `local`)      | the key, write-only from UI                                                                                    | persistent              |
 | `chrome.storage.session` | `apiKey:v1` (when mode = `session`)    | the key                                                                                                        | until full browser quit |
 |                          | `activeCaptureMode:v1`                 | `'none' \| 'library' \| 'reply-context'`                                                                       | session                 |
+|                          | `captureBundleTarget:v1`               | bundle id that captures/pastes also file into — paired with capture mode (cleared when it turns off)           | session                 |
 |                          | `replyContextLock:v1`                  | `ReplyContext`                                                                                                 | session                 |
 |                          | `lastPrompt:v2`                        | per-call prompt records (`calls[]`) + response                                                                 | session                 |
 |                          | `autoReplyCapture:v1`                  | one-shot shortcut stamp (consumed on read)                                                                     | seconds                 |
