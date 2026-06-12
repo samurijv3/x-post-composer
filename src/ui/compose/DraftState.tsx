@@ -391,7 +391,7 @@ export function DraftState({
                       : "This draft won't be saved to Voice on copy — click to include it"
                   }
                 >
-                  <span className="switch">
+                  <span className="switch sm">
                     <input type="checkbox" checked={shipToVoice} onChange={onToggleShipToVoice} />
                     <span className="track" />
                   </span>
@@ -408,7 +408,7 @@ export function DraftState({
                           : 'This draft won’t be filed into the bundle — click to include it'
                     }
                   >
-                    <span className="switch">
+                    <span className="switch sm">
                       <input
                         type="checkbox"
                         checked={shipToVoice && fileToBundle}
@@ -417,7 +417,7 @@ export function DraftState({
                       />
                       <span className="track" />
                     </span>
-                    <span>file into “{seedBundleName}”</span>
+                    <span className="ce-name">file into “{seedBundleName}”</span>
                   </label>
                 )}
               </div>

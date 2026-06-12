@@ -688,6 +688,21 @@ textarea::placeholder {
   background: var(--ok);
   border-color: var(--ok);
 }
+/* Compact switch — for quiet inline rows (the draft card's On-copy
+   footer), where the full 38px track overpowers its fs-xs label. */
+.switch.sm .track {
+  width: 28px;
+  height: 16px;
+}
+.switch.sm .track::after {
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+}
+.switch.sm input:checked + .track::after {
+  transform: translateX(12px);
+}
 
 .status {
   font-size: var(--fs-sm);
@@ -1533,21 +1548,35 @@ code {
   margin: 0;
 }
 /* Copy's side effects in one row: save-to-Voice + file-into-bundle.
-   Sits at the foot of the draft card, under the Copy action it
-   describes. */
+   A deliberate FOOTER band on the draft card, mirroring the head —
+   same horizontal padding, same tint, hairline rule against the white
+   body above. The card's overflow:hidden rounds its bottom corners. */
 .copy-effects {
   display: flex;
   align-items: center;
   gap: 14px;
+  row-gap: 5px;
   flex-wrap: wrap;
-  padding: 9px 2px 0;
+  padding: 8px 14px;
+  border-top: 1px solid var(--accent-line);
+  background: color-mix(in oklab, var(--accent-weak), transparent 30%);
+}
+[data-theme='dark'] .copy-effects {
+  background: var(--surface-3);
 }
 .ce-label {
   font-size: var(--fs-xs);
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--text-faint);
+  color: var(--text-3);
+}
+/* A long bundle name must not blow up the footer. */
+.ce-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* The bundle switch with its dependency (voice save) off. */
 .voice-toggle.dep-off {
