@@ -18,6 +18,7 @@ import {
   getCaptureMode,
   getReplyContextLock,
   setAutoReplyFlag,
+  setCaptureBundleTarget,
   setReplyContextLock,
 } from '../../src/storage';
 import type { ReplyContext } from '../../src/types';
@@ -77,6 +78,11 @@ export default defineBackground(() => {
       openPanelPorts.delete(port);
       if (openPanelPorts.size === 0) {
         void pushToTabs({ type: 'bg:panel-state', isOpen: false });
+        // The capture bundle target's lifetime is "while the panel is
+        // open": it survives mode toggles (repeated off/on browsing
+        // keeps the bundle choice) but closing the last panel resets
+        // filing to plain library — a fresh panel starts unbiased.
+        void setCaptureBundleTarget(null);
       }
     });
   });

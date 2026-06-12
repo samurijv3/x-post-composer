@@ -51,8 +51,9 @@ export function CaptureBanner({ handle, bundles, onCreateBundle }: CaptureBanner
     // re-picking the bundle every time was the friction (changed
     // 2026-06-12; it used to clear here). Never silent when it
     // matters — the banner shows the target whenever the switch is
-    // on, and every save states "Filed into …". It still dies with
-    // the browser session and resets if its bundle is deleted.
+    // on, and every save states "Filed into …". Closing the panel
+    // is the reset point (the background clears it on last-panel
+    // close); a deleted bundle resets it too.
     await setCaptureMode(on ? 'none' : 'library');
   }
 

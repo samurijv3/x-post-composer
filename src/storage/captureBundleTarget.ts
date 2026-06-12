@@ -3,13 +3,14 @@
  * set, tweets captured (or pasted) into the library also file into
  * this bundle — one gesture builds a series from existing tweets on X.
  *
- * Session storage on purpose, alongside `activeCaptureMode:v1`: both
- * evaporate on full browser quit. The target deliberately SURVIVES
- * mode toggles within a session — browsing for examples means flipping
- * capture off/on repeatedly, and the bundle choice should hold. The
- * value is a bundle id; the background validates it still exists at
- * capture time and skips filing silently when it doesn't (eligibility,
- * not error).
+ * Lifetime: WHILE A PANEL IS OPEN. The target deliberately survives
+ * mode toggles — browsing for examples means flipping capture off/on
+ * repeatedly, and the bundle choice should hold — but the background
+ * clears it when the last panel closes, so a fresh panel always starts
+ * filing into plain library. Session storage underneath (browser quit
+ * also clears, as a backstop). The value is a bundle id; the
+ * background validates it still exists at capture time and skips
+ * filing silently when it doesn't (eligibility, not error).
  */
 const FIELD = 'captureBundleTarget:v1';
 
