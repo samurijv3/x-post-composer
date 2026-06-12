@@ -11,10 +11,23 @@ interface LibRowProps {
   onToggle: () => void;
   onRemove: () => void;
   onSave: (patch: Partial<LibraryItem>) => void;
+  /** Bundle-building selection mode: when non-null, the row renders a
+   *  pick control instead of its actions, and the value is this row's
+   *  1-based position in the selection (members are stored in selection
+   *  order — the number makes that order visible) or null if unpicked. */
+  selection?: { index: number | null; onToggle: () => void };
 }
 
 /** One saved example — clamped to 2 lines with Show more/less, inline edit. */
-export function LibRow({ item, open, highlight, onToggle, onRemove, onSave }: LibRowProps) {
+export function LibRow({
+  item,
+  open,
+  highlight,
+  onToggle,
+  onRemove,
+  onSave,
+  selection,
+}: LibRowProps) {
   const rowRef = useRef<HTMLLIElement | null>(null);
   const textRef = useRef<HTMLParagraphElement | null>(null);
   const [truncatable, setTruncatable] = useState<boolean>(false);
@@ -51,9 +64,16 @@ export function LibRow({ item, open, highlight, onToggle, onRemove, onSave }: Li
   const hl = highlight === 'added' ? 'just-added' : highlight === 'dup' ? 'flash-dup' : '';
   const relTime = formatRelativeTweetTime(item.timestamp);
   const displayName = item.authorDisplayName ?? item.authorHandle;
+  const picked = selection?.index != null;
 
   return (
-    <li ref={rowRef} className={`lib-row ${hl} ${editing ? 'editing' : ''}`}>
+    <li
+      ref={rowRef}
+      className={`lib-row ${hl} ${editing ? 'editing' : ''} ${selection ? 'pickable' : ''} ${picked ? 'picked' : ''}`}
+      // In selection mode the whole row is the pick target (the
+      // checkbox inside carries keyboard access).
+      onClick={selection ? selection.onToggle : undefined}
+    >
       {editing ? (
         <div className="lib-edit">
           <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} autoFocus />
@@ -113,54 +133,75 @@ export function LibRow({ item, open, highlight, onToggle, onRemove, onSave }: Li
                 </span>
               )}
               <span className="head-spacer" />
-              <div className="lib-actions">
-                {item.source !== 'archive' && (
-                  // The starring boundary (Core Concept A): manual and
-                  // shipped only. Archive items are promoted by finding
-                  // them on X and handpicking — never starred directly.
+              {selection ? (
+                <label className="pick-mark" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={picked}
+                    onChange={selection.onToggle}
+                    aria-label={picked ? 'Remove from bundle' : 'Add to bundle'}
+                  />
+                  <span className="pick-badge">{selection.index ?? ''}</span>
+                </label>
+              ) : (
+                <div className="lib-actions">
+                  {item.source !== 'archive' && (
+                    // The starring boundary (Core Concept A): manual and
+                    // shipped only. Archive items are promoted by finding
+                    // them on X and handpicking — never starred directly.
+                    <button
+                      type="button"
+                      className={`icon-btn star-btn ${item.favorite ? 'starred' : ''}`}
+                      style={{ width: 26, height: 26 }}
+                      title={
+                        item.favorite
+                          ? 'Starred — guaranteed in every prompt as an aspirational example. Click to unstar.'
+                          : 'Star — you at your best; the bar drafts should reach for'
+                      }
+                      aria-label={item.favorite ? 'Unstar' : 'Star'}
+                      aria-pressed={item.favorite}
+                      onClick={() => onSave({ favorite: !item.favorite })}
+                    >
+                      <IcStar />
+                    </button>
+                  )}
                   <button
                     type="button"
-                    className={`icon-btn star-btn ${item.favorite ? 'starred' : ''}`}
+                    className="icon-btn"
                     style={{ width: 26, height: 26 }}
-                    title={
-                      item.favorite
-                        ? 'Starred — guaranteed in every prompt as an aspirational example. Click to unstar.'
-                        : 'Star — you at your best; the bar drafts should reach for'
-                    }
-                    aria-label={item.favorite ? 'Unstar' : 'Star'}
-                    aria-pressed={item.favorite}
-                    onClick={() => onSave({ favorite: !item.favorite })}
+                    title="Edit"
+                    aria-label="Edit"
+                    onClick={() => setEditing(true)}
                   >
-                    <IcStar />
+                    <IcEdit />
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="icon-btn"
-                  style={{ width: 26, height: 26 }}
-                  title="Edit"
-                  aria-label="Edit"
-                  onClick={() => setEditing(true)}
-                >
-                  <IcEdit />
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  style={{ width: 26, height: 26 }}
-                  title="Delete"
-                  aria-label="Delete"
-                  onClick={onRemove}
-                >
-                  <IcTrash />
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    style={{ width: 26, height: 26 }}
+                    title="Delete"
+                    aria-label="Delete"
+                    onClick={onRemove}
+                  >
+                    <IcTrash />
+                  </button>
+                </div>
+              )}
             </div>
             <p ref={textRef} className={`tn-text lib-text ${open ? '' : 'clamp'}`}>
               {item.text}
             </p>
             {(truncatable || open) && (
-              <button type="button" className="lib-more" onClick={onToggle}>
+              <button
+                type="button"
+                className="lib-more"
+                // stopPropagation: in selection mode the row itself is a
+                // pick target — expanding must not toggle the pick.
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle();
+                }}
+              >
                 {open ? 'Show less' : 'Show more'}
               </button>
             )}

@@ -1304,6 +1304,163 @@ code {
   gap: 12px;
 }
 
+/* ---- bundles (Phase 6) ---- */
+
+/* Selection mode: the whole row is the pick target. */
+.lib-row.pickable {
+  cursor: pointer;
+  user-select: none;
+}
+.lib-row.picked {
+  border-color: var(--accent-line);
+  background: var(--accent-weak);
+}
+.pick-mark {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+/* Keep the native checkbox for keyboard/AT; the badge is the visual. */
+.pick-mark input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.pick-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--on-accent);
+  background: transparent;
+}
+.lib-row.picked .pick-badge {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.pick-mark input:focus-visible + .pick-badge {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 2px;
+}
+.pick-badge.static {
+  width: 18px;
+  height: 18px;
+  border-color: var(--border);
+  color: var(--text-3);
+  flex: 0 0 auto;
+}
+
+.bundle-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bundle-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.bundle-row {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 7px 11px;
+  background: var(--surface);
+}
+.bundle-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bundle-head .icon-btn {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.bundle-row:hover .bundle-head .icon-btn,
+.bundle-row:focus-within .bundle-head .icon-btn {
+  opacity: 1;
+}
+.bundle-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  padding: 2px 0;
+  cursor: pointer;
+  color: var(--text);
+  min-width: 0;
+}
+.bundle-toggle svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--text-3);
+}
+.bundle-name {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bundle-rename,
+.bundle-name-input {
+  font: inherit;
+  font-size: var(--fs-base);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+  flex: 1;
+  min-width: 0;
+}
+.bundle-members {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  padding: 7px 0 2px;
+  margin: 6px 0 0;
+  border-top: 1px solid var(--hairline);
+}
+.bundle-member {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.bundle-member .icon-btn {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.bundle-member:hover .icon-btn,
+.bundle-member:focus-within .icon-btn {
+  opacity: 1;
+}
+.bundle-member-text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bundle-create .field-row {
+  margin-top: 4px;
+}
+
 /* Floating save-result banner slot — sticks to the top of the panel
    body so the banner stays visible across screens and scroll
    positions. */

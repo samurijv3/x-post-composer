@@ -125,6 +125,10 @@ export type BackgroundToContent =
  */
 export type BackgroundNotice =
   | { type: 'bg:library-changed' }
+  // Fired when the BACKGROUND writes a bundle (auto-filing a shipped
+  // draft into its seeding bundle). Panel-side bundle edits refresh
+  // their own screen directly and don't broadcast.
+  | { type: 'bg:bundles-changed' }
   // Fired by the keyboard shortcut for a panel that is ALREADY open
   // (a panel the shortcut just opened consumes the session flag on
   // mount instead). The timestamp matches the flag's so the panel can
@@ -179,6 +183,7 @@ export function isMessageOfType<T extends AnyMessage['type']>(
 export function isBackgroundNotice(message: unknown): message is BackgroundNotice {
   return (
     isMessageOfType(message, 'bg:library-changed') ||
+    isMessageOfType(message, 'bg:bundles-changed') ||
     isMessageOfType(message, 'bg:auto-reply-capture') ||
     isMessageOfType(message, 'bg:save-result') ||
     isMessageOfType(message, 'bg:reply-context-error') ||

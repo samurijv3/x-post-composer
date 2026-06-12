@@ -1,10 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { addItem, deleteItem, getAllItems, getSettings, updateItem } from '../storage';
+import {
+  addBundle,
+  addItem,
+  deleteBundle,
+  deleteItem,
+  getAllBundles,
+  getAllItems,
+  getSettings,
+  updateBundle,
+  updateItem,
+} from '../storage';
 import { isMessageOfType, onNotice, sendToBackground, type BackgroundReply } from '../messaging';
-import type { LibraryItem } from '../types';
+import type { Bundle, LibraryItem } from '../types';
 import { IcPlus, IcVoice } from './icons';
 import type { ToastData } from './Toast';
 import { AddForm } from './voice/AddForm';
+import { BundleSection } from './voice/BundleSection';
 import { CaptureBanner } from './voice/CaptureBanner';
 import { LibRow } from './voice/LibRow';
 
@@ -32,6 +43,13 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
   const [filter, setFilter] = useState<Filter>('all');
   const [adding, setAdding] = useState<boolean>(false);
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
+  // ---- bundles (roadmap Phase 6) ----
+  const [bundles, setBundles] = useState<Bundle[]>([]);
+  // Bundle-building selection mode: pickedIds is in SELECTION order —
+  // that order is the bundle's stored member order.
+  const [picking, setPicking] = useState<boolean>(false);
+  const [pickedIds, setPickedIds] = useState<string[]>([]);
+  const [bundleName, setBundleName] = useState<string>('');
 
   // "Show me" promised to show THE row — if a type filter would hide
   // it, the flash would be invisible and the CTA would read as broken.
@@ -51,14 +69,29 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
     }
   }, []);
 
+  const refreshBundles = useCallback(async () => {
+    try {
+      const all = await getAllBundles();
+      all.sort((a, b) => b.createdAt - a.createdAt);
+      setBundles(all);
+    } catch {
+      setBundles([]);
+    }
+  }, []);
+
   useEffect(() => {
     void refresh();
+    void refreshBundles();
     void getSettings().then((s) => setHandle(s.handle));
     const unsub = onNotice((notice) => {
       if (isMessageOfType(notice, 'bg:library-changed')) void refresh();
+      // Auto-filing (the background appending a shipped draft to its
+      // seeding bundle) is the one bundle write that happens outside
+      // this screen — follow it live.
+      if (isMessageOfType(notice, 'bg:bundles-changed')) void refreshBundles();
     });
     return () => unsub();
-  }, [refresh]);
+  }, [refresh, refreshBundles]);
 
   const posts = items.filter((i) => i.type === 'post').length;
   const replies = items.filter((i) => i.type === 'reply').length;
@@ -118,6 +151,75 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
     setOpenIds(allOpen ? new Set() : new Set(visibleIds));
   }
 
+  // ---- bundle handlers ----
+  function togglePick(id: string): void {
+    setPickedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function stopPicking(): void {
+    setPicking(false);
+    setPickedIds([]);
+    setBundleName('');
+  }
+
+  async function saveBundle(): Promise<void> {
+    const name = bundleName.trim();
+    if (name === '' || pickedIds.length === 0) return;
+    try {
+      await addBundle({
+        id: crypto.randomUUID(),
+        name,
+        memberIds: pickedIds,
+        createdAt: Date.now(),
+      });
+      stopPicking();
+      onToast(`Bundle “${name}” saved`);
+      await refreshBundles();
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Could not save the bundle.');
+    }
+  }
+
+  async function renameBundle(bundle: Bundle, name: string): Promise<void> {
+    try {
+      await updateBundle({ ...bundle, name });
+      await refreshBundles();
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Could not rename the bundle.');
+    }
+  }
+
+  async function removeBundleMember(bundle: Bundle, itemId: string): Promise<void> {
+    try {
+      await updateBundle({ ...bundle, memberIds: bundle.memberIds.filter((id) => id !== itemId) });
+      await refreshBundles();
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Could not update the bundle.');
+    }
+  }
+
+  async function removeBundle(bundle: Bundle): Promise<void> {
+    try {
+      await deleteBundle(bundle.id);
+      onToast('Bundle deleted', {
+        label: 'Undo',
+        onClick: () => {
+          void (async () => {
+            try {
+              await addBundle(bundle);
+              await refreshBundles();
+            } catch {
+              onToast('Could not restore.');
+            }
+          })();
+        },
+      });
+      await refreshBundles();
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Could not delete the bundle.');
+    }
+  }
+
   // Manual add — dedupe locally then send to background which saves.
   // Background broadcasts the save-result notice on success/dup, which
   // App.tsx surfaces in the floating banner.
@@ -149,6 +251,14 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
 
       <CaptureBanner handle={handle} />
 
+      <BundleSection
+        bundles={bundles}
+        items={items}
+        onRename={(b, name) => void renameBundle(b, name)}
+        onRemoveMember={(b, itemId) => void removeBundleMember(b, itemId)}
+        onDelete={(b) => void removeBundle(b)}
+      />
+
       <div className="lib-header">
         <div>
           <span className="eyebrow">Saved examples</span>
@@ -177,6 +287,40 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
           onAdd={(text, type) => void manualAdd(text, type)}
           onCancel={() => setAdding(false)}
         />
+      )}
+
+      {picking && (
+        <div className="card inset bundle-create">
+          <span className="eyebrow">New bundle</span>
+          <p className="help" style={{ margin: '4px 0 8px' }}>
+            Tap tweets below in the order you want them. The bundle becomes the exact set of voice
+            examples for drafts you compose from it.
+          </p>
+          <div className="field-row">
+            <input
+              className="bundle-name-input"
+              placeholder="Bundle name — e.g. “Day X series”"
+              value={bundleName}
+              autoFocus
+              onChange={(e) => setBundleName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void saveBundle();
+                if (e.key === 'Escape') stopPicking();
+              }}
+            />
+            <button
+              type="button"
+              className="btn primary sm"
+              disabled={bundleName.trim() === '' || pickedIds.length === 0}
+              onClick={() => void saveBundle()}
+            >
+              Save{pickedIds.length > 0 ? ` (${pickedIds.length})` : ''}
+            </button>
+            <button type="button" className="btn ghost sm" onClick={stopPicking}>
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       <div className="field-row">
@@ -213,6 +357,16 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
             </button>
           )}
         </div>
+        {!picking && items.length > 0 && (
+          <button
+            type="button"
+            className="btn ghost sm"
+            title="Pick specific tweets as a reusable voice seed"
+            onClick={() => setPicking(true)}
+          >
+            New bundle
+          </button>
+        )}
         {visible.length > 0 && (
           <button type="button" className="btn ghost sm" onClick={toggleAll}>
             {allOpen ? 'Collapse all' : 'Expand all'}
@@ -249,6 +403,14 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
               onToggle={() => toggleRow(it.id)}
               onRemove={() => void remove(it)}
               onSave={(patch) => void patchItem(it.id, patch)}
+              selection={
+                picking
+                  ? {
+                      index: pickedIds.includes(it.id) ? pickedIds.indexOf(it.id) + 1 : null,
+                      onToggle: () => togglePick(it.id),
+                    }
+                  : undefined
+              }
             />
           ))}
         </ul>
