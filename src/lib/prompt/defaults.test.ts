@@ -17,6 +17,7 @@ import {
   REFINE_PRECEDENCE,
   THREAD_FORMAT_REMINDER,
   THREAD_PRECEDENCE,
+  THREAD_REFIT_INSTRUCTION,
   TIGHTEN_INSTRUCTION,
 } from './defaults';
 import { extractSlotNames, validateTemplate } from './template';
@@ -302,5 +303,13 @@ describe('thread prompt pieces (Phase 10)', () => {
   it('the format reminder restates the --- convention', () => {
     expect(THREAD_FORMAT_REMINDER).toContain('---');
     expect(THREAD_FORMAT_REMINDER).toContain('no numbering');
+  });
+});
+
+describe('THREAD_REFIT_INSTRUCTION', () => {
+  it('holds content fixed and states the per-post cap', () => {
+    expect(THREAD_REFIT_INSTRUCTION).toContain('Each post');
+    expect(THREAD_REFIT_INSTRUCTION).toContain('280');
+    expect(THREAD_REFIT_INSTRUCTION).toContain('keep its content, voice, and intent exactly');
   });
 });

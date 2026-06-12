@@ -440,9 +440,15 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     if (!next || busy) return;
     const lc = lifecycleRef.current;
     if (lc.phase !== 'active' || lc.content === null) return;
-    // Thread reshaping on cap-flip is wired with the repack (next
-    // commit) — flipping the cap pre-wiring is just a setting.
-    if (lc.content.kind === 'thread') return;
+    if (lc.content.kind === 'thread') {
+      // Per-post refit: only fires when some post actually measures
+      // over — same content, re-fitted per post, never a regenerate.
+      const anyOver = lc.content.posts.some((post) => weightedLength(post.text) > X_HARD_LIMIT);
+      if (!anyOver) return;
+      onToast('Refitting \u2014 same thread, each post \u2264280');
+      void runRefine({ type: 'refit' }, true);
+      return;
+    }
     if (weightedLength(lc.content.posts[0]?.text ?? '') <= X_HARD_LIMIT) return; // already fits
     // REFIT, never regenerate: the draft's content is the fixed point.
     onToast('Refitting to \u2264280 \u2014 same draft, shorter');
@@ -703,6 +709,19 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     copied,
     canUndo: lifecycle.refineSnapshot !== null,
   };
+  // Changing the ≈N target over an ACTIVE thread draft repacks it —
+  // content is the fixed point, only the packaging changes (the refit
+  // pattern: the value rides the request same-tick, before state
+  // re-renders). Pre-draft, the stepper just seeds the next generate.
+  function handleSetTarget(n: number): void {
+    setThreadTarget(n);
+    const lc = lifecycleRef.current;
+    if (lc.phase !== 'active' || lc.content === null || lc.content.kind !== 'thread') return;
+    if (lc.content.targetCount === n) return;
+    onToast(`Repacking into \u2248${String(n)} posts \u2014 same content`);
+    void runRefine({ type: 'repack', targetCount: n });
+  }
+
   // Thread controls hide while a reply context exists — threads are
   // standalone posts in v1, so reply mode forces single composition.
   const threadControls: ThreadModeControls | null = hasContext
@@ -711,7 +730,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
         composeMode,
         onSetMode: setComposeMode,
         target: threadTarget,
-        onSetTarget: setThreadTarget,
+        onSetTarget: handleSetTarget,
         busy,
       };
   // The picker drives the NEXT generation; the note in DraftState

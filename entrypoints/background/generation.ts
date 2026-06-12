@@ -38,6 +38,7 @@ import {
   POLISH_INSTRUCTION,
   REFIT_INSTRUCTION,
   summarizeViolations,
+  THREAD_REFIT_INSTRUCTION,
   THREAD_CAP_LINE,
   THREAD_FORMAT_REMINDER,
   TIGHTEN_INSTRUCTION,
@@ -197,7 +198,7 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
     instruction = buildRepackInstruction(kind.targetCount);
     initialLabel = `refine (repack to \u2248${String(kind.targetCount)})`;
   } else {
-    instruction = REFIT_INSTRUCTION;
+    instruction = request.mode === 'thread' ? THREAD_REFIT_INSTRUCTION : REFIT_INSTRUCTION;
     initialLabel = 'refine (refit to \u2264280)';
   }
 

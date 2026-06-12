@@ -245,6 +245,12 @@ export const POLISH_INSTRUCTION =
 export const REFIT_INSTRUCTION =
   'The draft must now fit the 280-character X limit. Refit it: keep its content, voice, and intent exactly; change only what the length requires.';
 
+/** Thread variant of the refit — flipping the cap ON over a thread
+ *  whose posts measure over 280: content is the fixed point, only
+ *  per-post length changes. Code-supplied. */
+export const THREAD_REFIT_INSTRUCTION =
+  'Each post in the thread must now fit the 280-character X limit. Refit the thread: keep its content, voice, and intent exactly; change only what the per-post length requires.';
+
 /** Instruction the pipeline feeds the refine template's {{instruction}}
  *  slot for the (at most one) tighten pass. Code-supplied: tighten is a
  *  pipeline backstop, not a user-authored ask. */
