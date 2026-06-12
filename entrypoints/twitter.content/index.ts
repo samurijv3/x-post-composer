@@ -681,6 +681,10 @@ export default defineContentScript({
           if (targetLost || now - lastStateScan >= STATE_RESCAN_MS) {
             lastStateScan = now;
 
+            // The page's light/dark can change on SPA navigation or an
+            // X theme switch — keep the overlay's fill in tune.
+            overlay.refreshScheme();
+
             const modalNow = isXModalOpen();
             if (modalNow !== xModalOpen) {
               xModalOpen = modalNow;

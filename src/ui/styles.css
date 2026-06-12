@@ -36,20 +36,6 @@
   --warn-weak: rgba(184, 134, 11, 0.14);
   --danger-weak: rgba(244, 33, 46, 0.1);
 
-  /* LEGACY ALIASES — delete in the final reskin phase. */
-  --surface-2: var(--bg);
-  --surface-3: var(--hover);
-  --inset: var(--field);
-  --border: var(--line);
-  --border-strong: var(--line-2);
-  --hairline: var(--line);
-  --text-3: var(--text-2);
-  --text-faint: var(--text-2);
-  --accent-weak-2: var(--accent-weak);
-  --accent-line: var(--accent);
-  --ok-hover: var(--ok);
-  --ok-press: var(--ok);
-
   /* Shadows: none on panel surfaces; popovers/dialog/toast only. */
   --shadow-sm: none;
   --shadow: none;
@@ -258,7 +244,7 @@ body {
   padding: 0;
 }
 .icon-btn:hover {
-  background: var(--surface-3);
+  background: var(--hover);
   color: var(--text);
 }
 .icon-btn:disabled {
@@ -342,7 +328,7 @@ body {
   margin: 0;
 }
 .muted {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 .chev {
   width: 18px;
@@ -351,7 +337,7 @@ body {
 }
 .help {
   font-size: var(--fs-sm);
-  color: var(--text-3);
+  color: var(--text-2);
   line-height: 1.5;
   margin: 0;
 }
@@ -362,7 +348,7 @@ body {
 }
 .hr {
   height: 1px;
-  background: var(--hairline);
+  background: var(--line);
   border: 0;
   margin: 2px 0;
 }
@@ -404,7 +390,7 @@ textarea {
   padding: 8px 10px;
   color: var(--text);
   background: var(--surface);
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-2);
   border-radius: var(--r-sm);
   transition:
     border-color 0.12s,
@@ -413,7 +399,7 @@ textarea {
 :is([data-theme='dim'], [data-theme='lights']) input,
 :is([data-theme='dim'], [data-theme='lights']) select,
 :is([data-theme='dim'], [data-theme='lights']) textarea {
-  background: var(--inset);
+  background: var(--field);
 }
 textarea {
   resize: vertical;
@@ -428,7 +414,7 @@ textarea:focus {
 }
 input::placeholder,
 textarea::placeholder {
-  color: var(--text-faint);
+  color: var(--text-2);
 }
 
 /* buttons */
@@ -436,6 +422,7 @@ textarea::placeholder {
   font: inherit;
   font-size: var(--fs-base);
   font-weight: 700;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -506,21 +493,6 @@ textarea::placeholder {
 .btn.primary:active {
   background: var(--accent-press);
 }
-/* The success-toned primary — the Done exit. Same weight as .primary,
-   green instead of accent: completion should look like a happy click,
-   not just the next action. --ok-hover/--ok-press mirror each theme's
-   accent direction (light darkens on hover, dark lightens). */
-.btn.primary.ok {
-  background: var(--ok);
-  border-color: var(--ok);
-}
-.btn.primary.ok:hover:not(:disabled) {
-  background: var(--ok-hover);
-  border-color: var(--ok-hover);
-}
-.btn.primary.ok:active {
-  background: var(--ok-press);
-}
 .btn.block {
   width: 100%;
 }
@@ -536,7 +508,7 @@ textarea::placeholder {
 }
 .btn.danger-outline {
   color: var(--danger);
-  border-color: color-mix(in oklab, var(--danger) 45%, var(--border-strong));
+  border-color: color-mix(in oklab, var(--danger) 45%, var(--line-2));
 }
 .btn.danger-outline:hover:not(:disabled) {
   background: var(--danger-weak);
@@ -570,7 +542,7 @@ textarea::placeholder {
   border-radius: var(--r-pill);
   cursor: pointer;
   background: transparent;
-  color: var(--text-3);
+  color: var(--text-2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -604,7 +576,7 @@ textarea::placeholder {
   padding: 6px 12px;
   border-radius: var(--r-pill);
   cursor: pointer;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-2);
   background: var(--surface);
   color: var(--text-2);
   transition:
@@ -616,9 +588,9 @@ textarea::placeholder {
   gap: 6px;
 }
 .pill:hover:not(:disabled) {
-  background: var(--surface-3);
+  background: var(--hover);
   color: var(--text);
-  border-color: var(--text-faint);
+  border-color: var(--text-2);
 }
 .pill.active {
   background: var(--accent);
@@ -637,7 +609,7 @@ textarea::placeholder {
   padding: 7px 13px;
   border-radius: var(--r-pill);
   cursor: pointer;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-2);
   background: var(--surface);
   color: var(--text-2);
   transition:
@@ -649,7 +621,7 @@ textarea::placeholder {
 .chip:hover:not(:disabled) {
   background: var(--hover);
   color: var(--accent);
-  border-color: var(--accent-line);
+  border-color: var(--accent);
 }
 .chip:active {
   transform: scale(0.96);
@@ -671,7 +643,7 @@ textarea::placeholder {
   100% {
     background: var(--surface);
     color: var(--text-2);
-    border-color: var(--border-strong);
+    border-color: var(--line-2);
   }
 }
 .chip-x {
@@ -715,8 +687,8 @@ textarea::placeholder {
 }
 .badge.outline {
   background: transparent;
-  border: 1px solid var(--border-strong);
-  color: var(--text-3);
+  border: 1px solid var(--line-2);
+  color: var(--text-2);
 }
 
 /* toggle switch */
@@ -819,8 +791,8 @@ textarea::placeholder {
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 5px;
-  background: var(--surface-3);
-  border: 1px solid var(--border);
+  background: var(--hover);
+  border: 1px solid var(--line);
   color: var(--text-2);
 }
 .kbd-on {
@@ -885,9 +857,9 @@ code {
 
 /* reply context card (renders like a tweet) */
 .context-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--inset);
+  background: var(--field);
   overflow: hidden;
 }
 .context-card .ctx-top {
@@ -895,8 +867,8 @@ code {
   align-items: center;
   gap: 8px;
   padding: 9px 12px;
-  border-bottom: 1px solid var(--hairline);
-  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
 }
 .context-card .ctx-grand {
   padding: 9px 12px 0;
@@ -906,15 +878,15 @@ code {
 }
 .ctx-thread-label {
   font-size: var(--fs-xs);
-  color: var(--text-3);
+  color: var(--text-2);
   font-weight: 600;
 }
 .ctx-thread-text {
   margin: 3px 0 9px;
   font-size: var(--fs-sm);
-  color: var(--text-3);
+  color: var(--text-2);
   padding-left: 10px;
-  border-left: 2px solid var(--border-strong);
+  border-left: 2px solid var(--line-2);
   line-height: 1.45;
 }
 
@@ -925,11 +897,11 @@ code {
   flex-shrink: 0;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--surface-3);
+  background: var(--hover);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-3);
+  color: var(--text-2);
   font-weight: 700;
   line-height: 1;
 }
@@ -973,7 +945,7 @@ code {
   min-width: 0;
 }
 .tn-handle {
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-base);
   font-weight: 400;
   overflow: hidden;
@@ -983,12 +955,12 @@ code {
   min-width: 0;
 }
 .tn-dot {
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-base);
   flex-shrink: 0;
 }
 .tn-time {
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-base);
   flex-shrink: 0;
 }
@@ -1096,7 +1068,7 @@ code {
 }
 .upd {
   font-size: var(--fs-sm);
-  color: var(--text-3);
+  color: var(--text-2);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1123,12 +1095,7 @@ code {
 .shim {
   height: 11px;
   border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    var(--surface-3) 0%,
-    var(--surface-2) 50%,
-    var(--surface-3) 100%
-  );
+  background: linear-gradient(90deg, var(--hover) 0%, var(--bg) 50%, var(--hover) 100%);
   background-size: 200% 100%;
   animation: shim 1.1s ease-in-out infinite;
 }
@@ -1147,13 +1114,13 @@ code {
   align-items: center;
   gap: 8px;
   padding: 7px 8px 7px 11px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--r);
   background: var(--surface);
   transition: border-color 0.12s;
 }
 .brief:hover {
-  border-color: var(--border-strong);
+  border-color: var(--line-2);
 }
 .brief-main {
   flex: 1;
@@ -1182,7 +1149,7 @@ code {
 .brief-edit {
   width: 15px;
   height: 15px;
-  color: var(--text-faint);
+  color: var(--text-2);
   flex-shrink: 0;
   transition: color 0.12s;
 }
@@ -1304,17 +1271,17 @@ code {
   margin: 0;
 }
 .lib-row {
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--r);
   padding: 9px 11px;
   background: var(--surface);
   transition: border-color 0.12s;
 }
 .lib-row:hover {
-  border-color: var(--border-strong);
+  border-color: var(--line-2);
 }
 .lib-row.editing {
-  border-color: var(--accent-line);
+  border-color: var(--accent);
 }
 .lib-text {
   margin: 0;
@@ -1402,7 +1369,7 @@ code {
 .sec-toggle svg {
   width: 14px;
   height: 14px;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* Live search over the saved examples — composes with the pill filter. */
@@ -1416,7 +1383,7 @@ code {
   transform: translateY(-50%);
   width: 14px;
   height: 14px;
-  color: var(--text-faint);
+  color: var(--text-2);
   pointer-events: none;
 }
 .lib-search input {
@@ -1443,7 +1410,7 @@ code {
   user-select: none;
 }
 .lib-row.picked {
-  border-color: var(--accent-line);
+  border-color: var(--accent);
   background: var(--accent-weak);
 }
 .pick-mark {
@@ -1465,7 +1432,7 @@ code {
   justify-content: center;
   width: 22px;
   height: 22px;
-  border: 1.5px solid var(--border-strong);
+  border: 1.5px solid var(--line-2);
   border-radius: 50%;
   font-size: var(--fs-xs);
   font-weight: 700;
@@ -1477,21 +1444,21 @@ code {
   background: var(--accent);
 }
 .pick-mark input:focus-visible + .pick-badge {
-  outline: 2px solid var(--accent-line);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .pick-badge.static {
   width: 18px;
   height: 18px;
-  border-color: var(--border);
-  color: var(--text-3);
+  border-color: var(--line);
+  color: var(--text-2);
   flex: 0 0 auto;
 }
 /* Already in the destination bundle: checked but inert. */
 .pick-badge.locked {
-  border-color: var(--border-strong);
-  background: var(--surface-3);
-  color: var(--text-3);
+  border-color: var(--line-2);
+  background: var(--hover);
+  color: var(--text-2);
 }
 .pick-mark input:disabled,
 .pick-mark input:disabled + .pick-badge {
@@ -1512,7 +1479,7 @@ code {
   margin: 0;
 }
 .bundle-row {
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--r);
   padding: 7px 11px;
   background: var(--surface);
@@ -1546,7 +1513,7 @@ code {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 .bundle-name {
   font-size: var(--fs-base);
@@ -1561,7 +1528,7 @@ code {
   font-size: var(--fs-base);
   color: var(--text);
   background: var(--surface);
-  border: 1px solid var(--accent-line);
+  border: 1px solid var(--accent);
   border-radius: var(--r-sm);
   padding: 4px 8px;
   flex: 1;
@@ -1574,7 +1541,7 @@ code {
   list-style: none;
   padding: 7px 0 2px;
   margin: 6px 0 0;
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--line);
 }
 .bundle-member {
   display: flex;
@@ -1634,7 +1601,7 @@ code {
   padding-top: 2px;
 }
 .ts-seg + .ts-seg {
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--line);
 }
 .ts-ordinal {
   flex: 0 0 auto;
@@ -1684,7 +1651,7 @@ code {
 }
 .thread-card {
   position: relative;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--r);
   padding: 8px 10px 10px;
   background: var(--surface);
@@ -1701,12 +1668,12 @@ code {
   top: -11px;
   height: 10px;
   width: 2px;
-  background: var(--accent-line);
+  background: var(--accent);
 }
 /* The post the refine controls are aimed at. */
 .thread-card.tc-aimed {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent-weak-2);
+  box-shadow: 0 0 0 1px var(--accent-weak);
 }
 /* The aim indicator above the refine blocks. */
 .refine-scope {
@@ -1724,7 +1691,7 @@ code {
   width: fit-content;
 }
 .thread-card.tc-copied {
-  border-color: color-mix(in oklab, var(--ok) 45%, var(--border));
+  border-color: color-mix(in oklab, var(--ok) 45%, var(--line));
 }
 .tc-head {
   display: flex;
@@ -1735,7 +1702,7 @@ code {
 .tc-ordinal {
   font-size: var(--fs-xs);
   font-weight: 700;
-  color: var(--text-3);
+  color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
 .tc-copy {
@@ -1791,18 +1758,18 @@ code {
   row-gap: 5px;
   flex-wrap: wrap;
   padding: 8px 14px;
-  border-top: 1px solid var(--accent-line);
+  border-top: 1px solid var(--accent);
   background: color-mix(in oklab, var(--accent-weak), transparent 30%);
 }
 :is([data-theme='dim'], [data-theme='lights']) .copy-effects {
-  background: var(--surface-3);
+  background: var(--hover);
 }
 .ce-label {
   font-size: var(--fs-xs);
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 /* A long bundle name must not blow up the footer. */
 .ce-name {
@@ -1826,44 +1793,15 @@ code {
   z-index: 40;
   padding: var(--gap-sm) var(--pad);
   background: var(--surface);
-  border-bottom: 1px solid var(--hairline);
-  box-shadow: 0 4px 12px oklch(0 0 0 / 0.06);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 :is([data-theme='dim'], [data-theme='lights']) .floating-banner-slot {
-  box-shadow: 0 4px 12px oklch(0 0 0 / 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* Mini-pill toggle used inside the draft header for ≤280 cap.
    Lit (accent-tinted) when the cap is on, neutral when off. */
-.minitoggle {
-  font: inherit;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-  padding: 3px 9px;
-  border-radius: var(--r-pill);
-  cursor: pointer;
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text-3);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  transition:
-    background 0.12s,
-    color 0.12s,
-    border-color 0.12s;
-  white-space: nowrap;
-}
-.minitoggle:hover {
-  border-color: var(--text-faint);
-  color: var(--text-2);
-}
-.minitoggle.on {
-  background: var(--accent-weak);
-  border-color: var(--accent-line);
-  color: var(--accent);
-}
 
 /* Collapsible "Inspect last prompt" toggle at the bottom of Compose. */
 .inspect-section {
@@ -1872,7 +1810,7 @@ code {
 /* Open = one attached container: the toggle becomes the header of the
    panel it reveals (dashed invitation -> solid accordion). */
 .inspect-section.open {
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--line-2);
   border-radius: var(--r);
   background: var(--surface);
   overflow: hidden;
@@ -1886,7 +1824,7 @@ code {
   font-size: var(--fs-sm);
   font-weight: 600;
   padding: 8px 12px;
-  border: 1px dashed var(--border-strong);
+  border: 1px dashed var(--line-2);
   border-radius: var(--r);
   background: transparent;
   cursor: pointer;
@@ -1898,24 +1836,24 @@ code {
 }
 .inspect-section.open .inspect-toggle {
   border: 0;
-  border-bottom: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--line);
   border-radius: 0;
-  background: var(--surface-2);
+  background: var(--bg);
   color: var(--text);
 }
 .inspect-toggle:hover {
-  background: var(--surface-2);
+  background: var(--bg);
   color: var(--text);
-  border-color: var(--text-faint);
+  border-color: var(--text-2);
 }
 .inspect-section.open .inspect-toggle:hover {
-  background: var(--surface-3);
+  background: var(--hover);
 }
 .inspect-toggle .insp-chev {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
-  color: var(--text-3);
+  color: var(--text-2);
   transition: transform 0.12s ease;
 }
 .inspect-toggle .insp-chev.open {
@@ -1969,7 +1907,7 @@ code {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--text-faint);
+  background: var(--text-2);
   flex-shrink: 0;
 }
 .capture-banner.on .cb-dot {
@@ -2073,7 +2011,7 @@ code {
   border: 0;
   background: transparent;
   cursor: pointer;
-  color: var(--text-3);
+  color: var(--text-2);
   border-radius: 5px;
   padding: 0;
 }
@@ -2112,15 +2050,15 @@ code {
 }
 @keyframes justadded {
   0% {
-    background: var(--surface-3);
-    border-color: var(--border-strong);
+    background: var(--hover);
+    border-color: var(--line-2);
   }
   60% {
-    background: var(--surface-3);
+    background: var(--hover);
   }
   100% {
     background: var(--surface);
-    border-color: var(--border);
+    border-color: var(--line);
   }
 }
 .lib-row.flash-locate {
@@ -2130,7 +2068,7 @@ code {
   0% {
     background: var(--accent-weak);
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-weak-2);
+    box-shadow: 0 0 0 3px var(--accent-weak);
   }
   70% {
     background: var(--accent-weak);
@@ -2138,7 +2076,7 @@ code {
   }
   100% {
     background: var(--surface);
-    border-color: var(--border);
+    border-color: var(--line);
     box-shadow: none;
   }
 }
@@ -2146,8 +2084,8 @@ code {
 .empty {
   text-align: center;
   padding: 30px 18px;
-  color: var(--text-3);
-  border: 1.5px dashed var(--border);
+  color: var(--text-2);
+  border: 1.5px dashed var(--line);
   border-radius: var(--r);
   font-size: var(--fs-sm);
   line-height: 1.6;
@@ -2155,7 +2093,7 @@ code {
 .empty .ei {
   width: 30px;
   height: 30px;
-  color: var(--text-faint);
+  color: var(--text-2);
   margin: 0 auto 10px;
   display: block;
 }
@@ -2255,7 +2193,7 @@ code {
   font: inherit;
   font-size: var(--fs-sm);
   font-weight: 600;
-  color: var(--text-3);
+  color: var(--text-2);
   background: transparent;
   border: 0;
   cursor: pointer;
@@ -2264,7 +2202,7 @@ code {
   margin-bottom: 8px;
 }
 .opt-back:hover {
-  background: var(--surface-2);
+  background: var(--bg);
   color: var(--text);
 }
 .opt-back svg {
@@ -2322,7 +2260,7 @@ code {
 }
 .opt-foot {
   font-size: var(--fs-xs);
-  color: var(--text-faint);
+  color: var(--text-2);
   margin-top: 16px;
   line-height: 1.5;
 }
@@ -2347,7 +2285,7 @@ code {
 }
 .opt-sub {
   font-size: var(--fs-md);
-  color: var(--text-3);
+  color: var(--text-2);
   margin: 5px 0 0;
   max-width: 60ch;
   line-height: 1.5;
@@ -2405,7 +2343,7 @@ code {
 }
 .opt-card-desc {
   font-size: var(--fs-sm);
-  color: var(--text-3);
+  color: var(--text-2);
   margin: 0 0 14px;
   line-height: 1.5;
   max-width: 64ch;
@@ -2428,7 +2366,7 @@ code {
 .ip-prefix {
   position: absolute;
   left: 10px;
-  color: var(--text-3);
+  color: var(--text-2);
   font-size: var(--fs-base);
   pointer-events: none;
 }
@@ -2444,7 +2382,7 @@ code {
   padding: 9px 0;
   cursor: pointer;
   font-size: var(--fs-base);
-  border-bottom: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--line);
 }
 .rule-toggle:last-child {
   border-bottom: 0;
@@ -2455,7 +2393,7 @@ code {
   list-style: none;
   margin: 0 0 14px;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--r-sm);
   overflow: hidden;
 }
@@ -2465,13 +2403,13 @@ code {
   gap: 12px;
   padding: 8px 11px;
   font-size: var(--fs-sm);
-  border-bottom: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--line);
 }
 .spec-list li:last-child {
   border-bottom: 0;
 }
 .spec-list li > span:first-child {
-  color: var(--text-3);
+  color: var(--text-2);
 }
 .mono-val {
   font-family: var(--mono);
@@ -2480,7 +2418,7 @@ code {
 }
 
 .danger-zone {
-  border-color: color-mix(in oklab, var(--danger) 28%, var(--border));
+  border-color: color-mix(in oklab, var(--danger) 28%, var(--line));
 }
 .confirm-row {
   display: flex;
@@ -2502,10 +2440,10 @@ code {
 .tmpl-meta {
   font-family: var(--mono);
   font-size: 10px;
-  color: var(--text-faint);
+  color: var(--text-2);
 }
 .collapse {
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--r);
   overflow: hidden;
 }
@@ -2518,7 +2456,7 @@ code {
   font: inherit;
   font-weight: 600;
   font-size: var(--fs-base);
-  background: var(--surface-2);
+  background: var(--bg);
   border: 0;
   cursor: pointer;
   color: var(--text);
@@ -2526,7 +2464,7 @@ code {
 }
 .collapse-head .chev {
   margin-left: auto;
-  color: var(--text-faint);
+  color: var(--text-2);
   transition: transform 0.15s;
 }
 .collapse.open .collapse-head .chev {
@@ -2537,7 +2475,7 @@ code {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--line);
 }
 .collapse-body textarea {
   font-family: var(--mono);
@@ -2552,7 +2490,7 @@ code {
 .slot-label {
   font-size: var(--fs-xs);
   font-weight: 600;
-  color: var(--text-3);
+  color: var(--text-2);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-right: 2px;
@@ -2594,7 +2532,7 @@ code {
   gap: 8px;
   font-size: var(--fs-xs);
   font-weight: 600;
-  color: var(--text-3);
+  color: var(--text-2);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 0 2px;
@@ -2619,7 +2557,7 @@ code {
   flex-direction: column;
   gap: 12px;
   margin-top: 14px;
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--line);
   padding-top: 14px;
 }
 .insp-meta {
@@ -2628,20 +2566,20 @@ code {
   gap: 8px;
 }
 .insp-block {
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--r-sm);
   overflow: hidden;
 }
 .insp-block.is-response {
-  border-color: var(--accent-line);
+  border-color: var(--accent);
 }
 .insp-head {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--hairline);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
 }
 .insp-label {
   font-weight: 650;
@@ -2653,7 +2591,7 @@ code {
 .insp-count {
   font-family: var(--mono);
   font-size: 11px;
-  color: var(--text-faint);
+  color: var(--text-2);
 }
 .insp-copy {
   margin-left: auto;
@@ -2675,7 +2613,7 @@ code {
   height: 13px;
 }
 .insp-copy:hover {
-  background: var(--surface-3);
+  background: var(--hover);
   color: var(--text);
 }
 .insp-pre {
@@ -2799,7 +2737,7 @@ code {
 .brief-ctx-toggle .ctx-chev {
   width: 14px;
   height: 14px;
-  color: var(--text-3);
+  color: var(--text-2);
   transition: transform 0.12s ease;
 }
 .brief-ctx-toggle .ctx-chev.open {
@@ -2809,7 +2747,7 @@ code {
 /* Inspector call accordion — each Anthropic call is a collapsible
    section so a multi-call chain reads as a summary first. */
 .insp-call {
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: var(--r-sm);
   overflow: hidden;
   background: var(--surface);
@@ -2824,19 +2762,19 @@ code {
   font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--text);
-  background: var(--surface-2);
+  background: var(--bg);
   border: 0;
   cursor: pointer;
   text-align: left;
 }
 .insp-call-head:hover {
-  background: var(--surface-3);
+  background: var(--hover);
 }
 .insp-call-chev {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
-  color: var(--text-3);
+  color: var(--text-2);
   transition: transform 0.12s ease;
 }
 .insp-call.open .insp-call-chev {
@@ -2854,7 +2792,7 @@ code {
   flex-direction: column;
   gap: 10px;
   padding: 10px;
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--line);
 }
 
 /* Per-draft save-to-Voice switch, living next to the draft eyebrow. */
@@ -2866,7 +2804,7 @@ code {
   font-size: var(--fs-xs);
   font-weight: 600;
   letter-spacing: 0.03em;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 
 /* Star toggle — quiet until starred, then filled accent. */

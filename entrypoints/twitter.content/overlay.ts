@@ -21,6 +21,10 @@ export interface OverlaySystem {
   setLock(article: Element | null): void;
   getLockTarget(): Element | null;
   reposition(): void;
+  /** Re-sample the PAGE's background for light/dark — X's theme is
+   *  per-site, not per-OS. Called on the shared state-scan throttle
+   *  so SPA navigations (and theme switches) are picked up. */
+  refreshScheme(): void;
   destroy(): void;
 }
 
@@ -29,6 +33,7 @@ export function createOverlaySystem(opts: { onDismiss: () => void }): OverlaySys
 
   const root = document.createElement('div');
   root.setAttribute('data-margin-overlay', 'root');
+  root.setAttribute('data-margin-scheme', detectPageScheme());
   root.style.position = 'fixed';
   root.style.top = '0';
   root.style.left = '0';
@@ -54,7 +59,10 @@ export function createOverlaySystem(opts: { onDismiss: () => void }): OverlaySys
 
   const labelEl = document.createElement('div');
   labelEl.setAttribute('data-margin-overlay', 'label');
-  labelEl.textContent = '↑ pulled in as reply context';
+  const labelGlyph = document.createElement('span');
+  labelGlyph.setAttribute('data-margin-overlay', 'label-glyph');
+  labelEl.appendChild(labelGlyph);
+  labelEl.appendChild(document.createTextNode('Replying in Margin'));
 
   root.appendChild(previewEl);
   root.appendChild(lockEl);
@@ -86,7 +94,7 @@ export function createOverlaySystem(opts: { onDismiss: () => void }): OverlaySys
     lockTarget = article;
     const visible = article !== null;
     lockEl.style.display = visible ? 'block' : 'none';
-    labelEl.style.display = visible ? 'block' : 'none';
+    labelEl.style.display = visible ? 'flex' : 'none';
     if (article) {
       if (changed) {
         animateOnce(lockEl);
@@ -127,11 +135,19 @@ export function createOverlaySystem(opts: { onDismiss: () => void }): OverlaySys
     root.remove();
   }
 
+  function refreshScheme(): void {
+    const scheme = detectPageScheme();
+    if (root.getAttribute('data-margin-scheme') !== scheme) {
+      root.setAttribute('data-margin-scheme', scheme);
+    }
+  }
+
   return {
     setPreview,
     setLock,
     getLockTarget: () => lockTarget,
     reposition,
+    refreshScheme,
     destroy,
   };
 }
@@ -169,17 +185,32 @@ function positionLabel(
   rect: DOMRect,
   cache: WeakMap<HTMLElement, { x: number; y: number; w: number; h: number }>,
 ): void {
-  // Label anchors to the bottom-left of the lock highlight, just below
-  // the rectangle. Vertical offset of 4px keeps it visually attached
-  // to the bottom border without overlapping it. Width/height aren't
+  // The pill half-overlaps the lock's bottom border (X's own badge
+  // placement), 13px in from the left edge. Width/height aren't
   // applied because the label sizes to its content (the pill style).
-  const x = Math.round(rect.left + 8);
-  const y = Math.round(rect.bottom + 4);
+  const x = Math.round(rect.left + 13);
+  const y = Math.round(rect.bottom - 11);
   const last = cache.get(el);
   if (last && last.x === x && last.y === y) return;
   el.style.top = `${String(y)}px`;
   el.style.left = `${String(x)}px`;
   cache.set(el, { x, y, w: 0, h: 0 });
+}
+
+/** Light/dark from the PAGE's actual background luminance — X's theme
+ *  is per-site, so prefers-color-scheme mismatches when OS and X
+ *  themes differ. Unparseable backgrounds read as light (fails open
+ *  to the lighter fill). */
+function detectPageScheme(): 'light' | 'dark' {
+  try {
+    const bg = getComputedStyle(document.body).backgroundColor;
+    const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(bg);
+    if (!m) return 'light';
+    const luminance = 0.2126 * Number(m[1]) + 0.7152 * Number(m[2]) + 0.0722 * Number(m[3]);
+    return luminance < 128 ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
 }
 
 let stylesInjected = false;
@@ -188,29 +219,22 @@ function injectOverlayStyles(): void {
   stylesInjected = true;
   const style = document.createElement('style');
   style.setAttribute('data-margin-overlay', 'styles');
-  // Define the overlay's own colour scope rather than reading the
-  // panel's `[data-theme]` token (X.com is its own document and we
-  // can't reach the panel's CSS variables from here). Two colour
-  // schemes: an oklch muted-blue that matches the panel's accent in
-  // light theme, and a slightly brighter variant for users browsing
-  // X in dark mode. We auto-detect via `prefers-color-scheme`.
+  // One accent — X's #1D9BF0, identical in light and dark (the reskin
+  // rule). The page's light/dark only tunes the fill alpha and shadow;
+  // it is detected from the PAGE's actual background (X's theme is
+  // per-site — prefers-color-scheme mismatches when OS and X differ)
+  // and re-sampled on the shared scan throttle via refreshScheme().
   style.textContent = `
     [data-margin-overlay="root"] {
-      --margin-accent: oklch(0.56 0.12 250);
-      --margin-accent-fill: oklch(0.56 0.12 250 / 0.08);
-      --margin-accent-hover: oklch(0.5 0.13 250);
-      --margin-on-accent: oklch(0.99 0.005 250);
+      --margin-accent: #1d9bf0;
+      --margin-accent-fill: rgba(29, 155, 240, 0.08);
+      --margin-preview-line: rgba(29, 155, 240, 0.75);
     }
-    @media (prefers-color-scheme: dark) {
-      [data-margin-overlay="root"] {
-        --margin-accent: oklch(0.7 0.13 248);
-        --margin-accent-fill: oklch(0.7 0.13 248 / 0.10);
-        --margin-accent-hover: oklch(0.76 0.13 248);
-        --margin-on-accent: oklch(0.15 0.02 250);
-      }
+    [data-margin-overlay="root"][data-margin-scheme="dark"] {
+      --margin-accent-fill: rgba(29, 155, 240, 0.12);
     }
     [data-margin-overlay="preview"] {
-      border: 2px solid color-mix(in oklab, var(--margin-accent) 70%, transparent);
+      border: 2px solid var(--margin-preview-line);
       border-radius: 16px;
       background: transparent;
     }
@@ -229,19 +253,20 @@ function injectOverlayStyles(): void {
     }
     [data-margin-overlay="dismiss"] {
       position: absolute;
-      top: -10px;
-      right: -10px;
-      width: 24px;
-      height: 24px;
+      top: 9px;
+      right: 11px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
       border: 0;
-      background: var(--margin-accent);
-      color: var(--margin-on-accent);
-      font-size: 16px;
+      background: rgba(15, 20, 25, 0.75);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+      color: #fff;
+      font-size: 17px;
       line-height: 1;
       cursor: pointer;
       pointer-events: auto;
-      box-shadow: 0 1px 3px oklch(0 0 0 / 0.25);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -249,22 +274,53 @@ function injectOverlayStyles(): void {
       padding: 0;
     }
     [data-margin-overlay="dismiss"]:hover {
-      background: var(--margin-accent-hover);
+      background: rgba(15, 20, 25, 0.9);
     }
     [data-margin-overlay="label"] {
       position: fixed;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--margin-on-accent);
-      background: var(--margin-accent);
-      padding: 4px 10px;
-      border-radius: 6px;
-      pointer-events: none;
       display: none;
-      box-shadow: 0 1px 3px oklch(0 0 0 / 0.18);
+      align-items: center;
+      gap: 5px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #fff;
+      background: var(--margin-accent);
+      padding: 4px 11px 4px 8px;
+      border-radius: 999px;
+      pointer-events: none;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
       white-space: nowrap;
       z-index: 2147483000;
+    }
+    [data-margin-overlay="label-glyph"] {
+      position: relative;
+      width: 11px;
+      height: 11px;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    [data-margin-overlay="label-glyph"]::before {
+      content: "";
+      position: absolute;
+      left: 1px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      border-radius: 1px;
+      background: #fff;
+    }
+    [data-margin-overlay="label-glyph"]::after {
+      content: "";
+      position: absolute;
+      left: 5.5px;
+      right: 0;
+      top: 2px;
+      height: 2px;
+      border-radius: 1px;
+      background: #fff;
+      opacity: 0.9;
+      box-shadow: 0 4px 0 #fff;
     }
     [data-margin-overlay="label"].moving {
       transition: top 0.16s ease-out, left 0.16s ease-out;
