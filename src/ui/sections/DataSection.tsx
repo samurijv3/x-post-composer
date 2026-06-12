@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   clearAllItems,
   EXPORT_SCHEMA_VERSION,
+  getAllBundles,
   getAllItems,
   getSettings,
   setSettings,
@@ -58,10 +59,15 @@ export function DataSection({ onSaved }: Props) {
     setError(null);
     try {
       const items = await getAllItems();
+      // Bundles joined the export at schema v5 — they are user data
+      // (names + member references), and a backup without them would
+      // silently drop the series the user curated.
+      const bundles = await getAllBundles();
       const payload = {
         exportedAt: new Date().toISOString(),
         schemaVersion: EXPORT_SCHEMA_VERSION,
         items,
+        bundles,
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], {
         type: 'application/json',

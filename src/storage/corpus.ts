@@ -17,19 +17,23 @@
  *       (no existing rows carry it, so no backfill for it).
  *   v4: adds `favorite: boolean` (the Star tier), backfilled false on
  *       existing rows.
+ *   v5: adds the `bundles` object store (context bundles, keyed by
+ *       `id`). No item-row changes; CRUD lives in ./bundles.ts.
  */
 import type { LibraryItem } from '../types';
 
 export const DB_NAME = 'x-post-composer';
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 /**
- * Version stamped into library-export JSON. Tracks the LibraryItem ROW
- * shape, which is defined by the DB schema version — bump alongside
- * DB_VERSION whenever a migration changes the row shape, so a future
- * import can tell what it is reading.
+ * Version stamped into library-export JSON. Tracks the export's record
+ * shapes, which are defined by the DB schema version — bump alongside
+ * DB_VERSION whenever a migration changes what an export contains, so
+ * a future import can tell what it is reading. (v5 exports gain a
+ * `bundles` array next to `items`.)
  */
 export const EXPORT_SCHEMA_VERSION = DB_VERSION;
 export const STORE_ITEMS = 'items';
+export const STORE_BUNDLES = 'bundles';
 // Schema-level seam: no v1 reader queries this index (sampling filters
 // in memory), but Phase-2 retrieval will, and indexes are cheapest to
 // carry from day one rather than added via migration later.
@@ -54,6 +58,11 @@ export function openCorpus(): Promise<IDBDatabase> {
       if (oldVersion < 1) {
         const store = db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
         store.createIndex(INDEX_BY_TYPE, 'type', { unique: false });
+      }
+      // v5: the bundles store. Store creation is synchronous inside the
+      // versionchange transaction — it needs no migration pass.
+      if (oldVersion < 5) {
+        db.createObjectStore(STORE_BUNDLES, { keyPath: 'id' });
       }
       // Row-rewriting passes run SEQUENTIALLY, one per schema version,
       // each keeping its original logic verbatim in its own function.
@@ -165,7 +174,9 @@ function txStore(db: IDBDatabase, mode: IDBTransactionMode): IDBObjectStore {
   return db.transaction(STORE_ITEMS, mode).objectStore(STORE_ITEMS);
 }
 
-function promisifyRequest<T>(request: IDBRequest<T>): Promise<T> {
+/** Shared IDB plumbing for this database's store modules (here and
+ *  ./bundles.ts) — resolve/reject a single request as a promise. */
+export function promisifyRequest<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'));
@@ -190,11 +201,17 @@ export async function deleteItem(id: string): Promise<void> {
   await promisifyRequest(txStore(db, 'readwrite').delete(id));
 }
 
-/** Remove every item in one transaction — all-or-nothing, unlike a
- *  per-item delete loop that can fail half-way through a large corpus. */
+/** Remove every item AND every bundle in one transaction — "clear all"
+ *  means all the user's library data, all-or-nothing (a per-store loop
+ *  could fail half-way and leave bundles full of dangling ids). */
 export async function clearAllItems(): Promise<void> {
   const db = await openCorpus();
-  await promisifyRequest(txStore(db, 'readwrite').clear());
+  const tx = db.transaction([STORE_ITEMS, STORE_BUNDLES], 'readwrite');
+  const cleared = Promise.all([
+    promisifyRequest(tx.objectStore(STORE_ITEMS).clear()),
+    promisifyRequest(tx.objectStore(STORE_BUNDLES).clear()),
+  ]);
+  await cleared;
 }
 
 /** Read every item. Order is unspecified. */

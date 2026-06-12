@@ -12,6 +12,7 @@ import {
   STORE_ITEMS,
   updateItem,
 } from './corpus';
+import { addBundle, getAllBundles } from './bundles';
 
 function makeItem(overrides: Partial<LibraryItem> = {}): LibraryItem {
   return {
@@ -169,6 +170,63 @@ describe('corpus store', () => {
     expect(bySource.get('was-manual')).toBe('manual');
     // The same chain runs v4: every pre-star row arrives unfavorited.
     expect(items.every((i) => i.favorite === false)).toBe(true);
+  });
+
+  it('v4→v5 migration adds the bundles store, leaving items untouched', async () => {
+    // Seed a v4 database directly — items store only, no bundles store,
+    // one fully-v4-shaped row.
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 4);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        const store = db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
+        store.createIndex('byType', 'type', { unique: false });
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        expect(Array.from(db.objectStoreNames)).toEqual([STORE_ITEMS]);
+        const tx = db.transaction(STORE_ITEMS, 'readwrite');
+        tx.objectStore(STORE_ITEMS).add({
+          id: 'pre-bundles',
+          text: 'v4 row',
+          type: 'post',
+          source: 'manual',
+          authorHandle: 'me',
+          authorDisplayName: null,
+          authorAvatarUrl: null,
+          timestamp: '2025-01-01T00:00:00Z',
+          engagement: null,
+          favorite: true,
+          embedding: null,
+          createdAt: 1,
+        });
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error ?? new Error('seed transaction failed'));
+      };
+      req.onerror = () => reject(req.error ?? new Error('seed open failed'));
+    });
+    _resetCorpusCache();
+
+    // Items survive verbatim (v5 rewrites no rows)…
+    const items = await getAllItems();
+    expect(items).toHaveLength(1);
+    expect(items[0]?.id).toBe('pre-bundles');
+    expect(items[0]?.favorite).toBe(true);
+    // …and the new store is immediately usable.
+    await addBundle({ id: 'b1', name: 'Day X', memberIds: ['pre-bundles'], createdAt: 1 });
+    const bundles = await getAllBundles();
+    expect(bundles.map((b) => b.id)).toEqual(['b1']);
+  });
+
+  it('clearAllItems wipes bundles along with items', async () => {
+    await addItem(makeItem({ id: 'a' }));
+    await addBundle({ id: 'b1', name: 'Day X', memberIds: ['a'], createdAt: 1 });
+    await clearAllItems();
+    expect(await countItems()).toBe(0);
+    expect(await getAllBundles()).toEqual([]);
   });
 
   it('v3→v4 migration backfills favorite: false', async () => {

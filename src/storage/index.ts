@@ -19,6 +19,7 @@ export {
   DB_VERSION,
   EXPORT_SCHEMA_VERSION,
 } from './corpus';
+export { addBundle, updateBundle, deleteBundle, getBundle, getAllBundles } from './bundles';
 export {
   getCaptureMode,
   setCaptureMode,
