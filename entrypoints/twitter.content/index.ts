@@ -434,23 +434,25 @@ export default defineContentScript({
     /**
      * Nudge the cursor article into the comfortable band of the
      * viewport — scroll only when it sits within MARGIN of an edge (or
-     * off screen), and only BY the overshoot, smoothly. Mid-viewport
-     * steps don't scroll at all; a taller-than-band tweet anchors its
-     * top so reading starts at the start.
+     * off screen), and only BY the overshoot. Mid-viewport steps don't
+     * scroll at all; a taller-than-band tweet anchors its top so
+     * reading starts at the start. Discrete presses glide (smooth);
+     * HELD-key repeats scroll instantly — smooth animation can't keep
+     * pace with the repeat rate, and the cursor would escape the
+     * viewport (the same reason multi-step acceleration was reverted).
      */
     const SCROLL_MARGIN = 100;
-    function nudgeArticleIntoView(article: Element): void {
+    function nudgeArticleIntoView(article: Element, instant: boolean): void {
       const rect = article.getBoundingClientRect();
       const topBound = SCROLL_MARGIN;
       const bottomBound = window.innerHeight - SCROLL_MARGIN;
+      const behavior = instant ? 'auto' : 'smooth';
       if (rect.height > bottomBound - topBound || rect.top < topBound) {
-        window.scrollBy({ top: rect.top - topBound, behavior: 'smooth' });
+        window.scrollBy({ top: rect.top - topBound, behavior });
       } else if (rect.bottom > bottomBound) {
-        window.scrollBy({ top: rect.bottom - bottomBound, behavior: 'smooth' });
+        window.scrollBy({ top: rect.bottom - bottomBound, behavior });
       }
     }
-
-    let navRepeatCount = 0;
 
     /**
      * One nav keypress — from this page's own keydown listener OR
@@ -469,19 +471,17 @@ export default defineContentScript({
         // can't move (edge): the suppression must already hold when
         // the passed-through native scroll fires echo mouseovers.
         keyboardNavActive = true;
-        navRepeatCount = repeat ? navRepeatCount + 1 : 0;
-        const step = navRepeatCount < 5 ? 1 : navRepeatCount < 15 ? 2 : 3;
         let cursor = hoveredArticle !== null && hoveredArticle.isConnected ? hoveredArticle : null;
         if (cursor === null && captureMode === 'reply-context') {
           // Nav resumes from the current selection — the locked
           // tweet — when it's rendered, rather than the viewport.
           cursor = findLockArticle(isXModalOpen() ? 'modal' : 'page');
         }
-        const next = stepToAdjacentArticle(cursor, key === 'ArrowDown' ? 1 : -1, step);
+        const next = stepToAdjacentArticle(cursor, key === 'ArrowDown' ? 1 : -1);
         if (next === null) return false;
         hoveredArticle = next;
         applyOverlayState();
-        nudgeArticleIntoView(next);
+        nudgeArticleIntoView(next, repeat);
         return true;
       }
       if (key === 'Enter') {
@@ -493,17 +493,27 @@ export default defineContentScript({
         }
         return true;
       }
-      // Escape — staged de-select: first press drops the cursor (the
-      // highlight outline), the next drops the reply-context lock.
-      // While X has a modal open, Escape is X's (it closes the modal).
+      // Escape — staged de-select: drop the VISIBLE cursor first, the
+      // reply-context lock next. Visibility is the stage gate: after
+      // Enter locks a tweet the cursor still points at it, but its
+      // preview is suppressed (hovered === locked paints nothing), and
+      // a press that clears only an invisible cursor reads as a dead
+      // key — that exact double-press was a field bug. While X has a
+      // modal open, Escape is X's (it closes the modal).
       if (isXModalOpen()) return false;
-      if (hoveredArticle !== null) {
+      const lockTarget = captureMode === 'reply-context' ? findLockArticle('page') : null;
+      const cursorVisible =
+        hoveredArticle !== null && hoveredArticle.isConnected && hoveredArticle !== lockTarget;
+      if (cursorVisible) {
         hoveredArticle = null;
         keyboardNavActive = false;
         applyOverlayState();
         return true;
       }
       if (captureMode === 'reply-context' && replyContextLock !== null) {
+        // Clear the stale/invisible cursor along with the lock.
+        hoveredArticle = null;
+        keyboardNavActive = false;
         dismissReplyContext();
         return true;
       }

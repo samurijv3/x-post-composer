@@ -107,7 +107,7 @@ Then open the panel (toolbar icon), click the gear to open **Settings**, and in 
 ### Compose
 
 1. **Post:** type bullets describing what you want to say, hit **Generate** (⌘↵ works).
-2. **Reply:** turn on the **Reply to a tweet** toggle in Compose, then click the target tweet on x.com (or step to it with **↑/↓** and press **Enter**; **Esc** drops the highlight, and pressed again clears the lock). It gets a highlight on the page (with a × to dismiss) and appears in the panel as the reply context — generation automatically becomes reply-mode. Click a different tweet to swap the context; turn the toggle off when done.
+2. **Reply:** turn on the **Reply to a tweet** toggle in Compose, then click the target tweet on x.com (or step to it with **↑/↓** and press **Enter**; **Esc** drops the highlight, or clears the lock when that's what's showing). It gets a highlight on the page (with a × to dismiss) and appears in the panel as the reply context — generation automatically becomes reply-mode. Click a different tweet to swap the context; turn the toggle off when done.
 3. Shortcut: with X's native reply composer open, **Alt-Shift-R** opens the panel and pulls in the tweet you're replying to, in one step.
 4. Toggle **Keep under 280** on/off per composition (the uncapped soft target is in Output rules).
 
