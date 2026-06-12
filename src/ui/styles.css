@@ -3072,6 +3072,9 @@ code {
 .ring.is-committed .ring-bar {
   stroke: var(--ok);
 }
+.ring.is-beyond .ring-bar {
+  stroke: var(--line-2);
+}
 
 /* Actions + copyline. */
 .draft-actions {

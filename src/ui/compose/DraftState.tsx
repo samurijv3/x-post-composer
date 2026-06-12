@@ -206,7 +206,12 @@ export function DraftState({
     ? "Hide the tweet you're replying to"
     : "Show the tweet you're replying to";
 
-  const ringLimit = brief.charCap ? X_HARD_LIMIT : brief.softCapChars;
+  const firstCount = first?.count ?? 0;
+  // The ring is the 280 dial regardless of mode; red only when over
+  // the limit actually enforced (280 capped, the soft cap uncapped).
+  const ringOver = brief.charCap ? (first?.over ?? false) : firstCount > brief.softCapChars;
+  const ringBeyond =
+    !brief.charCap && firstCount > X_HARD_LIMIT && firstCount <= brief.softCapChars;
   const filesInto = shipToVoice !== null && fileToBundle ? seedBundleName : null;
 
   return (
@@ -399,9 +404,10 @@ export function DraftState({
               />
               <div className="draft-foot">
                 <CountRing
-                  count={first?.count ?? 0}
-                  limit={ringLimit}
-                  over={first?.over ?? false}
+                  count={firstCount}
+                  limit={X_HARD_LIMIT}
+                  over={ringOver}
+                  beyond={ringBeyond}
                   committed={draft.committed && !busy}
                 />
                 <span className={`count ${(first?.over ?? false) ? 'over' : ''}`}>

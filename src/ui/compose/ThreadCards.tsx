@@ -54,7 +54,6 @@ export function ThreadCards({
   onRewritePost,
   onAimPost,
 }: ThreadCardsProps) {
-  const ringLimit = charCap ? X_HARD_LIMIT : softCapChars;
   return (
     <div className="tsegs">
       {posts.map((post, i) => (
@@ -86,8 +85,9 @@ export function ThreadCards({
                 <>
                   <CountRing
                     count={post.count}
-                    limit={ringLimit}
-                    over={post.over}
+                    limit={X_HARD_LIMIT}
+                    over={charCap ? post.over : post.count > softCapChars}
+                    beyond={!charCap && post.count > X_HARD_LIMIT && post.count <= softCapChars}
                     committed={false}
                   />
                   <span className={`count ${post.over ? 'over' : ''}`}>{post.count}</span>
