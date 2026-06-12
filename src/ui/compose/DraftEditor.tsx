@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { Span } from '../../lib/exclusion';
 import { renderWithHighlights } from '../highlights';
 
@@ -31,6 +31,24 @@ export function DraftEditor({ text, violations, disabled, onEdit }: DraftEditorP
     el.style.height = 'auto';
     el.style.height = `${String(el.scrollHeight)}px`;
   }, [text]);
+
+  // Re-fit when the WIDTH changes (the side panel is user-resizable):
+  // narrower wraps the same text onto more lines, and a height
+  // measured at the old width would clip them with no scrollbar.
+  // Width-gated so our own height writes can't loop the observer.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    let lastWidth = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth === lastWidth) return;
+      lastWidth = el.clientWidth;
+      el.style.height = 'auto';
+      el.style.height = `${String(el.scrollHeight)}px`;
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div className="draft-editor">
