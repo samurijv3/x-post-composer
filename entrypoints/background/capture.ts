@@ -224,7 +224,8 @@ export async function handleManualAdd(
  */
 export async function handleShippedDraft(
   text: string,
-  mode: 'post' | 'reply',
+  segments: string[] | null,
+  mode: 'post' | 'reply' | 'thread',
   bundleId: string | null,
 ): Promise<BackgroundReply> {
   const settings = await getSettings();
@@ -235,12 +236,14 @@ export async function handleShippedDraft(
   }
 
   const item: LibraryItem = {
-    // No status id exists at commit time — the tweet hasn't been
-    // posted yet. A later handpick of the published tweet text-matches
-    // this record and promotes it to 'manual'.
+    // No status id exists at commit time — the tweets haven't been
+    // posted yet (thread segments carry null ids for the same reason).
+    // A later handpick of the published tweet text-matches this record
+    // and promotes it to 'manual'.
     id: crypto.randomUUID(),
     text: trimmed,
     type: mode,
+    segments: segments?.map((segment) => ({ text: segment, statusId: null })) ?? null,
     source: 'shipped',
     authorHandle: handle,
     authorDisplayName: null,
@@ -248,7 +251,6 @@ export async function handleShippedDraft(
     timestamp: new Date().toISOString(),
     engagement: null,
     favorite: false,
-    segments: null,
     embedding: null,
     createdAt: Date.now(),
   };

@@ -73,8 +73,9 @@ export interface GenerationRequest {
  * In-flight only — never stored, so reshaping it needs no migration.
  */
 export interface RefineRequest {
-  /** Mode of the original generation (used by `setLastPrompt` only). */
-  mode: 'post' | 'reply';
+  /** Mode of the original generation — 'thread' switches the pipeline
+   *  to per-segment processing and the format reminder. */
+  mode: 'post' | 'reply' | 'thread';
   /** The on-screen draft text that this refine is reshaping. */
   previousDraftText: string;
   /** Same constraint as the original composition. */
@@ -99,18 +100,26 @@ export type RefineKind =
   | { type: 'polish' }
   /** The ≤280 toggle flipped ON over an over-limit draft — a refit,
    *  never a regenerate (REFIT_INSTRUCTION). */
-  | { type: 'refit' };
+  | { type: 'refit' }
+  /** The ≈N stepper changed over an ACTIVE thread draft — a REPACK:
+   *  content is the fixed point, only the packaging changes
+   *  (buildRepackInstruction). Count is re-validated against this
+   *  target. */
+  | { type: 'repack'; targetCount: number };
 
 export interface GenerationResultOk {
   ok: true;
+  /** How the draft renders: the classic single card or thread cards. */
+  kind: 'single' | 'thread';
+  /** Ordered posts, each carrying its own residual violations. */
   draft: Draft;
-  /** Spans (in the FIRST-PASS draft text) that auto-fix rewrote.
-   *  Useful for logging / inspection; not surfaced in the main UI. */
+  /** The ≈N target this thread was produced/repacked against; null
+   *  for singles (and for refines that don't re-validate count). */
+  targetCount: number | null;
+  /** Spans (in the first-pass texts) that auto-fix rewrote. Useful for
+   *  logging / inspection; not surfaced in the main UI. */
   appliedAutoFixes: Span[];
-  /** Spans (in the FINAL draft text) that survived auto-fix + repair.
-   *  The UI highlights these so the user can hand-edit. */
-  residualViolations: Span[];
-  /** True when a repair re-prompt fired. */
+  /** True when a repair or reshape re-prompt fired. */
   wasRepaired: boolean;
 }
 

@@ -383,18 +383,16 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     dispatchDraft({
       type: 'generation-succeeded',
       seq,
-      // Single-post mapping (threads land with the thread compose UI):
-      // one post carrying the draft text and its violations.
+      // The result's posts map 1:1 onto lifecycle posts — length 1 for
+      // singles, the thread's segments otherwise.
       draft: {
-        kind: 'single',
-        posts: [
-          {
-            text: result.draft.posts[0]?.text ?? '',
-            residualViolations: result.residualViolations,
-          },
-        ],
+        kind: result.kind,
+        posts: result.draft.posts.map((p) => ({
+          text: p.text,
+          residualViolations: p.residualViolations,
+        })),
         wasRepaired: result.wasRepaired,
-        targetCount: null,
+        targetCount: result.targetCount,
       },
       seedBundleId,
     });
@@ -513,13 +511,10 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   useEffect(() => {
     const unsub = onDraftCommit((commit) => {
       if (!saveShippedDefaultRef.current || !shipToVoiceRef.current) return;
-      // Thread commits ride once the contract carries segments (the
-      // pipeline commit, next) — no thread draft can exist before the
-      // thread compose UI lands anyway.
-      if (commit.mode === 'thread') return;
       sendToBackground({
         type: 'panel:draft-committed',
         text: commit.text,
+        segments: commit.segments,
         mode: commit.mode,
         // The per-draft filing override: off means the shipped example
         // still saves but the bundle doesn't grow.

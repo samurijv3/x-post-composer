@@ -30,18 +30,27 @@ import {
   assembleInitialPrompt,
   assembleRefinePrompt,
   buildCharConstraintInstruction,
+  buildCountNudgeLine,
+  buildRepackInstruction,
   buildRepairInstruction,
+  buildTightenSegmentsInstruction,
   escalateChipInstruction,
   POLISH_INSTRUCTION,
   REFIT_INSTRUCTION,
   summarizeViolations,
+  THREAD_CAP_LINE,
+  THREAD_FORMAT_REMINDER,
   TIGHTEN_INSTRUCTION,
   type RenderedPrompt,
 } from '../../src/lib/prompt';
 import { isOver280, weightedLength } from '../../src/lib/counting';
+import { DEFAULT_THREAD_TARGET, joinSegments, parseThreadSegments } from '../../src/lib/thread';
 import { callAnthropic, verifyKey } from '../../src/api/anthropic';
 
 const MAX_TOKENS = 1024;
+// A 7–9 post thread at ~280 chars/post needs far more output headroom
+// than a single tweet; 1024 would silently truncate mid-thread.
+const THREAD_MAX_TOKENS = 4096;
 
 /** "Does the saved key work" probe behind the Account section's Verify button. */
 export async function runVerifyKey(): Promise<{ ok: boolean; message: string }> {
@@ -119,6 +128,10 @@ export async function runGeneration(request: GenerationRequest): Promise<Generat
     apiKey,
     settings,
     mode: request.mode,
+    kind: request.mode === 'thread' ? 'thread' : 'single',
+    // Generates validate the count; refines don't (chips may
+    // legitimately change it) — repack re-supplies a target.
+    targetCount: request.mode === 'thread' ? (request.targetCount ?? DEFAULT_THREAD_TARGET) : null,
     charCap: request.charCap,
     initialPrompt,
     initialLabel: bundle !== null ? `${baseLabel} (bundle: ${bundle.name})` : baseLabel,
@@ -180,18 +193,28 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
   } else if (kind.type === 'polish') {
     instruction = POLISH_INSTRUCTION;
     initialLabel = 'refine (polish)';
+  } else if (kind.type === 'repack') {
+    instruction = buildRepackInstruction(kind.targetCount);
+    initialLabel = `refine (repack to \u2248${String(kind.targetCount)})`;
   } else {
     instruction = REFIT_INSTRUCTION;
     initialLabel = 'refine (refit to \u2264280)';
   }
 
   // The cap is a constraint; the instruction is a direction \u2014
-  // constraints win. With the cap on, every refine carries the 280
+  // constraints win. With the cap on, every refine carries the cap
   // line explicitly so the model aims AT the headroom ("Longer" means
-  // longer-but-under-280) instead of overshooting into the tighten
-  // backstop, which would silently crush the result back. The refit's
-  // own instruction already states the limit.
-  if (request.charCap && kind.type !== 'refit') {
+  // longer-but-under-the-cap) instead of overshooting into the
+  // reshape backstop, which would silently crush the result back. The
+  // refit's own instruction already states the limit. Thread refines
+  // get the per-post cap line and ALWAYS the format reminder — a
+  // revision pass must never flatten the thread into one post.
+  if (request.mode === 'thread') {
+    if (request.charCap) {
+      instruction = `${instruction}\n\n${THREAD_CAP_LINE}`;
+    }
+    instruction = `${instruction}\n\n${THREAD_FORMAT_REMINDER}`;
+  } else if (request.charCap && kind.type !== 'refit') {
     instruction = `${instruction}\n\n${buildCharConstraintInstruction({
       charCap: true,
       softCapChars: settings.softCapChars,
@@ -202,6 +225,10 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
     apiKey,
     settings,
     mode: request.mode,
+    kind: request.mode === 'thread' ? 'thread' : 'single',
+    // Only a repack re-validates the post count — other refines act
+    // holistically and may legitimately change it.
+    targetCount: kind.type === 'repack' ? kind.targetCount : null,
     charCap: request.charCap,
     initialPrompt: assembleRefinePrompt(settings, request.previousDraftText, instruction),
     initialLabel,
@@ -210,19 +237,32 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
 }
 
 // ---------------------------------------------------------------------
-// Shared pipeline: call → autoFix → exclusion-repair? → tighten-repair?
-// → persistLastPrompt → result.
+// Shared pipeline: call → per-post autoFix/check → exclusion-repair?
+// → reshape? → persistLastPrompt → result.
 //
-// At most three Anthropic calls per invocation:
+// The HARD CEILING is unchanged: at most three Anthropic calls per
+// invocation —
 //   1. Initial call
-//   2. One exclusion repair (only if violations remain after autoFix)
-//   3. One tighten repair (only if charCap is on AND draft still > 280)
+//   2. One exclusion repair (only if violations remain after autoFix;
+//      in thread mode it also restates the count when drifted)
+//   3. One reshape (single mode: the classic tighten when charCap is
+//      on and the draft measures >280; thread mode: when any post is
+//      over the cap and/or the post count drifted beyond ±1 of the
+//      target)
+// Thread invocations parse the --- wire format and process each post
+// independently (autoFix, exclusions, weighted counts); every backstop
+// instruction is code-composed from tested lib/prompt constants.
 // ---------------------------------------------------------------------
 
 interface PipelineOptions {
   apiKey: string;
   settings: Settings;
   mode: 'post' | 'reply' | 'thread';
+  /** Single card vs thread cards — decides parsing and per-post math. */
+  kind: 'single' | 'thread';
+  /** Thread ≈N target to validate (generate/repack); null skips the
+   *  count check. */
+  targetCount: number | null;
   charCap: boolean;
   initialPrompt: RenderedPrompt;
   /** Inspector label for the initial call ('generate', 'refine (…)', …). */
@@ -230,20 +270,50 @@ interface PipelineOptions {
   temperature: number;
 }
 
+/** One post after deterministic post-processing. */
+interface ProcessedPost {
+  text: string;
+  violations: Span[];
+}
+
+/** Parse (threads) and run per-post autoFix + exclusion checks. */
+function processDraftText(
+  raw: string,
+  kind: 'single' | 'thread',
+  settings: Settings,
+  fixOptions: { fixEmDash: boolean; fixSmartQuotes: boolean },
+): { posts: ProcessedPost[]; appliedFixes: Span[] } {
+  const rawPosts = kind === 'thread' ? parseThreadSegments(raw) : [raw];
+  const posts: ProcessedPost[] = [];
+  const appliedFixes: Span[] = [];
+  for (const rawPost of rawPosts) {
+    const fixed = autoFix(rawPost, fixOptions);
+    const check = checkExclusions(fixed.text, settings);
+    posts.push({ text: fixed.text, violations: check.violations });
+    appliedFixes.push(...fixed.appliedFixes);
+  }
+  return { posts, appliedFixes };
+}
+
 async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
-  const { apiKey, settings, mode, charCap, initialPrompt, initialLabel, temperature } = opts;
+  const { apiKey, settings, mode, kind, targetCount, charCap, initialPrompt, initialLabel } = opts;
   const fixOptions = {
     fixEmDash: settings.structuralRules.noEmDash,
     fixSmartQuotes: settings.structuralRules.noSmartQuotes,
   };
+  const maxTokens = kind === 'thread' ? THREAD_MAX_TOKENS : MAX_TOKENS;
+  const joined = (posts: ProcessedPost[]): string =>
+    kind === 'thread' ? joinSegments(posts.map((p) => p.text)) : (posts[0]?.text ?? '');
+  const countDrifted = (posts: ProcessedPost[]): boolean =>
+    kind === 'thread' && targetCount !== null && Math.abs(posts.length - targetCount) > 1;
 
   const firstCall = await callAnthropic({
     apiKey,
     model: settings.model,
     system: initialPrompt.system,
     prompt: initialPrompt.user,
-    temperature,
-    maxTokens: MAX_TOKENS,
+    temperature: opts.temperature,
+    maxTokens,
   });
   if (!firstCall.ok) {
     return { ok: false, kind: firstCall.kind, message: firstCall.message };
@@ -257,24 +327,26 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
     };
   }
 
-  const firstFixed = autoFix(firstCall.text, fixOptions);
-  const firstCheck = checkExclusions(firstFixed.text, settings);
-
-  let finalText = firstFixed.text;
-  let appliedAutoFixes: Span[] = firstFixed.appliedFixes;
-  let residualViolations = firstCheck.violations;
+  let processed = processDraftText(firstCall.text, kind, settings, fixOptions);
+  let appliedAutoFixes: Span[] = processed.appliedFixes;
   let wasRepaired = false;
   // Every call in the invocation, recorded exactly as sent — the
   // inspector renders this verbatim. Transparency is load-bearing.
   const calls: PromptCall[] = [{ label: initialLabel, ...initialPrompt }];
 
-  if (hasRepairableViolations(firstCheck)) {
-    const violationsSummary = summarizeViolations(firstCheck.violations);
-    const repairPrompt = assembleRefinePrompt(
-      settings,
-      firstFixed.text,
-      buildRepairInstruction(violationsSummary),
-    );
+  const allViolations = processed.posts.flatMap((p) => p.violations);
+  if (hasRepairableViolations({ violations: allViolations })) {
+    const violationsSummary = summarizeViolations(allViolations);
+    let repairInstruction = buildRepairInstruction(violationsSummary);
+    if (kind === 'thread') {
+      // Fold the count nudge into the repair when both fired — one
+      // combined instruction, no extra call.
+      if (countDrifted(processed.posts)) {
+        repairInstruction += `\n\n${buildCountNudgeLine(processed.posts.length, targetCount ?? 0)}`;
+      }
+      repairInstruction += `\n\n${THREAD_FORMAT_REMINDER}`;
+    }
+    const repairPrompt = assembleRefinePrompt(settings, joined(processed.posts), repairInstruction);
 
     const repairCall = await callAnthropic({
       apiKey,
@@ -282,15 +354,13 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
       system: repairPrompt.system,
       prompt: repairPrompt.user,
       temperature: settings.temperature.regenerate,
-      maxTokens: MAX_TOKENS,
+      maxTokens,
     });
 
     if (repairCall.ok) {
-      const repaired = autoFix(repairCall.text, fixOptions);
-      const repairedCheck = checkExclusions(repaired.text, settings);
-      finalText = repaired.text;
-      appliedAutoFixes = [...firstFixed.appliedFixes, ...repaired.appliedFixes];
-      residualViolations = repairedCheck.violations;
+      const repaired = processDraftText(repairCall.text, kind, settings, fixOptions);
+      processed = repaired;
+      appliedAutoFixes = [...appliedAutoFixes, ...repaired.appliedFixes];
       wasRepaired = true;
       calls.push({
         label: `repair (${violationsSummary.replace(/\n/g, ' · ')})`,
@@ -301,46 +371,79 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
     // something. Don't loop.
   }
 
-  if (charCap && isOver280(finalText)) {
-    const overLength = weightedLength(finalText);
-    const tightenPrompt = assembleRefinePrompt(settings, finalText, TIGHTEN_INSTRUCTION);
-    const tightenCall = await callAnthropic({
+  // The reshape backstop: over-cap posts (single's classic tighten is
+  // the N=1 case) and/or thread count drift — one call, composed
+  // instruction, then done. No loops.
+  const overOrdinals = charCap
+    ? processed.posts.flatMap((p, i) => (isOver280(p.text) ? [i + 1] : []))
+    : [];
+  const needsCount = countDrifted(processed.posts);
+  if (overOrdinals.length > 0 || needsCount) {
+    let reshapeInstruction: string;
+    let reshapeLabel: string;
+    if (kind === 'single') {
+      reshapeInstruction = TIGHTEN_INSTRUCTION;
+      reshapeLabel = `tighten (${String(weightedLength(processed.posts[0]?.text ?? ''))} → target ≤280)`;
+    } else {
+      const parts: string[] = [];
+      if (overOrdinals.length > 0) parts.push(buildTightenSegmentsInstruction(overOrdinals));
+      if (needsCount) {
+        parts.push(buildCountNudgeLine(processed.posts.length, targetCount ?? 0));
+      }
+      parts.push(THREAD_FORMAT_REMINDER);
+      reshapeInstruction = parts.join('\n\n');
+      const why = [
+        overOrdinals.length > 0 ? `posts over cap: ${overOrdinals.join(', ')}` : '',
+        needsCount ? `count ${String(processed.posts.length)} → ≈${String(targetCount ?? 0)}` : '',
+      ]
+        .filter((w) => w !== '')
+        .join(' · ');
+      reshapeLabel = `reshape (${why})`;
+    }
+    const reshapePrompt = assembleRefinePrompt(
+      settings,
+      joined(processed.posts),
+      reshapeInstruction,
+    );
+    const reshapeCall = await callAnthropic({
       apiKey,
       model: settings.model,
-      system: tightenPrompt.system,
-      prompt: tightenPrompt.user,
+      system: reshapePrompt.system,
+      prompt: reshapePrompt.user,
       temperature: settings.temperature.generate,
-      maxTokens: MAX_TOKENS,
+      maxTokens,
     });
-    if (tightenCall.ok) {
-      const tightened = autoFix(tightenCall.text, fixOptions);
-      const tightenedCheck = checkExclusions(tightened.text, settings);
-      finalText = tightened.text;
-      appliedAutoFixes = [...appliedAutoFixes, ...tightened.appliedFixes];
-      residualViolations = tightenedCheck.violations;
+    if (reshapeCall.ok) {
+      const reshaped = processDraftText(reshapeCall.text, kind, settings, fixOptions);
+      processed = reshaped;
+      appliedAutoFixes = [...appliedAutoFixes, ...reshaped.appliedFixes];
       wasRepaired = true;
-      calls.push({
-        label: `tighten (${String(overLength)} → target ≤280)`,
-        ...tightenPrompt,
-      });
+      calls.push({ label: reshapeLabel, ...reshapePrompt });
     }
-    // Tighten failed → user sees the over-limit draft and the gate
-    // surface in the panel will warn them.
+    // Reshape failed → user sees the draft as-is; the per-post counts
+    // and highlights in the panel will warn them.
   }
 
   await setLastPrompt({
     timestamp: Date.now(),
     mode,
     calls,
-    response: finalText,
+    response: joined(processed.posts),
     wasRepaired,
   });
 
   return {
     ok: true,
-    draft: { posts: [{ text: finalText, characterCount: weightedLength(finalText) }] },
+    kind,
+    targetCount,
+    draft: {
+      posts: processed.posts.map((p) => ({
+        text: p.text,
+        characterCount: weightedLength(p.text),
+        residualViolations: p.violations,
+      })),
+    },
     appliedAutoFixes,
-    residualViolations,
     wasRepaired,
   };
 }

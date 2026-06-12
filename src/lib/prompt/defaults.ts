@@ -310,10 +310,17 @@ export function buildThreadConstraintInstruction(opts: {
 }): string {
   const target = `Aim for about ${String(opts.targetCount)} posts — one over or under is fine when the content demands it.`;
   const perPost = opts.charCap
-    ? 'Keep each post strictly under 280 characters (the X single-post limit).'
+    ? THREAD_CAP_LINE
     : `Aim for at most ${String(opts.softCapChars)} characters per post. Shorter is fine.`;
   return `${target} ${perPost}`;
 }
+
+/** The per-post half of the thread length constraint — also appended
+ *  in code to thread-mode refine instructions when the cap is on
+ *  (chips must aim at the per-post headroom, same prevention-first
+ *  logic as the single-mode cap line). */
+export const THREAD_CAP_LINE =
+  'Keep each post strictly under 280 characters (the X single-post limit).';
 
 /** Appended in code to every thread-mode refine instruction so a
  *  revision pass can never silently flatten the thread into one post —

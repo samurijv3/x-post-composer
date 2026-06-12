@@ -17,6 +17,7 @@ export {
   buildRepairInstruction,
   THREAD_PRECEDENCE,
   THREAD_FORMAT_REMINDER,
+  THREAD_CAP_LINE,
   buildThreadExamplesBlock,
   buildThreadConstraintInstruction,
   buildRepackInstruction,

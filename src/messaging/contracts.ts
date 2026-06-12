@@ -54,10 +54,12 @@ export type PanelToBackground =
   // onDraftCommit listener when the setting + per-draft override allow.
   // `bundleId` is the bundle that seeded the draft (null = sampled);
   // when the shipped save persists, the item auto-files into it.
+  // Threads carry their ordered segments (text = the joined form).
   | {
       type: 'panel:draft-committed';
       text: string;
-      mode: 'post' | 'reply';
+      segments: string[] | null;
+      mode: 'post' | 'reply' | 'thread';
       bundleId: string | null;
     };
 
