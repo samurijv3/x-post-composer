@@ -110,7 +110,10 @@ describe('DEFAULT_PROMPT_TEMPLATES', () => {
     expect(GENERATION_PRECEDENCE).toContain('<aspirational_examples>');
     expect(GENERATION_PRECEDENCE).toContain('<voice_examples>');
     expect(GENERATION_PRECEDENCE).toContain('<reply_context>');
+    expect(GENERATION_PRECEDENCE).toContain('<length>');
     expect(GENERATION_PRECEDENCE).toContain('<intent>');
+    // The per-item tag is glossed where its parent block is ranked.
+    expect(GENERATION_PRECEDENCE).toContain('each <example> inside is one complete post');
     expect(REFINE_PRECEDENCE).toContain('<exclusions>');
     expect(REFINE_PRECEDENCE).toContain('<style_guide>');
     expect(REFINE_PRECEDENCE).toContain('<instruction>');
@@ -257,6 +260,8 @@ describe('thread prompt pieces (Phase 10)', () => {
     expect(THREAD_PRECEDENCE).toContain('<thread_examples>');
     expect(THREAD_PRECEDENCE).toContain('<voice_examples>');
     expect(THREAD_PRECEDENCE).toContain('<exclusions>');
+    expect(THREAD_PRECEDENCE).toContain('<length>');
+    expect(THREAD_PRECEDENCE).toContain('each <thread_example> is one whole thread');
     expect(THREAD_PRECEDENCE).not.toContain('<reply_context>'); // posts-only v1
   });
 

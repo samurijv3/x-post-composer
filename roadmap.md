@@ -482,3 +482,7 @@ Decisions:
 ### 2026-06-12 — per-example XML tags in the prompt (numbering retired)
 
 Examples were rendered as a numbered list (`1) text`, blank-line separated) inside the block tags. For a TWEET corpus the two boundary cues are both spoofable by content: tweets contain internal blank lines (multi-paragraph posts) and their own list numbering (listicle tweets, "2/" openers) — so examples could bleed together or split apart, silently corrupting exactly the signal they carry (length, density, pacing). Now each item gets its own `<example>` tag (`<thread_example>` per thread, `1/ 2/` segment markers unchanged inside) — the documented Anthropic pattern, an indisputable boundary, ~5 tokens per example. The `N)` numbers are retired entirely: nothing ever referenced an example by number, and removing them kills the spurious-boundary class at the source. A test pins the motivating case (a multi-paragraph self-numbered tweet stays ONE example).
+
+### 2026-06-12 — precedence lines gloss the item tags and rank `<length>`
+
+Thoroughness follow-up to the per-example tags (marginal by agreement): the `<voice_examples>` precedence line now states "each `<example>` inside is one complete post" (thread variant: "each `<thread_example>` is one whole thread, its posts marked 1/ 2/"), and `<length>` gets its own rank in both generation precedences — it was the one block never defined anywhere, even though its enforcement is deterministic downstream regardless.

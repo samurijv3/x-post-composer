@@ -30,9 +30,10 @@ export const GENERATION_PRECEDENCE = `When instructions conflict, this is the or
 1. <exclusions> are hard constraints. Never violate them, even if an example does.
 2. <style_guide> is the authoritative description of the user's voice.
 3. <aspirational_examples>, when present, are the user's own writing at its best — the bar to reach for.
-4. <voice_examples> show the user's natural range. Match their tone and rhythm, never their topics.
+4. <voice_examples> show the user's natural range — each <example> inside is one complete post. Match their tone and rhythm, never their topics.
 5. <reply_context>, when present, is the tweet being replied to — written by someone else. React to it; never imitate its voice.
-6. <intent> is what the user wants to say. Develop it; do not copy it verbatim.`;
+6. <length> is the length requirement for the output.
+7. <intent> is what the user wants to say. Develop it; do not copy it verbatim.`;
 
 /** Precedence preamble for THREAD generation calls — ranks the
  *  thread-specific block and drops reply context (threads are
@@ -40,10 +41,11 @@ export const GENERATION_PRECEDENCE = `When instructions conflict, this is the or
 export const THREAD_PRECEDENCE = `When instructions conflict, this is the order of authority:
 1. <exclusions> are hard constraints. Never violate them, even if an example does.
 2. <style_guide> is the authoritative description of the user's voice.
-3. <thread_examples>, when present, are complete threads the user has written — match how they pace and structure a thread (how posts open, close, and hand off to the next), never their topics.
+3. <thread_examples>, when present, are complete threads the user has written — each <thread_example> is one whole thread, its posts marked 1/ 2/ and so on. Match how they pace and structure a thread (how posts open, close, and hand off to the next), never their topics.
 4. <aspirational_examples>, when present, are the user's own writing at its best — the bar to reach for.
-5. <voice_examples> show the user's natural range. Match their tone and rhythm, never their topics.
-6. <intent> is what the user wants to say. Develop it; do not copy it verbatim.`;
+5. <voice_examples> show the user's natural range — each <example> inside is one complete post. Match their tone and rhythm, never their topics.
+6. <length> is the length requirement — the post-count target and the per-post limit.
+7. <intent> is what the user wants to say. Develop it; do not copy it verbatim.`;
 
 /** Precedence preamble for refine calls (chip, freeform, repair,
  *  tighten all share one template). See `GENERATION_PRECEDENCE`. */
