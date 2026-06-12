@@ -260,17 +260,22 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   // Manual add — dedupe locally then send to background which saves.
   // Background broadcasts the save-result notice on success/dup, which
   // App.tsx surfaces in the floating banner.
-  async function manualAdd(text: string, type: 'post' | 'reply'): Promise<void> {
+  async function manualAdd(
+    text: string,
+    type: 'post' | 'reply',
+    bundleId: string | null,
+  ): Promise<void> {
     setAdding(false);
     try {
       const reply = await sendToBackground<
         Extract<BackgroundReply, { type: 'bg:add-manual-result' }>
-      >({ type: 'panel:add-manual-item', text, itemType: type });
+      >({ type: 'panel:add-manual-item', text, itemType: type, bundleId });
       if (!reply.ok) {
         onToast(reply.message);
         return;
       }
       await refresh();
+      if (bundleId !== null) await refreshBundles();
     } catch (err) {
       onToast(err instanceof Error ? err.message : 'Could not add.');
     }
@@ -286,7 +291,7 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
         </p>
       </div>
 
-      <CaptureBanner handle={handle} />
+      <CaptureBanner handle={handle} bundles={bundles} />
 
       <BundleSection
         bundles={bundles}
@@ -353,7 +358,8 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
 
           {adding && (
             <AddForm
-              onAdd={(text, type) => void manualAdd(text, type)}
+              bundles={bundles}
+              onAdd={(text, type, bundleId) => void manualAdd(text, type, bundleId)}
               onCancel={() => setAdding(false)}
             />
           )}

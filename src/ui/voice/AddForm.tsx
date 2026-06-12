@@ -1,8 +1,12 @@
 import { useState } from 'react';
+import type { Bundle } from '../../types';
 import { IcX } from '../icons';
 
 interface AddFormProps {
-  onAdd: (text: string, type: 'post' | 'reply') => void;
+  /** Existing bundles — the optional "also file into" target (hidden
+   *  when none exist). */
+  bundles: Bundle[];
+  onAdd: (text: string, type: 'post' | 'reply', bundleId: string | null) => void;
   onCancel: () => void;
 }
 
@@ -11,10 +15,11 @@ interface AddFormProps {
  * authorship gate for this path — it replaces validateAuthor, which
  * only applies to on-page captures (see messaging contract).
  */
-export function AddForm({ onAdd, onCancel }: AddFormProps) {
+export function AddForm({ bundles, onAdd, onCancel }: AddFormProps) {
   const [text, setText] = useState<string>('');
   const [type, setType] = useState<'post' | 'reply'>('post');
   const [confirmed, setConfirmed] = useState<boolean>(false);
+  const [bundleId, setBundleId] = useState<string | null>(null);
   const ready = text.trim() !== '' && confirmed;
   return (
     <div className="card inset" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -59,6 +64,23 @@ export function AddForm({ onAdd, onCancel }: AddFormProps) {
           </button>
         </div>
       </div>
+      {bundles.length > 0 && (
+        <label className="bundle-pick">
+          <span className="fld-label">Also file into</span>
+          <select
+            value={bundleId ?? ''}
+            onChange={(e) => setBundleId(e.target.value === '' ? null : e.target.value)}
+            title="The saved example also joins this bundle"
+          >
+            <option value="">— just the library</option>
+            {bundles.map((b) => (
+              <option key={b.id} value={b.id}>
+                Bundle: {b.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="switch">
         <input
           type="checkbox"
@@ -74,7 +96,7 @@ export function AddForm({ onAdd, onCancel }: AddFormProps) {
         type="button"
         className="btn primary"
         disabled={!ready}
-        onClick={() => onAdd(text.trim(), type)}
+        onClick={() => onAdd(text.trim(), type, bundleId)}
       >
         Save to voice
       </button>

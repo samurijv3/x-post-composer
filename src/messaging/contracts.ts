@@ -25,11 +25,13 @@ export type PanelToBackground =
   | { type: 'panel:ping' }
   | { type: 'panel:verify-key' }
   // Save a manually-pasted item. Bypasses validateAuthor because the
-  // user explicitly confirmed authorship in the form.
+  // user explicitly confirmed authorship in the form. `bundleId`
+  // optionally files the saved item into a bundle in the same gesture.
   | {
       type: 'panel:add-manual-item';
       text: string;
       itemType: 'post' | 'reply';
+      bundleId: string | null;
     }
   // Ask the background to run the full generation pipeline (sample →
   // assemble → call → autoFix → check → optional repair → optional
@@ -157,6 +159,9 @@ export type BackgroundNotice =
       itemType?: 'post' | 'reply';
       rejectedAuthor?: string;
       duplicateOfId?: string;
+      /** Present when a capture-mode bundle target filed the saved
+       *  item — the banner says so; the side effect is never silent. */
+      filedIntoBundleName?: string;
     }
   // Reply-context-mode selection failure. Mirrors `bg:save-result` —
   // we send the *kind* and let the panel render reply-context-flavoured

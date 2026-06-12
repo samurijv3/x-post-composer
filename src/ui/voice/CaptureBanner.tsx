@@ -1,17 +1,42 @@
 import { useEffect, useState } from 'react';
-import { getCaptureMode, setCaptureMode, subscribeCaptureMode } from '../../storage';
+import {
+  getCaptureMode,
+  setCaptureBundleTarget,
+  setCaptureMode,
+  subscribeCaptureBundleTarget,
+  subscribeCaptureMode,
+} from '../../storage';
+import type { Bundle } from '../../types';
 
 /** The "Saving from X" capture-mode toggle at the top of the Voice screen. */
-export function CaptureBanner({ handle }: { handle: string }) {
+export function CaptureBanner({ handle, bundles }: { handle: string; bundles: Bundle[] }) {
   const [mode, setMode] = useState<'none' | 'library' | 'reply-context'>('none');
+  // The optional capture target (Phase 6): saves also file into this
+  // bundle. Session storage, read by the background at capture time.
+  const [target, setTarget] = useState<string | null>(null);
   useEffect(() => {
     void getCaptureMode().then(setMode);
     const unsub = subscribeCaptureMode(setMode);
-    return () => unsub();
+    const unsubTarget = subscribeCaptureBundleTarget(setTarget);
+    return () => {
+      unsub();
+      unsubTarget();
+    };
   }, []);
   const on = mode === 'library';
 
+  // A target whose bundle was deleted resets to plain capture rather
+  // than silently filing into nothing.
+  useEffect(() => {
+    if (target !== null && !bundles.some((b) => b.id === target)) {
+      void setCaptureBundleTarget(null);
+    }
+  }, [target, bundles]);
+
   async function toggle(): Promise<void> {
+    // Mode and target live and die together — turning capture off
+    // clears the target so the next session starts plain.
+    if (on) await setCaptureBundleTarget(null);
     await setCaptureMode(on ? 'none' : 'library');
   }
 
@@ -34,6 +59,25 @@ export function CaptureBanner({ handle }: { handle: string }) {
           <span className="track track-ok" />
         </label>
       </div>
+      {on && bundles.length > 0 && (
+        <label className="bundle-pick cb-target">
+          <span className="fld-label">Also file into</span>
+          <select
+            value={target ?? ''}
+            onChange={(e) =>
+              void setCaptureBundleTarget(e.target.value === '' ? null : e.target.value)
+            }
+            title="Captured tweets also join this bundle — one pass on X builds the series"
+          >
+            <option value="">— just the library</option>
+            {bundles.map((b) => (
+              <option key={b.id} value={b.id}>
+                Bundle: {b.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
     </div>
   );
 }

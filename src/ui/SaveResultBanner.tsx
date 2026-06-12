@@ -14,6 +14,9 @@ export interface SaveResult {
   rejectedAuthor?: string | undefined;
   duplicateOfId?: string | undefined;
   itemType?: 'post' | 'reply' | undefined;
+  /** Set when a capture-mode bundle target filed the saved item — the
+   *  banner states the side effect; it is never silent. */
+  filedIntoBundleName?: string | undefined;
   stamp: number;
 }
 
@@ -52,11 +55,20 @@ export function SaveResultBanner({ result, handle, onDismiss, onShowDup }: Props
   let msg: React.ReactNode;
   let action: { label: string; onClick: () => void } | null = null;
 
+  // Capture-with-a-bundle-target appends "filed into …" so the side
+  // effect is visible on whichever save outcome carried it.
+  const filed = result.filedIntoBundleName ? (
+    <>
+      {' '}
+      Filed into <strong>“{result.filedIntoBundleName}”</strong>.
+    </>
+  ) : null;
+
   if (result.kind === 'success') {
     title = 'Saved to your voice';
     msg = (
       <>
-        Added as a <strong>{result.itemType ?? 'post'}</strong>.
+        Added as a <strong>{result.itemType ?? 'post'}</strong>.{filed}
       </>
     );
   } else if (result.kind === 'text-media') {
@@ -64,12 +76,16 @@ export function SaveResultBanner({ result, handle, onDismiss, onShowDup }: Props
     msg = (
       <>
         This post had media. We saved the <strong>text</strong>; images and quoted posts aren’t
-        read.
+        read.{filed}
       </>
     );
   } else if (result.kind === 'duplicate') {
     title = 'Already in your voice';
-    msg = 'You saved this one before — no need to add it twice.';
+    msg = filed ? (
+      <>You saved this one before — no second copy.{filed}</>
+    ) : (
+      'You saved this one before — no need to add it twice.'
+    );
     if (result.duplicateOfId) {
       const id = result.duplicateOfId;
       action = { label: 'Show me', onClick: () => onShowDup(id) };

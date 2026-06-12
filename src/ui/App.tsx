@@ -123,6 +123,7 @@ function PanelShell() {
           rejectedAuthor: notice.rejectedAuthor,
           duplicateOfId: notice.duplicateOfId,
           itemType: notice.itemType,
+          filedIntoBundleName: notice.filedIntoBundleName,
           stamp: stampRef.current,
         });
         // Mutex: a new save-result clears any lingering reply-context

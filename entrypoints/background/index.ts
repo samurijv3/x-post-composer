@@ -128,7 +128,7 @@ export default defineBackground(() => {
     }
 
     if (isMessageOfType(message, 'panel:add-manual-item')) {
-      return handleManualAdd(message.text, message.itemType);
+      return handleManualAdd(message.text, message.itemType, message.bundleId);
     }
 
     if (isMessageOfType(message, 'content:captured-tweet')) {

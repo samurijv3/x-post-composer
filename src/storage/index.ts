@@ -27,6 +27,11 @@ export {
   type ActiveCaptureMode,
 } from './captureMode';
 export {
+  getCaptureBundleTarget,
+  setCaptureBundleTarget,
+  subscribeCaptureBundleTarget,
+} from './captureBundleTarget';
+export {
   getReplyContextLock,
   setReplyContextLock,
   subscribeReplyContextLock,

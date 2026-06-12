@@ -8,6 +8,7 @@ import {
   addItem,
   getAllItems,
   getBundle,
+  getCaptureBundleTarget,
   getSettings,
   updateBundle,
   updateItem,
@@ -59,6 +60,11 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
     createdAt: Date.now(),
   };
 
+  // The capture-mode bundle target (Phase 6): while set, every save —
+  // fresh or dedupe-merged — also files into that bundle, and the
+  // banner says so.
+  const bundleTarget = await getCaptureBundleTarget();
+
   // Dedupe per Core Concept A: a handpick of an already-present tweet
   // WINS — it updates the existing record in place (promoting shipped/
   // archive rows to 'manual') and never inserts a duplicate. Identity
@@ -73,10 +79,14 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
       await updateItem(merged);
       await broadcastNotice({ type: 'bg:library-changed' });
     }
+    // Filing an already-saved tweet is the point of capturing with a
+    // target — the promotion gesture grows the bundle.
+    const filedInto = await fileIntoBundle(bundleTarget, existing.id);
     await broadcastNotice({
       type: 'bg:save-result',
       kind: 'duplicate',
       duplicateOfId: existing.id,
+      ...(filedInto !== null && { filedIntoBundleName: filedInto }),
     });
     return;
   }
@@ -93,11 +103,13 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
     return;
   }
 
+  const filedInto = await fileIntoBundle(bundleTarget, item.id);
   await broadcastNotice({
     type: 'bg:save-result',
     kind: capture.hasMedia ? 'text-media' : 'success',
     itemId: item.id,
     itemType,
+    ...(filedInto !== null && { filedIntoBundleName: filedInto }),
   });
   await broadcastNotice({ type: 'bg:library-changed' });
 }
@@ -105,6 +117,7 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
 export async function handleManualAdd(
   text: string,
   itemType: 'post' | 'reply',
+  bundleId: string | null,
 ): Promise<BackgroundReply> {
   const trimmed = text.trim();
   if (trimmed === '') {
@@ -144,20 +157,24 @@ export async function handleManualAdd(
       await updateItem(merged);
       await broadcastNotice({ type: 'bg:library-changed' });
     }
+    const filedInto = await fileIntoBundle(bundleId, existing.id);
     return {
       type: 'bg:add-manual-result',
       ok: true,
-      message: 'Already in your voice — refreshed the existing entry.',
+      message: `Already in your voice — refreshed the existing entry${
+        filedInto !== null ? ` and filed it into “${filedInto}”` : ''
+      }.`,
       itemId: existing.id,
     };
   }
 
   await addItem(item);
   await broadcastNotice({ type: 'bg:library-changed' });
+  const filedInto = await fileIntoBundle(bundleId, item.id);
   return {
     type: 'bg:add-manual-result',
     ok: true,
-    message: 'Added.',
+    message: filedInto !== null ? `Added — filed into “${filedInto}”.` : 'Added.',
     itemId: item.id,
   };
 }
@@ -224,20 +241,24 @@ export async function handleShippedDraft(
 }
 
 /**
- * Append a freshly-shipped item to the bundle that seeded its draft. A
- * deleted bundle skips silently (eligibility, not error — the copy and
- * the shipped save both already succeeded; there is just nothing left
- * to file into). Already-a-member is a no-op via `appendBundleMember`'s
- * identity return.
+ * File a just-saved item into a bundle — shipped drafts into their
+ * seeding bundle, captures/pastes into the capture-mode target. A
+ * deleted bundle skips silently (eligibility, not error — the save
+ * already succeeded; there is just nothing left to file into).
+ * Already-a-member is a no-op via `appendBundleMember`'s identity
+ * return. Returns the bundle's name when the item is (now) a member,
+ * so callers can say so in their banners; null when nothing applied.
  */
-async function fileIntoBundle(bundleId: string | null, itemId: string): Promise<void> {
-  if (bundleId === null) return;
+async function fileIntoBundle(bundleId: string | null, itemId: string): Promise<string | null> {
+  if (bundleId === null) return null;
   const bundle = await getBundle(bundleId);
-  if (bundle === null) return;
+  if (bundle === null) return null;
   const grown = appendBundleMember(bundle, itemId);
-  if (grown === bundle) return;
-  await updateBundle(grown);
-  await broadcastNotice({ type: 'bg:bundles-changed' });
+  if (grown !== bundle) {
+    await updateBundle(grown);
+    await broadcastNotice({ type: 'bg:bundles-changed' });
+  }
+  return bundle.name;
 }
 
 async function tryAddItem(item: LibraryItem): Promise<'added' | 'duplicate'> {
