@@ -17,6 +17,8 @@ export interface SaveResult {
    *  wording (a shipped match is a promotion, not a re-save). */
   duplicateOfSource?: 'manual' | 'shipped' | 'archive' | undefined;
   itemType?: 'post' | 'reply' | undefined;
+  /** Present on thread captures — the honest rendered-segment count. */
+  threadSegmentCount?: number | undefined;
   /** Set when a capture-mode bundle target filed the saved item — the
    *  banner states the side effect; it is never silent. */
   filedIntoBundleName?: string | undefined;
@@ -69,7 +71,12 @@ export function SaveResultBanner({ result, handle, onDismiss, onShowDup }: Props
 
   if (result.kind === 'success') {
     title = 'Saved to your voice';
-    msg = (
+    msg = result.threadSegmentCount ? (
+      <>
+        Saved as a <strong>thread · {result.threadSegmentCount} posts</strong> (every post visible
+        on screen — scroll a long thread fully into view before capturing).{filed}
+      </>
+    ) : (
       <>
         Added as a <strong>{result.itemType ?? 'post'}</strong>.{filed}
       </>

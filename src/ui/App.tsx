@@ -124,6 +124,7 @@ function PanelShell() {
           duplicateOfId: notice.duplicateOfId,
           duplicateOfSource: notice.duplicateOfSource,
           itemType: notice.itemType,
+          threadSegmentCount: notice.threadSegmentCount,
           filedIntoBundleName: notice.filedIntoBundleName,
           stamp: stampRef.current,
         });

@@ -43,6 +43,8 @@ import {
   findArticleByTweetText,
   isTweetTruncated,
   isXModalOpen,
+  collectSelfThreadSpine,
+  extractThread,
 } from './extract';
 import { createOverlaySystem } from './overlay';
 
@@ -379,6 +381,25 @@ export default defineContentScript({
 
     function runLibraryCapture(article: Element): void {
       try {
+        // Thread capture (Phase 10): on a /status/ page the click may
+        // sit on a self-reply spine — if the visible chain is ≥2, the
+        // whole thread saves as one item. Any truncated segment blocks
+        // (we only save full text; expand on X and re-capture); a
+        // spine of one falls through to the single path, byte-for-byte.
+        const spine = collectSelfThreadSpine(article);
+        if (spine.length >= 2) {
+          if (spine.some(isTweetTruncated)) {
+            sendOneWay({ type: 'content:capture-failed', reason: 'truncated' });
+            return;
+          }
+          const thread = extractThread(spine);
+          if (thread === 'missing-text' || thread === 'missing-author' || thread === 'media-only') {
+            sendOneWay({ type: 'content:capture-failed', reason: thread });
+            return;
+          }
+          sendOneWay({ type: 'content:captured-thread', payload: thread });
+          return;
+        }
         if (isTweetTruncated(article)) {
           sendOneWay({ type: 'content:capture-failed', reason: 'truncated' });
           return;

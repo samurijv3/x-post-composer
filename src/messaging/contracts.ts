@@ -11,7 +11,7 @@
  *       Requests (PanelToBackground, ContentToBackground) get a reply.
  *       Notices  (BackgroundNotice)                       are broadcast.
  */
-import type { RawCapture, CaptureFailureReason } from '../types/capture';
+import type { RawCapture, RawThreadCapture, CaptureFailureReason } from '../types/capture';
 import type {
   GenerationRequest,
   GenerationResult,
@@ -30,7 +30,7 @@ export type PanelToBackground =
   | {
       type: 'panel:add-manual-item';
       text: string;
-      itemType: 'post' | 'reply';
+      itemType: 'post' | 'reply' | 'thread';
       bundleId: string | null;
     }
   // Ask the background to run the full generation pipeline (sample →
@@ -66,6 +66,9 @@ export type PanelToBackground =
 /** Requests a content script sends to the background worker. */
 export type ContentToBackground =
   | { type: 'content:captured-tweet'; payload: RawCapture }
+  // A captured self-reply spine (thread capture, Phase 10) — the
+  // visible chain walked from the thread root on its /status/ page.
+  | { type: 'content:captured-thread'; payload: RawThreadCapture }
   | { type: 'content:capture-failed'; reason: CaptureFailureReason }
   // Initial read on content-script load. Content scripts cannot reach
   // `chrome.storage.session` directly (kept trusted-only so the user's
@@ -166,6 +169,9 @@ export type BackgroundNotice =
        *  happened ("matches the draft you shipped — now handpicked")
        *  instead of a misleading "you saved this before". */
       duplicateOfSource?: 'manual' | 'shipped' | 'archive';
+      /** Present on thread captures — the banner reports the honest
+       *  rendered-segment count ("Saved as a thread · N posts"). */
+      threadSegmentCount?: number;
       /** Present when a capture-mode bundle target filed the saved
        *  item — the banner says so; the side effect is never silent. */
       filedIntoBundleName?: string;

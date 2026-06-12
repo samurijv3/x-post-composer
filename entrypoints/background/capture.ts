@@ -14,6 +14,8 @@ import {
   updateItem,
 } from '../../src/storage';
 import type { LibraryItem, RawCapture } from '../../src/types';
+import type { RawThreadCapture } from '../../src/types/capture';
+import { joinSegments, parseThreadSegments } from '../../src/lib/thread';
 import { classifyType, validateAuthor } from '../../src/lib/voice';
 import { findLibraryDuplicate, mergeLibraryDuplicate } from '../../src/lib/library';
 import { appendBundleMember } from '../../src/lib/bundles';
@@ -142,9 +144,92 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
   await broadcastNotice({ type: 'bg:library-changed' });
 }
 
+/**
+ * Thread capture (Phase 10): a self-reply spine walked on its /status/
+ * page, persisted as ONE atomic thread item. Same author filter and
+ * dedupe as single captures; the record id is the ROOT's status id
+ * when readable. The banner carries the honest rendered-segment count.
+ */
+export async function handleCapturedThread(capture: RawThreadCapture): Promise<void> {
+  const settings = await getSettings();
+  if (settings.handle.trim() === '' || !validateAuthor(capture.authorHandle, settings.handle)) {
+    await broadcastNotice({
+      type: 'bg:save-result',
+      kind: 'not-mine',
+      rejectedAuthor: capture.authorHandle,
+    });
+    return;
+  }
+
+  const rootStatusId = capture.segments[0]?.statusId ?? null;
+  const joined = joinSegments(capture.segments.map((s) => s.text));
+  const item: LibraryItem = {
+    id: rootStatusId ?? crypto.randomUUID(),
+    text: joined,
+    type: 'thread',
+    segments: capture.segments,
+    source: 'manual',
+    authorHandle: settings.handle.replace(/^@/, '').trim(),
+    authorDisplayName: capture.authorDisplayName,
+    authorAvatarUrl: capture.authorAvatarUrl,
+    timestamp: capture.timestamp ?? new Date().toISOString(),
+    engagement: null,
+    favorite: false,
+    embedding: null,
+    createdAt: Date.now(),
+  };
+
+  const bundleTarget = await getCaptureBundleTarget();
+  // Identity: the root's status id (record id), any segment id, or
+  // text — the thread-aware dedupe finds a previously-captured root
+  // or an earlier capture of this same thread and upgrades in place.
+  const existing = findLibraryDuplicate(await getAllItems(), {
+    statusId: rootStatusId,
+    text: joined,
+  });
+  if (existing) {
+    const priorSource = existing.source;
+    const merged = mergeLibraryDuplicate(existing, item);
+    if (merged !== existing) {
+      await updateItem(merged);
+      await broadcastNotice({ type: 'bg:library-changed' });
+    }
+    const filedInto = await fileIntoBundle(bundleTarget, existing.id);
+    if (Date.now() - existing.createdAt < JUST_SAVED_GRACE_MS) {
+      await broadcastNotice({
+        type: 'bg:save-result',
+        kind: capture.hasMedia ? 'text-media' : 'success',
+        itemId: existing.id,
+        threadSegmentCount: capture.segments.length,
+        ...(filedInto !== null && { filedIntoBundleName: filedInto }),
+      });
+      return;
+    }
+    await broadcastNotice({
+      type: 'bg:save-result',
+      kind: 'duplicate',
+      duplicateOfId: existing.id,
+      duplicateOfSource: priorSource,
+      ...(filedInto !== null && { filedIntoBundleName: filedInto }),
+    });
+    return;
+  }
+
+  await addItem(item);
+  const filedInto = await fileIntoBundle(bundleTarget, item.id);
+  await broadcastNotice({
+    type: 'bg:save-result',
+    kind: capture.hasMedia ? 'text-media' : 'success',
+    itemId: item.id,
+    threadSegmentCount: capture.segments.length,
+    ...(filedInto !== null && { filedIntoBundleName: filedInto }),
+  });
+  await broadcastNotice({ type: 'bg:library-changed' });
+}
+
 export async function handleManualAdd(
   text: string,
-  itemType: 'post' | 'reply',
+  itemType: 'post' | 'reply' | 'thread',
   bundleId: string | null,
 ): Promise<BackgroundReply> {
   const trimmed = text.trim();
@@ -159,27 +244,38 @@ export async function handleManualAdd(
       message: 'Set your X handle in the Account tab before adding items.',
     };
   }
+  // A pasted thread arrives in the --- wire format; fewer than two
+  // parsed segments is an honest error, never a silent single save.
+  const segments = itemType === 'thread' ? parseThreadSegments(trimmed) : null;
+  if (segments !== null && segments.length < 2) {
+    return {
+      type: 'bg:add-manual-result',
+      ok: false,
+      message: 'A thread needs at least two posts — separate them with a line containing only ---.',
+    };
+  }
   const item: LibraryItem = {
     id: crypto.randomUUID(),
-    text: trimmed,
+    text: segments !== null ? joinSegments(segments) : trimmed,
     type: itemType,
     source: 'manual',
     authorHandle: settings.handle.replace(/^@/, '').trim(),
     // Manual paste has no DOM source for these — the row renders without
-    // an avatar and shows the handle only.
+    // an avatar and shows the handle only. Pasted segments carry no
+    // status ids for the same reason.
     authorDisplayName: null,
     authorAvatarUrl: null,
     timestamp: new Date().toISOString(),
     engagement: null,
     favorite: false,
-    segments: null,
+    segments: segments?.map((segment) => ({ text: segment, statusId: null })) ?? null,
     embedding: null,
     createdAt: Date.now(),
   };
   // Same dedupe as capture: pasting text that is already in the
   // library refreshes the existing record (manual outranks everything)
   // instead of inserting a second copy.
-  const existing = findLibraryDuplicate(await getAllItems(), { statusId: null, text: trimmed });
+  const existing = findLibraryDuplicate(await getAllItems(), { statusId: null, text: item.text });
   if (existing) {
     const merged = mergeLibraryDuplicate(existing, item);
     if (merged !== existing) {

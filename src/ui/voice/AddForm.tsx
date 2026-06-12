@@ -8,7 +8,7 @@ interface AddFormProps {
   bundles: Bundle[];
   /** Mint an empty bundle inline (the select's "+ New bundle…"). */
   onCreateBundle: (name: string) => Promise<string | null>;
-  onAdd: (text: string, type: 'post' | 'reply', bundleId: string | null) => void;
+  onAdd: (text: string, type: 'post' | 'reply' | 'thread', bundleId: string | null) => void;
   onCancel: () => void;
 }
 
@@ -19,7 +19,7 @@ interface AddFormProps {
  */
 export function AddForm({ bundles, onCreateBundle, onAdd, onCancel }: AddFormProps) {
   const [text, setText] = useState<string>('');
-  const [type, setType] = useState<'post' | 'reply'>('post');
+  const [type, setType] = useState<'post' | 'reply' | 'thread'>('post');
   const [confirmed, setConfirmed] = useState<boolean>(false);
   const [bundleId, setBundleId] = useState<string | null>(null);
   const ready = text.trim() !== '' && confirmed;
@@ -40,10 +40,14 @@ export function AddForm({ bundles, onCreateBundle, onAdd, onCancel }: AddFormPro
           </button>
         </div>
         <textarea
-          rows={3}
+          rows={type === 'thread' ? 6 : 3}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="exactly as you wrote it"
+          placeholder={
+            type === 'thread'
+              ? 'paste the whole thread — separate posts with a line containing only ---'
+              : 'exactly as you wrote it'
+          }
         />
       </label>
       <div className="field-row">
@@ -63,6 +67,15 @@ export function AddForm({ bundles, onCreateBundle, onAdd, onCancel }: AddFormPro
             style={{ padding: '5px 14px' }}
           >
             Reply
+          </button>
+          <button
+            type="button"
+            className={type === 'thread' ? 'active' : ''}
+            title="A thread — posts separated by a line containing only ---"
+            onClick={() => setType('thread')}
+            style={{ padding: '5px 14px' }}
+          >
+            Thread
           </button>
         </div>
       </div>

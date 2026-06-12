@@ -25,6 +25,7 @@ import { mergeReplyContextSelection } from '../../src/lib/replyContext';
 import { runGeneration, runRefine, runVerifyKey } from './generation';
 import {
   failureReasonToSaveResultKind,
+  handleCapturedThread,
   handleCapturedTweet,
   handleManualAdd,
   handleShippedDraft,
@@ -133,6 +134,11 @@ export default defineBackground(() => {
 
     if (isMessageOfType(message, 'content:captured-tweet')) {
       await handleCapturedTweet(message.payload);
+      return { type: 'bg:capture-ack', ok: true };
+    }
+
+    if (isMessageOfType(message, 'content:captured-thread')) {
+      await handleCapturedThread(message.payload);
       return { type: 'bg:capture-ack', ok: true };
     }
 

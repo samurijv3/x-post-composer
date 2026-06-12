@@ -332,7 +332,7 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   // App.tsx surfaces in the floating banner.
   async function manualAdd(
     text: string,
-    type: 'post' | 'reply',
+    type: 'post' | 'reply' | 'thread',
     bundleId: string | null,
   ): Promise<void> {
     setAdding(false);
