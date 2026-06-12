@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, type GenerationRequest, type LibraryItem } from '../../types';
 import type { Span } from '../exclusion';
+import { DEFAULT_THREAD_TARGET } from '../thread';
 import {
   assembleInitialPrompt,
   assembleRefinePrompt,
@@ -10,8 +11,12 @@ import {
   type ExamplePools,
 } from './assemble';
 
-function pools(voice: LibraryItem[] = [], aspirational: LibraryItem[] = []): ExamplePools {
-  return { voice, aspirational };
+function pools(
+  voice: LibraryItem[] = [],
+  aspirational: LibraryItem[] = [],
+  threads: LibraryItem[] = [],
+): ExamplePools {
+  return { voice, aspirational, threads };
 }
 
 function item(text: string, type: LibraryItem['type'] = 'post'): LibraryItem {
@@ -321,5 +326,71 @@ describe('assembleRefinePrompt', () => {
   it('uses a refine-appropriate placeholder when no style guide is set', () => {
     const out = assembleRefinePrompt(DEFAULT_SETTINGS, 'draft', 'instruction');
     expect(out.system).toContain("preserve the draft's existing voice");
+  });
+});
+
+describe('assembleInitialPrompt — thread mode (Phase 10)', () => {
+  const threadItem = (id: string, segs: string[]): LibraryItem => ({
+    ...item(id),
+    type: 'thread',
+    text: segs.join('\n---\n'),
+    segments: segs.map((text) => ({ text, statusId: null })),
+  });
+
+  it('renders through the thread template with THREAD_PRECEDENCE', () => {
+    const out = assembleInitialPrompt(
+      postRequest({ mode: 'thread', targetCount: 4 }),
+      DEFAULT_SETTINGS,
+      pools(),
+    );
+    expect(out.system).toContain('writing an X thread');
+    expect(out.system).toContain('<thread_examples>'); // ranked in precedence
+    expect(out.system).toContain('separated by a line containing only ---');
+  });
+
+  it('fills thread examples with segment markers; collapses when none', () => {
+    const withThreads = assembleInitialPrompt(
+      postRequest({ mode: 'thread' }),
+      DEFAULT_SETTINGS,
+      pools([], [], [threadItem('t1', ['alpha', 'beta'])]),
+    );
+    expect(withThreads.user).toContain('<thread_examples>');
+    expect(withThreads.user).toContain('1/ alpha');
+    const without = assembleInitialPrompt(
+      postRequest({ mode: 'thread' }),
+      DEFAULT_SETTINGS,
+      pools(),
+    );
+    expect(without.user).not.toContain('<thread_examples>');
+  });
+
+  it('states the ≈N target — explicit or the default', () => {
+    const explicit = assembleInitialPrompt(
+      postRequest({ mode: 'thread', targetCount: 7 }),
+      DEFAULT_SETTINGS,
+      pools(),
+    );
+    expect(explicit.user).toContain('about 7 posts');
+    const fallback = assembleInitialPrompt(
+      postRequest({ mode: 'thread' }),
+      DEFAULT_SETTINGS,
+      pools(),
+    );
+    expect(fallback.user).toContain(`about ${String(DEFAULT_THREAD_TARGET)} posts`);
+  });
+
+  it('per-post cap follows the charCap toggle', () => {
+    const capped = assembleInitialPrompt(
+      postRequest({ mode: 'thread', charCap: true }),
+      DEFAULT_SETTINGS,
+      pools(),
+    );
+    expect(capped.user).toContain('each post strictly under 280');
+    const soft = assembleInitialPrompt(
+      postRequest({ mode: 'thread', charCap: false }),
+      DEFAULT_SETTINGS,
+      pools(),
+    );
+    expect(soft.user).toContain(`${String(DEFAULT_SETTINGS.softCapChars)} characters per post`);
   });
 });

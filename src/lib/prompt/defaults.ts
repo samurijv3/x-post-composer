@@ -34,6 +34,17 @@ export const GENERATION_PRECEDENCE = `When instructions conflict, this is the or
 5. <reply_context>, when present, is the tweet being replied to — written by someone else. React to it; never imitate its voice.
 6. <intent> is what the user wants to say. Develop it; do not copy it verbatim.`;
 
+/** Precedence preamble for THREAD generation calls — ranks the
+ *  thread-specific block and drops reply context (threads are
+ *  standalone posts in v1). See `GENERATION_PRECEDENCE`. */
+export const THREAD_PRECEDENCE = `When instructions conflict, this is the order of authority:
+1. <exclusions> are hard constraints. Never violate them, even if an example does.
+2. <style_guide> is the authoritative description of the user's voice.
+3. <thread_examples>, when present, are complete threads the user has written — match how they pace and structure a thread (how posts open, close, and hand off to the next), never their topics.
+4. <aspirational_examples>, when present, are the user's own writing at its best — the bar to reach for.
+5. <voice_examples> show the user's natural range. Match their tone and rhythm, never their topics.
+6. <intent> is what the user wants to say. Develop it; do not copy it verbatim.`;
+
 /** Precedence preamble for refine calls (chip, freeform, repair,
  *  tighten all share one template). See `GENERATION_PRECEDENCE`. */
 export const REFINE_PRECEDENCE = `When instructions conflict, this is the order of authority:
@@ -137,6 +148,46 @@ export const DEFAULT_PROMPT_TEMPLATES: Record<PromptTemplateKey, PromptTemplate>
       'bullets',
     ],
   },
+  thread: {
+    name: 'Thread',
+    system: `You are writing an X thread — one post followed by successive posts, all one continuous piece — in the user's voice. Output ONLY the thread text: the posts in order, separated by a line containing only ---. No preamble, no numbering, no commentary.
+
+<precedence>
+{{precedence}}
+</precedence>
+
+<style_guide>
+{{styleGuide}}
+</style_guide>
+
+<exclusions>
+{{exclusions}}
+</exclusions>`,
+    user: `{{threadExamples}}{{aspirationalExamples}}<voice_examples>
+{{voiceExamples}}
+</voice_examples>
+
+<length>
+{{length}}
+</length>
+
+<intent>
+{{intentFraming}}
+
+{{bullets}}
+</intent>`,
+    slots: [
+      'precedence',
+      'styleGuide',
+      'exclusions',
+      'threadExamples',
+      'aspirationalExamples',
+      'voiceExamples',
+      'length',
+      'intentFraming',
+      'bullets',
+    ],
+  },
   refine: {
     name: 'Refine',
     system: `You are revising a draft written in the user's voice for X. Output ONLY the revised text — no preamble, no quotation marks around it, no commentary.
@@ -229,6 +280,66 @@ export function formatExamples(items: LibraryItem[]): string {
 export function buildAspirationalBlock(items: LibraryItem[]): string {
   if (items.length === 0) return '';
   return `<aspirational_examples>\n${formatExamples(items)}\n</aspirational_examples>\n\n`;
+}
+
+/** Build the optional {{threadExamples}} slot value — complete threads
+ *  the user has written, each rendered as ONE example with `1/ 2/ …`
+ *  segment markers (the boundaries ARE the pacing signal; the joined
+ *  flow is the throughline). Empty pool collapses to '' like the
+ *  aspirational block. The pacing instruction lives in
+ *  `THREAD_PRECEDENCE`, not here — precedence ranks the blocks. */
+export function buildThreadExamplesBlock(items: LibraryItem[]): string {
+  if (items.length === 0) return '';
+  const rendered = items
+    .map((item, idx) => {
+      const segments = item.segments?.map((s) => s.text) ?? [item.text];
+      const marked = segments.map((text, i) => `${String(i + 1)}/ ${text.trim()}`).join('\n\n');
+      return `${String(idx + 1)})\n${marked}`;
+    })
+    .join('\n\n');
+  return `<thread_examples>\n${rendered}\n</thread_examples>\n\n`;
+}
+
+/** Build the {{length}} slot value for THREAD generation: the soft ≈N
+ *  post target plus the per-post cap. Both facts are baked (the
+ *  pipeline validates them), filled into one slot. */
+export function buildThreadConstraintInstruction(opts: {
+  charCap: boolean;
+  softCapChars: number;
+  targetCount: number;
+}): string {
+  const target = `Aim for about ${String(opts.targetCount)} posts — one over or under is fine when the content demands it.`;
+  const perPost = opts.charCap
+    ? 'Keep each post strictly under 280 characters (the X single-post limit).'
+    : `Aim for at most ${String(opts.softCapChars)} characters per post. Shorter is fine.`;
+  return `${target} ${perPost}`;
+}
+
+/** Appended in code to every thread-mode refine instruction so a
+ *  revision pass can never silently flatten the thread into one post —
+ *  the format is machinery, not a preference. */
+export const THREAD_FORMAT_REMINDER =
+  'The draft is an X thread: posts in order, separated by a line containing only ---. Keep exactly that format in your output — no preamble, no numbering, no commentary.';
+
+/** Instruction behind changing the ≈N stepper over an active thread —
+ *  a REPACK, never a regenerate: content is the fixed point; only the
+ *  packaging changes. Code-supplied, like `REFIT_INSTRUCTION`. */
+export function buildRepackInstruction(targetCount: number): string {
+  return `The thread's content is the fixed point. Repackage it into about ${String(targetCount)} posts: keep its content, voice, and intent exactly; change only how it is split across posts.`;
+}
+
+/** Instruction for the thread reshape backstop when specific posts
+ *  measure over the 280 cap — names the offenders, spares the rest. */
+export function buildTightenSegmentsInstruction(overOrdinals: number[]): string {
+  const list = overOrdinals.join(', ');
+  const plural = overOrdinals.length > 1;
+  return `Post${plural ? 's' : ''} ${list} ${plural ? 'are' : 'is'} over the 280-character X limit. Tighten ${plural ? 'those posts' : 'that post'} to fit under 280 characters each, preserving voice and meaning. Leave the other posts unchanged.`;
+}
+
+/** One line for the reshape backstop when the post count drifted past
+ *  the ±1 band around the target. */
+export function buildCountNudgeLine(actual: number, target: number): string {
+  return `The thread currently has ${String(actual)} post${actual === 1 ? '' : 's'}; the target is about ${String(target)}. Adjust the packaging toward ${String(target)} posts without dropping content.`;
 }
 
 /** Build the {{exclusions}} slot value from the active structural

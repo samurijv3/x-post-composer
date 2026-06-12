@@ -30,7 +30,7 @@ export interface PromptCall {
 export interface LastPromptRecord {
   /** Epoch ms at the moment the last call returned. */
   timestamp: number;
-  mode: 'post' | 'reply';
+  mode: 'post' | 'reply' | 'thread';
   /** Every call in the invocation, in order (1–3 of them). */
   calls: PromptCall[];
   /** Raw text content of the final call. May be the post-repair version. */

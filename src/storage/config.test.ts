@@ -99,8 +99,28 @@ describe('getSettings', () => {
         },
       });
       const s = await getSettings();
-      expect(Object.keys(s.promptTemplates).sort()).toEqual(['post', 'refine', 'reply']);
+      expect(Object.keys(s.promptTemplates).sort()).toEqual(['post', 'refine', 'reply', 'thread']);
       expect(s.promptTemplates).toEqual(DEFAULT_SETTINGS.promptTemplates);
+    });
+
+    it('a pre-thread install picks up the new thread template on merge', async () => {
+      // Stored settings predate Phase 10: only the three v2 templates,
+      // one of them customised. The merge must add the thread default
+      // WITHOUT touching the customisation.
+      const custom = {
+        ...DEFAULT_SETTINGS.promptTemplates.post,
+        user: DEFAULT_SETTINGS.promptTemplates.post.user + '\n(custom tail)',
+      };
+      seed({
+        promptTemplates: {
+          reply: DEFAULT_SETTINGS.promptTemplates.reply,
+          post: custom,
+          refine: DEFAULT_SETTINGS.promptTemplates.refine,
+        },
+      });
+      const s = await getSettings();
+      expect(s.promptTemplates.thread).toEqual(DEFAULT_SETTINGS.promptTemplates.thread);
+      expect(s.promptTemplates.post.user).toContain('(custom tail)');
     });
 
     it('restores the default when the stored system body is blank', async () => {

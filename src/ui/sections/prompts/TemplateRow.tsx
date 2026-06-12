@@ -7,6 +7,7 @@ import { IcCheck, IcChevR, IcWarn } from '../../icons';
 const TEMPLATE_LABELS: Record<PromptTemplateKey, string> = {
   reply: 'Reply',
   post: 'Post',
+  thread: 'Thread',
   refine: 'Refine',
 };
 

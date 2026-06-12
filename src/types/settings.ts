@@ -92,7 +92,7 @@ export interface ChipPreset {
   instruction: string;
 }
 
-export type PromptTemplateKey = 'reply' | 'post' | 'refine';
+export type PromptTemplateKey = 'reply' | 'post' | 'thread' | 'refine';
 
 export interface PromptTemplate {
   /** Human-readable name shown in the Prompts tab. */

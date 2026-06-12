@@ -6,29 +6,33 @@
  */
 import type { GenerationRequest, LibraryItem, Settings } from '../../types';
 import type { Span } from '../exclusion';
+import { DEFAULT_THREAD_TARGET } from '../thread';
 import {
   buildAspirationalBlock,
   buildCharConstraintInstruction,
   buildExclusionInstructions,
+  buildThreadConstraintInstruction,
   buildThreadContextBlock,
+  buildThreadExamplesBlock,
   formatExamples,
   GENERATION_PRECEDENCE,
   INTENT_FRAMING,
   REFINE_PRECEDENCE,
+  THREAD_PRECEDENCE,
   type IntentShape,
 } from './defaults';
 import { renderTemplate, type RenderedPrompt } from './template';
 
 /**
  * The example pools the initial prompt draws from, behind the
- * `selectExamples` seam. `aspirational` is deliberately empty in v1
- * (its block collapses); favorites feed it in roadmap Phase 5. The
- * model never learns which pool an example came from beyond the block
- * it appears in.
+ * `selectExamples` seam. The model never learns which pool an example
+ * came from beyond the block it appears in. `threads` feeds
+ * <thread_examples> and is empty outside thread mode.
  */
 export interface ExamplePools {
   voice: LibraryItem[];
   aspirational: LibraryItem[];
+  threads: LibraryItem[];
 }
 
 /**
@@ -45,7 +49,7 @@ export function assembleInitialPrompt(
 ): RenderedPrompt {
   const template = settings.promptTemplates[request.mode];
   const slots: Record<string, string> = {
-    precedence: GENERATION_PRECEDENCE,
+    precedence: request.mode === 'thread' ? THREAD_PRECEDENCE : GENERATION_PRECEDENCE,
     styleGuide:
       settings.styleGuide.trim() === ''
         ? '(no style guide set — infer voice from the examples)'
@@ -53,10 +57,17 @@ export function assembleInitialPrompt(
     exclusions: buildExclusionInstructions(settings),
     aspirationalExamples: buildAspirationalBlock(pools.aspirational),
     voiceExamples: formatExamples(pools.voice),
-    length: buildCharConstraintInstruction({
-      charCap: request.charCap,
-      softCapChars: settings.softCapChars,
-    }),
+    length:
+      request.mode === 'thread'
+        ? buildThreadConstraintInstruction({
+            charCap: request.charCap,
+            softCapChars: settings.softCapChars,
+            targetCount: request.targetCount ?? DEFAULT_THREAD_TARGET,
+          })
+        : buildCharConstraintInstruction({
+            charCap: request.charCap,
+            softCapChars: settings.softCapChars,
+          }),
     // A bulleted input is an explicit fragments signal from the panel
     // (real • bullets) — trust it over re-guessing from the text.
     intentFraming:
@@ -67,6 +78,9 @@ export function assembleInitialPrompt(
     const ctx = request.replyContext;
     slots.targetText = ctx?.targetText ?? '(no target captured)';
     slots.threadContext = buildThreadContextBlock(ctx?.grandparentText ?? null);
+  }
+  if (request.mode === 'thread') {
+    slots.threadExamples = buildThreadExamplesBlock(pools.threads);
   }
   return renderTemplate(template, slots);
 }

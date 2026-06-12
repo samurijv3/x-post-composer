@@ -36,7 +36,7 @@ export interface ReplyContext {
 }
 
 export interface GenerationRequest {
-  mode: 'post' | 'reply';
+  mode: 'post' | 'reply' | 'thread';
   /** Free-text bullets describing what the user wants to say. */
   bullets: string;
   /** Per-composition character constraint. When true → ≤280. When
@@ -57,6 +57,10 @@ export interface GenerationRequest {
    *  general corpus. The background resolves the id and errors honestly
    *  if the bundle has been deleted — never a silent fallback. */
   bundleId?: string | null;
+  /** Thread mode's ≈N post target (the stepper) — a soft target the
+   *  prompt states and the pipeline validates (nudge only beyond ±1).
+   *  Ignored outside thread mode. */
+  targetCount?: number;
 }
 
 /**

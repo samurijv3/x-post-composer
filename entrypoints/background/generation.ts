@@ -106,6 +106,7 @@ export async function runGeneration(request: GenerationRequest): Promise<Generat
   const initialPrompt = assembleInitialPrompt(request, settings, {
     voice: examples.voice,
     aspirational: examples.aspirational,
+    threads: examples.threads,
   });
   const temperature = request.isRegenerate
     ? settings.temperature.regenerate
@@ -221,7 +222,7 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
 interface PipelineOptions {
   apiKey: string;
   settings: Settings;
-  mode: 'post' | 'reply';
+  mode: 'post' | 'reply' | 'thread';
   charCap: boolean;
   initialPrompt: RenderedPrompt;
   /** Inspector label for the initial call ('generate', 'refine (…)', …). */

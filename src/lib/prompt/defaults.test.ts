@@ -3,13 +3,20 @@ import { DEFAULT_SETTINGS, type LibraryItem, type PromptTemplateKey } from '../.
 import {
   buildAspirationalBlock,
   buildCharConstraintInstruction,
+  buildCountNudgeLine,
   buildExclusionInstructions,
+  buildRepackInstruction,
   buildRepairInstruction,
+  buildThreadConstraintInstruction,
   buildThreadContextBlock,
+  buildThreadExamplesBlock,
+  buildTightenSegmentsInstruction,
   DEFAULT_PROMPT_TEMPLATES,
   formatExamples,
   GENERATION_PRECEDENCE,
   REFINE_PRECEDENCE,
+  THREAD_FORMAT_REMINDER,
+  THREAD_PRECEDENCE,
   TIGHTEN_INSTRUCTION,
 } from './defaults';
 import { extractSlotNames, validateTemplate } from './template';
@@ -21,8 +28,8 @@ describe('DEFAULT_PROMPT_TEMPLATES', () => {
     expect(DEFAULT_SETTINGS.promptTemplates).toBe(DEFAULT_PROMPT_TEMPLATES);
   });
 
-  it('has exactly the three template keys', () => {
-    expect(keys.sort()).toEqual(['post', 'refine', 'reply']);
+  it('has exactly the four template keys', () => {
+    expect(keys.sort()).toEqual(['post', 'refine', 'reply', 'thread']);
   });
 
   it.each(keys)('"%s" has no drift between declared slots and bodies', (key) => {
@@ -40,6 +47,7 @@ describe('DEFAULT_PROMPT_TEMPLATES', () => {
     'bullets',
     'voiceExamples',
     'aspirationalExamples',
+    'threadExamples',
     'length',
     'intentFraming',
     'targetText',
@@ -72,7 +80,7 @@ describe('DEFAULT_PROMPT_TEMPLATES', () => {
   });
 
   it('generation user bodies carry the example, length, and intent blocks', () => {
-    for (const key of ['reply', 'post'] as const) {
+    for (const key of ['reply', 'post', 'thread'] as const) {
       const user = DEFAULT_PROMPT_TEMPLATES[key].user;
       expect(user).toContain('{{aspirationalExamples}}');
       expect(user).toContain('<voice_examples>');
@@ -214,5 +222,85 @@ describe('refine instructions (code-supplied)', () => {
     expect(out).toContain('- em dashes (use commas)');
     expect(out).toContain('Rewrite');
     expect(out).toContain('keeping the same voice');
+  });
+});
+
+describe('thread prompt pieces (Phase 10)', () => {
+  const threadItem = (id: string, segs: string[]): LibraryItem => ({
+    id,
+    text: segs.join('\n---\n'),
+    type: 'thread',
+    source: 'manual',
+    authorHandle: 'me',
+    authorDisplayName: null,
+    authorAvatarUrl: null,
+    timestamp: '2026-01-01T00:00:00Z',
+    engagement: null,
+    favorite: false,
+    segments: segs.map((text) => ({ text, statusId: null })),
+    embedding: null,
+    createdAt: 0,
+  });
+
+  it('THREAD_PRECEDENCE references the tags it ranks, incl. thread_examples', () => {
+    expect(THREAD_PRECEDENCE).toContain('<thread_examples>');
+    expect(THREAD_PRECEDENCE).toContain('<voice_examples>');
+    expect(THREAD_PRECEDENCE).toContain('<exclusions>');
+    expect(THREAD_PRECEDENCE).not.toContain('<reply_context>'); // posts-only v1
+  });
+
+  it('buildThreadExamplesBlock collapses when empty', () => {
+    expect(buildThreadExamplesBlock([])).toBe('');
+  });
+
+  it('renders each thread as ONE numbered example with segment markers', () => {
+    const block = buildThreadExamplesBlock([threadItem('t1', ['alpha', 'beta'])]);
+    expect(block).toContain('<thread_examples>');
+    expect(block).toContain('1)\n1/ alpha\n\n2/ beta');
+  });
+
+  it('falls back to the joined text when segments are null (defensive)', () => {
+    const weird = { ...threadItem('t2', ['solo']), segments: null };
+    expect(buildThreadExamplesBlock([weird])).toContain('1/ solo');
+  });
+
+  it('buildThreadConstraintInstruction states the soft target and the per-post cap', () => {
+    const capped = buildThreadConstraintInstruction({
+      charCap: true,
+      softCapChars: 1000,
+      targetCount: 4,
+    });
+    expect(capped).toContain('about 4 posts');
+    expect(capped).toContain('under 280 characters');
+    const soft = buildThreadConstraintInstruction({
+      charCap: false,
+      softCapChars: 900,
+      targetCount: 6,
+    });
+    expect(soft).toContain('about 6 posts');
+    expect(soft).toContain('900 characters per post');
+  });
+
+  it('repack holds content fixed and names the target', () => {
+    const repack = buildRepackInstruction(3);
+    expect(repack).toContain('fixed point');
+    expect(repack).toContain('about 3 posts');
+  });
+
+  it('tighten-segments names the offenders and spares the rest', () => {
+    expect(buildTightenSegmentsInstruction([2])).toContain('Post 2 is over');
+    const plural = buildTightenSegmentsInstruction([2, 5]);
+    expect(plural).toContain('Posts 2, 5 are over');
+    expect(plural).toContain('Leave the other posts unchanged');
+  });
+
+  it('count nudge states actual and target', () => {
+    expect(buildCountNudgeLine(8, 5)).toContain('8 posts');
+    expect(buildCountNudgeLine(8, 5)).toContain('about 5');
+  });
+
+  it('the format reminder restates the --- convention', () => {
+    expect(THREAD_FORMAT_REMINDER).toContain('---');
+    expect(THREAD_FORMAT_REMINDER).toContain('no numbering');
   });
 });

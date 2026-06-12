@@ -15,7 +15,7 @@ interface Props {
 }
 
 const TEMPLATE_GROUPS: { name: string; keys: PromptTemplateKey[] }[] = [
-  { name: 'Generation', keys: ['reply', 'post'] },
+  { name: 'Generation', keys: ['reply', 'post', 'thread'] },
   { name: 'Refine', keys: ['refine'] },
 ];
 
