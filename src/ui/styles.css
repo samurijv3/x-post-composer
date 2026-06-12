@@ -1936,8 +1936,8 @@ code {
    cards in the OTHER column. */
 .opt-cols-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 0;
   align-items: start;
 }
 .opt-cols-2 > .opt-col {
@@ -2318,6 +2318,7 @@ code {
   background: var(--hover);
   color: var(--text);
   font-weight: 700;
+  box-shadow: inset -3px 0 0 var(--accent);
 }
 .opt-foot {
   font-size: var(--fs-xs);
@@ -2386,12 +2387,15 @@ code {
   gap: 16px;
   align-items: start;
 }
+/* DE-CARDED (reskin phase 6): options sections are single-column
+   hairline blocks, X-settings style. */
 .opt-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 22px;
-  box-shadow: var(--card-shadow);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 20px 0 22px;
+  box-shadow: none;
 }
 .opt-card-title {
   font-size: var(--fs-lg);
@@ -3838,4 +3842,40 @@ code {
 }
 .insp-pre {
   font-size: 11px;
+}
+
+/* ============================================================
+   Reskin phase 6 — options: X-settings anatomy.
+   ============================================================ */
+.opt-h {
+  font-size: 19px;
+  font-weight: 800;
+}
+.opt-card-title {
+  font-size: var(--fs-base);
+  font-weight: 700;
+}
+.danger-zone .opt-card-title {
+  color: var(--danger);
+}
+/* Square-ish inputs in settings (X's account fields), blue focus. */
+.options input[type='text'],
+.options input[type='password'],
+.options input[type='number'] {
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.options input[type='text']:focus,
+.options input[type='password']:focus,
+.options input[type='number']:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.theme-seg button {
+  padding: 6px 13px;
+}
+.opt-foot {
+  margin-top: auto;
+  padding-top: 16px;
 }

@@ -154,7 +154,7 @@ export function DataSection({ onSaved }: Props) {
         </ul>
         <button
           type="button"
-          className="btn primary"
+          className="btn dark"
           disabled={count === 0 || exporting}
           onClick={() => void exportJson()}
         >

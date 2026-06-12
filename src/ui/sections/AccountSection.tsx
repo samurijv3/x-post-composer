@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react';
 import {
   clearApiKey,
   getSettings,
+  getThemePreference,
   hasApiKey,
   migrateApiKey,
   setApiKey,
   setSettings,
+  setThemePreference,
+  subscribeTheme,
   type KeyStorageMode,
+  type ThemePreference,
 } from '../../storage';
 import { sendToBackground, type BackgroundReply } from '../../messaging';
 import { IcCheck, IcKey, IcShield } from '../icons';
@@ -144,6 +148,14 @@ export function AccountSection({ onSaved }: Props) {
   return (
     <div className="opt-stack">
       <div className="opt-card">
+        <div className="opt-card-title">Theme</div>
+        <p className="opt-card-desc">
+          Auto follows your system — light, or your chosen dark variant.
+        </p>
+        <ThemeRow />
+      </div>
+
+      <div className="opt-card">
         <div className="opt-card-title">Your X account</div>
         <p className="opt-card-desc">
           The hard filter for saving — only posts from this handle can join your voice.
@@ -202,7 +214,7 @@ export function AccountSection({ onSaved }: Props) {
         <div className="pillrow" style={{ marginTop: 4 }}>
           <button
             type="button"
-            className="btn primary"
+            className="btn dark"
             onClick={() => void saveKey()}
             disabled={saving}
           >
@@ -263,6 +275,39 @@ export function AccountSection({ onSaved }: Props) {
           Drafts are generated with <code>{model}</code>.
         </p>
       </div>
+    </div>
+  );
+}
+
+/** Auto / Light / Dim / Lights Out — the four-way theme preference
+ *  (reskin): Auto resolves via prefers-color-scheme, dark → Dim. */
+function ThemeRow() {
+  const [pref, setPref] = useState<ThemePreference>('auto');
+  useEffect(() => {
+    void getThemePreference().then(setPref);
+    const unsub = subscribeTheme(setPref);
+    return () => unsub();
+  }, []);
+  const options: { value: ThemePreference; label: string }[] = [
+    { value: 'auto', label: 'Auto' },
+    { value: 'light', label: 'Light' },
+    { value: 'dim', label: 'Dim' },
+    { value: 'lights', label: 'Lights Out' },
+  ];
+  return (
+    <div className="miniseg theme-seg" role="radiogroup" aria-label="Theme">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={pref === o.value}
+          className={pref === o.value ? 'active' : ''}
+          onClick={() => void setThemePreference(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }

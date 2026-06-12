@@ -1,12 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { BrandMark } from './BrandMark';
-import { IcChevL, IcCheck, IcData, IcKey, IcMoon, IcPrompt, IcSliders, IcSun } from './icons';
-import {
-  getThemePreference,
-  setThemePreference,
-  subscribeTheme,
-  type ThemePreference,
-} from '../storage';
+import { IcChevL, IcCheck, IcData, IcKey, IcPrompt, IcSliders } from './icons';
 import { AccountSection } from './sections/AccountSection';
 import { OutputRulesSection } from './sections/OutputRulesSection';
 import { PromptsSection } from './sections/PromptsSection';
@@ -92,9 +86,10 @@ export function OptionsPage() {
               );
             })}
           </nav>
-          <hr className="hr" style={{ margin: '12px 0' }} />
-          <ThemeNavButton />
-          <p className="opt-foot">Margin v1 · honest LLM wrapper · no telemetry</p>
+          <p className="opt-foot">
+            Margin is an independent project, not affiliated with or endorsed by X Corp. · MIT · no
+            telemetry
+          </p>
         </aside>
         <main className="opt-main">
           <div className="opt-head">
@@ -113,31 +108,5 @@ export function OptionsPage() {
         </main>
       </div>
     </div>
-  );
-}
-
-function ThemeNavButton() {
-  // INTERIM (reskin phase 1): cycles light ↔ Dim until phase 6 replaces
-  // this with the four-way Theme row in Settings → Account.
-  const [pref, setPref] = useState<ThemePreference>('auto');
-  useEffect(() => {
-    void getThemePreference().then(setPref);
-    const unsub = subscribeTheme(setPref);
-    return () => unsub();
-  }, []);
-  const isDarkish = pref === 'dim' || pref === 'lights';
-  function toggle(): void {
-    void setThemePreference(isDarkish ? 'light' : 'dim');
-  }
-  return (
-    <button
-      type="button"
-      className="opt-nav-btn"
-      onClick={toggle}
-      title={isDarkish ? 'Switch to light theme' : 'Switch to dark theme'}
-    >
-      {isDarkish ? <IcSun /> : <IcMoon />}
-      {isDarkish ? 'Light theme' : 'Dark theme'}
-    </button>
   );
 }
