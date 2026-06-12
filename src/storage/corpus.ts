@@ -19,11 +19,14 @@
  *       existing rows.
  *   v5: adds the `bundles` object store (context bundles, keyed by
  *       `id`). No item-row changes; CRUD lives in ./bundles.ts.
+ *   v6: adds `segments` (thread support, roadmap Phase 10) — the
+ *       ordered thread segments with per-segment status ids; null on
+ *       posts/replies, backfilled null on existing rows.
  */
 import type { LibraryItem } from '../types';
 
 export const DB_NAME = 'x-post-composer';
-export const DB_VERSION = 5;
+export const DB_VERSION = 6;
 /**
  * Version stamped into library-export JSON. Tracks the export's record
  * shapes, which are defined by the DB schema version — bump alongside
@@ -78,6 +81,7 @@ export function openCorpus(): Promise<IDBDatabase> {
       if (oldVersion < 2) passes.push(backfillDisplayFieldsV2);
       if (oldVersion < 3) passes.push(collapseSourceTaxonomyV3);
       if (oldVersion < 4) passes.push(backfillFavoriteV4);
+      if (oldVersion < 6) passes.push(backfillSegmentsV6);
       let passIndex = 0;
       const runNextPass = (): void => {
         const pass = passes[passIndex++];
@@ -158,6 +162,25 @@ function backfillFavoriteV4(store: IDBObjectStore, done: () => void): void {
     const row = cursor.value as Partial<LibraryItem>;
     if (row.favorite === undefined) {
       row.favorite = false;
+      cursor.update(row);
+    }
+    cursor.continue();
+  };
+}
+
+/** v6 pass: backfill `segments: null` (thread support) on rows stored
+ *  before threads existed — every pre-thread row is a post or reply. */
+function backfillSegmentsV6(store: IDBObjectStore, done: () => void): void {
+  const cursorReq = store.openCursor();
+  cursorReq.onsuccess = () => {
+    const cursor = cursorReq.result;
+    if (!cursor) {
+      done();
+      return;
+    }
+    const row = cursor.value as Partial<LibraryItem>;
+    if (row.segments === undefined) {
+      row.segments = null;
       cursor.update(row);
     }
     cursor.continue();

@@ -26,6 +26,7 @@ function makeItem(overrides: Partial<LibraryItem> = {}): LibraryItem {
     timestamp: overrides.timestamp ?? '2026-01-01T00:00:00Z',
     engagement: overrides.engagement ?? null,
     favorite: overrides.favorite ?? false,
+    segments: overrides.segments ?? null,
     embedding: overrides.embedding ?? null,
     createdAt: overrides.createdAt ?? Date.now(),
   };
@@ -219,6 +220,64 @@ describe('corpus store', () => {
     await addBundle({ id: 'b1', name: 'Day X', memberIds: ['pre-bundles'], createdAt: 1 });
     const bundles = await getAllBundles();
     expect(bundles.map((b) => b.id)).toEqual(['b1']);
+  });
+
+  it('v5→v6 migration backfills segments: null, leaving everything else intact', async () => {
+    // Seed a v5 database directly — items + bundles stores, one fully
+    // v5-shaped row (no segments field).
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 5);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        const store = db.createObjectStore(STORE_ITEMS, { keyPath: 'id' });
+        store.createIndex('byType', 'type', { unique: false });
+        db.createObjectStore('bundles', { keyPath: 'id' });
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction(STORE_ITEMS, 'readwrite');
+        tx.objectStore(STORE_ITEMS).add({
+          id: 'pre-threads',
+          text: 'v5 row',
+          type: 'post',
+          source: 'manual',
+          authorHandle: 'me',
+          authorDisplayName: null,
+          authorAvatarUrl: null,
+          timestamp: '2025-01-01T00:00:00Z',
+          engagement: null,
+          favorite: true,
+          embedding: null,
+          createdAt: 1,
+        });
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => reject(tx.error ?? new Error('seed transaction failed'));
+      };
+      req.onerror = () => reject(req.error ?? new Error('seed open failed'));
+    });
+    _resetCorpusCache();
+
+    const items = await getAllItems();
+    expect(items).toHaveLength(1);
+    expect(items[0]?.segments).toBeNull();
+    expect(items[0]?.favorite).toBe(true); // untouched
+    // A thread row round-trips through the migrated store.
+    await addItem(
+      makeItem({
+        id: 'thread-1',
+        type: 'thread',
+        text: 'one\n---\ntwo',
+        segments: [
+          { text: 'one', statusId: '11' },
+          { text: 'two', statusId: '12' },
+        ],
+      }),
+    );
+    const thread = (await getAllItems()).find((i) => i.id === 'thread-1');
+    expect(thread?.segments).toHaveLength(2);
   });
 
   it('clearAllItems wipes bundles along with items', async () => {

@@ -62,6 +62,7 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
     timestamp: capture.timestamp ?? new Date().toISOString(),
     engagement: null,
     favorite: false,
+    segments: null,
     embedding: null,
     createdAt: Date.now(),
   };
@@ -100,7 +101,7 @@ export async function handleCapturedTweet(capture: RawCapture): Promise<void> {
         type: 'bg:save-result',
         kind: capture.hasMedia ? 'text-media' : 'success',
         itemId: existing.id,
-        itemType: merged.type,
+        ...(merged.type !== 'thread' && { itemType: merged.type }),
         ...(filedInto !== null && { filedIntoBundleName: filedInto }),
       });
       return;
@@ -171,6 +172,7 @@ export async function handleManualAdd(
     timestamp: new Date().toISOString(),
     engagement: null,
     favorite: false,
+    segments: null,
     embedding: null,
     createdAt: Date.now(),
   };
@@ -246,6 +248,7 @@ export async function handleShippedDraft(
     timestamp: new Date().toISOString(),
     engagement: null,
     favorite: false,
+    segments: null,
     embedding: null,
     createdAt: Date.now(),
   };

@@ -8,10 +8,22 @@
 export interface LibraryItem {
   /** Stable identifier. Use the tweet id when available, otherwise a uuid. */
   id: string;
-  /** The exact text of the post or reply. */
+  /** The exact text of the post or reply. For threads, the joined
+   *  segments (`joinSegments`) — so search, dedupe, and previews see
+   *  the whole thread as one body. */
   text: string;
-  /** Whether this item is a standalone post or a reply to another tweet. */
-  type: 'post' | 'reply';
+  /** What this item is: a standalone post, a reply to another tweet,
+   *  or a THREAD — a post plus successive self-replies, stored as one
+   *  atomic item (roadmap Phase 10; deliberately NOT metadata over
+   *  constituent post/reply rows, which would pollute reply sampling
+   *  and create hole semantics). */
+  type: 'post' | 'reply' | 'thread';
+  /** Thread segments in order, each carrying its own tweet identity
+   *  when known (capture has status ids; composed/pasted threads
+   *  don't). Null on posts/replies. Segment ids keep capture-dedupe
+   *  honest ("this tweet is segment 3 of a saved thread") and let the
+   *  future archive import reconstruct chains. */
+  segments: { text: string; statusId: string | null }[] | null;
   /** How the item entered the library (roadmap Core Concept A —
    *  system-assigned, mutually exclusive):
    *   - 'manual'  — handpicked by the user: one-click capture on x.com

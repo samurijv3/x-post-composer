@@ -35,7 +35,9 @@ export function LibRow({
   const [truncatable, setTruncatable] = useState<boolean>(false);
   const [editing, setEditing] = useState<boolean>(false);
   const [text, setText] = useState<string>(item.text);
-  const [type, setType] = useState<'post' | 'reply'>(item.type);
+  // Thread rows get a per-segment editor later (Phase 10 session 4);
+  // until then the post/reply editor never opens for them.
+  const [type, setType] = useState<'post' | 'reply'>(item.type === 'thread' ? 'post' : item.type);
 
   useLayoutEffect(() => {
     const el = textRef.current;
@@ -59,7 +61,7 @@ export function LibRow({
   }
   function cancel(): void {
     setText(item.text);
-    setType(item.type);
+    setType(item.type === 'thread' ? 'post' : item.type);
     setEditing(false);
   }
 
@@ -184,16 +186,18 @@ export function LibRow({
                       <IcStar />
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    style={{ width: 26, height: 26 }}
-                    title="Edit"
-                    aria-label="Edit"
-                    onClick={() => setEditing(true)}
-                  >
-                    <IcEdit />
-                  </button>
+                  {item.type !== 'thread' && (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      style={{ width: 26, height: 26 }}
+                      title="Edit"
+                      aria-label="Edit"
+                      onClick={() => setEditing(true)}
+                    >
+                      <IcEdit />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="icon-btn"

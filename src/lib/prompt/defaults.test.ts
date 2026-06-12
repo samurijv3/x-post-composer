@@ -119,6 +119,7 @@ function item(text: string): LibraryItem {
     timestamp: '2026-01-01T00:00:00Z',
     engagement: null,
     favorite: false,
+    segments: null,
     embedding: null,
     createdAt: 0,
   };
