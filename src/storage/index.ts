@@ -41,7 +41,9 @@ export {
   setThemePreference,
   subscribeTheme,
   bindDocumentTheme,
+  resolveTheme,
   type ThemePreference,
+  type ResolvedTheme,
 } from './theme';
 export {
   getLastPrompt,

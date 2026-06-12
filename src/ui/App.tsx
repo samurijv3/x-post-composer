@@ -321,19 +321,23 @@ function PanelHead({ screen, onSwitchScreen, onOpenOptions }: HeadProps) {
  * "switch to dark." Matches every other extension's theme button.
  */
 function ThemeToggle() {
-  const [pref, setPref] = useState<ThemePreference>('light');
+  // INTERIM (reskin phase 1): the binary toggle cycles light ↔ Dim
+  // until phase 5 removes this button and phase 6/7 adds the four-way
+  // Theme row (Auto / Light / Dim / Lights Out) in Settings → Account.
+  const [pref, setPref] = useState<ThemePreference>('auto');
   useEffect(() => {
     void getThemePreference().then(setPref);
     const unsub = subscribeTheme(setPref);
     return () => unsub();
   }, []);
+  const isDarkish = pref === 'dim' || pref === 'lights';
   function toggle(): void {
-    void setThemePreference(pref === 'dark' ? 'light' : 'dark');
+    void setThemePreference(isDarkish ? 'light' : 'dim');
   }
-  const title = pref === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+  const title = isDarkish ? 'Switch to light theme' : 'Switch to dark theme';
   return (
     <button className="icon-btn" type="button" title={title} aria-label={title} onClick={toggle}>
-      {pref === 'dark' ? <IcSun /> : <IcMoon />}
+      {isDarkish ? <IcSun /> : <IcMoon />}
     </button>
   );
 }

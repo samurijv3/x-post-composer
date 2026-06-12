@@ -2,64 +2,76 @@
    Margin — design tokens + base + components
    In the margin of X. Honest, quiet, useful.
 
-   Tokens use `oklch` (Chrome 111+). Dark theme via [data-theme="dark"]
-   on document.documentElement; light is the default :root.
-   We ship the muted-blue accent and "quiet" vibe only — no accent
-   variants and no density variants in the codebase.
+   X-NATIVE TOKEN SYSTEM (design_handoff_x_native_reskin): pure
+   white/black surfaces, hairline dividers, X's exact blue (#1D9BF0,
+   identical in every theme), two radii (999px pills / 16px blocks).
+   Themes: light (default), Dim (#15202B), Lights Out (#000) via
+   [data-theme] on document.documentElement; 'auto' resolves in
+   src/storage/theme.ts. The LEGACY ALIASES section maps every
+   pre-reskin token name onto this system — burned down per-component
+   through the reskin phases and deleted in the final phase.
    ============================================================ */
 
 /* ---------- Tokens: light (default) ---------- */
 :root {
-  --bg: oklch(0.985 0.002 250);
-  --surface: oklch(0.998 0.001 250);
-  --surface-2: oklch(0.972 0.003 250);
-  --surface-3: oklch(0.948 0.004 250);
-  --inset: oklch(0.965 0.003 250);
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --text: #0f1419;
+  --text-2: #536471;
+  --line: #eff3f4;
+  --line-2: #cfd9de;
+  --accent: #1d9bf0;
+  --accent-hover: #1a8cd8;
+  --accent-press: #177cc0;
+  --accent-weak: rgba(29, 155, 240, 0.1);
+  --on-accent: #ffffff;
+  --ok: #00ba7c;
+  --warn: #b8860b;
+  --danger: #f4212e;
+  --hover: rgba(15, 20, 25, 0.06);
+  --field: #eff3f4;
 
-  --border: oklch(0.905 0.004 255);
-  --border-strong: oklch(0.84 0.006 255);
-  --hairline: oklch(0.93 0.003 255);
+  /* Tone discs for notices (spec silent on values; X-style alphas). */
+  --ok-weak: rgba(0, 186, 124, 0.12);
+  --warn-weak: rgba(184, 134, 11, 0.14);
+  --danger-weak: rgba(244, 33, 46, 0.1);
 
-  --text: oklch(0.255 0.012 260);
-  --text-2: oklch(0.46 0.012 260);
-  --text-3: oklch(0.6 0.01 260);
-  --text-faint: oklch(0.72 0.008 260);
+  /* LEGACY ALIASES — delete in the final reskin phase. */
+  --surface-2: var(--bg);
+  --surface-3: var(--hover);
+  --inset: var(--field);
+  --border: var(--line);
+  --border-strong: var(--line-2);
+  --hairline: var(--line);
+  --text-3: var(--text-2);
+  --text-faint: var(--text-2);
+  --accent-weak-2: var(--accent-weak);
+  --accent-line: var(--accent);
+  --ok-hover: var(--ok);
+  --ok-press: var(--ok);
 
-  --accent: oklch(0.56 0.12 250);
-  --accent-hover: oklch(0.5 0.13 250);
-  --accent-press: oklch(0.45 0.13 250);
-  --accent-weak: oklch(0.95 0.028 250);
-  --accent-weak-2: oklch(0.9 0.045 250);
-  --accent-line: oklch(0.78 0.07 250);
-  --on-accent: oklch(0.99 0.005 250);
+  /* Shadows: none on panel surfaces; popovers/dialog/toast only. */
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-lg: 0 8px 28px rgba(0, 0, 0, 0.15);
 
-  --ok: oklch(0.56 0.1 155);
-  --ok-hover: oklch(0.5 0.11 155);
-  --ok-press: oklch(0.45 0.11 155);
-  --ok-weak: oklch(0.94 0.04 155);
-  --warn: oklch(0.62 0.11 75);
-  --warn-weak: oklch(0.95 0.05 85);
-  --danger: oklch(0.55 0.16 25);
-  --danger-weak: oklch(0.95 0.04 25);
-
-  --shadow-sm: 0 1px 2px oklch(0.4 0.02 260 / 0.06);
-  --shadow: 0 2px 8px oklch(0.4 0.02 260 / 0.08), 0 1px 2px oklch(0.4 0.02 260 / 0.05);
-  --shadow-lg: 0 12px 32px oklch(0.35 0.02 260 / 0.14), 0 2px 6px oklch(0.35 0.02 260 / 0.08);
-
-  --r-xs: 5px;
-  --r-sm: 7px;
-  --r: 10px;
-  --r-lg: 14px;
-  --r-xl: 18px;
+  /* Two radii — plus the two sanctioned exceptions. */
+  --r-xs: 8px; /* toast only (X's own toast radius) */
+  --r-sm: 12px; /* inspector blocks */
+  --r: 16px; /* textareas, popovers, dialogs */
+  --r-lg: 16px; /* legacy alias */
+  --r-xl: 16px; /* legacy alias */
   --r-pill: 999px;
 
-  --fs-xs: 11px;
-  --fs-sm: 12px;
-  --fs-base: 13px;
-  --fs-md: 14px;
-  --fs-lg: 16px;
-  --fs-xl: 20px;
-  --fs-2xl: 26px;
+  /* Type scale (X-native). */
+  --fs-xs: 11.5px; /* badges, slot pills */
+  --fs-sm: 13px; /* secondary, hints, counts */
+  --fs-md: 14.5px; /* library text, chips, menu rows */
+  --fs-base: 15px; /* body, buttons, tabs */
+  --fs-lg: 17px; /* draft text */
+  --fs-xl: 18px; /* composer input */
+  --fs-2xl: 19px; /* page titles (800 weight) */
+  --fs-mono: 12.5px; /* mono prompt text */
 
   --font:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, system-ui, sans-serif;
@@ -71,47 +83,42 @@
   --gap-sm: 8px;
 
   --card-shadow: none;
-  --card-border: 1px solid var(--border);
+  --card-border: 1px solid var(--line);
   --card-radius: var(--r);
 }
 
-/* ---------- Tokens: dark ---------- */
-[data-theme='dark'] {
-  --bg: oklch(0.17 0.008 260);
-  --surface: oklch(0.205 0.009 260);
-  --surface-2: oklch(0.245 0.01 260);
-  --surface-3: oklch(0.285 0.012 260);
-  --inset: oklch(0.225 0.01 260);
+/* ---------- Tokens: Dim ---------- */
+[data-theme='dim'] {
+  --bg: #15202b;
+  --surface: #15202b;
+  --text: #f7f9f9;
+  --text-2: #8b98a5;
+  --line: #38444d;
+  --line-2: #536471;
+  --field: #273340;
+  --hover: rgba(247, 249, 249, 0.08);
+  --accent-weak: rgba(29, 155, 240, 0.16);
+  --warn: #d9a514;
+  --ok-weak: rgba(0, 186, 124, 0.16);
+  --warn-weak: rgba(217, 165, 20, 0.16);
+  --danger-weak: rgba(244, 33, 46, 0.14);
+}
 
-  --border: oklch(0.31 0.012 260);
-  --border-strong: oklch(0.4 0.014 260);
-  --hairline: oklch(0.27 0.01 260);
-
-  --text: oklch(0.95 0.005 260);
-  --text-2: oklch(0.74 0.01 260);
-  --text-3: oklch(0.6 0.012 260);
-  --text-faint: oklch(0.5 0.012 260);
-
-  --accent: oklch(0.7 0.13 248);
-  --accent-hover: oklch(0.76 0.13 248);
-  --accent-press: oklch(0.66 0.13 248);
-  --accent-weak: oklch(0.32 0.06 250);
-  --accent-weak-2: oklch(0.38 0.08 250);
-  --accent-line: oklch(0.5 0.1 250);
-  --on-accent: oklch(0.15 0.02 250);
-
-  --ok: oklch(0.72 0.12 155);
-  --ok-hover: oklch(0.78 0.12 155);
-  --ok-press: oklch(0.68 0.12 155);
-  --ok-weak: oklch(0.32 0.06 155);
-  --warn: oklch(0.78 0.12 80);
-  --warn-weak: oklch(0.34 0.06 80);
-  --danger: oklch(0.7 0.15 25);
-  --danger-weak: oklch(0.34 0.07 25);
-
-  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
-  --shadow: 0 2px 10px oklch(0 0 0 / 0.35);
-  --shadow-lg: 0 16px 40px oklch(0 0 0 / 0.5), 0 2px 8px oklch(0 0 0 / 0.3);
+/* ---------- Tokens: Lights Out ---------- */
+[data-theme='lights'] {
+  --bg: #000000;
+  --surface: #000000;
+  --text: #e7e9ea;
+  --text-2: #71767b;
+  --line: #2f3336;
+  --line-2: #536471;
+  --field: #202327;
+  --hover: rgba(231, 233, 234, 0.08);
+  --accent-weak: rgba(29, 155, 240, 0.16);
+  --warn: #d9a514;
+  --ok-weak: rgba(0, 186, 124, 0.16);
+  --warn-weak: rgba(217, 165, 20, 0.16);
+  --danger-weak: rgba(244, 33, 46, 0.14);
 }
 
 * {
@@ -260,7 +267,7 @@ body {
   border-radius: 12px;
   box-shadow: 0 8px 28px oklch(0 0 0 / 0.12);
 }
-[data-theme='dark'] .offx-card {
+:is([data-theme='dim'], [data-theme='lights']) .offx-card {
   box-shadow: 0 8px 28px oklch(0 0 0 / 0.45);
 }
 .offx-title {
@@ -360,9 +367,9 @@ textarea {
     border-color 0.12s,
     box-shadow 0.12s;
 }
-[data-theme='dark'] input,
-[data-theme='dark'] select,
-[data-theme='dark'] textarea {
+:is([data-theme='dim'], [data-theme='lights']) input,
+:is([data-theme='dim'], [data-theme='lights']) select,
+:is([data-theme='dim'], [data-theme='lights']) textarea {
   background: var(--inset);
 }
 textarea {
@@ -526,7 +533,7 @@ textarea::placeholder {
   color: var(--text);
   box-shadow: var(--shadow-sm);
 }
-[data-theme='dark'] .seg button.active {
+:is([data-theme='dim'], [data-theme='lights']) .seg button.active {
   background: var(--surface-3);
 }
 
@@ -754,7 +761,7 @@ textarea::placeholder {
   background: var(--warn-weak);
   color: oklch(0.42 0.07 60);
 }
-[data-theme='dark'] .callout.warn {
+:is([data-theme='dim'], [data-theme='lights']) .callout.warn {
   color: oklch(0.85 0.08 80);
 }
 .callout.info {
@@ -999,7 +1006,7 @@ code {
     0 10px 30px color-mix(in oklab, var(--accent) 16%, transparent),
     0 2px 8px oklch(0.4 0.02 260 / 0.08);
 }
-[data-theme='dark'] .draft {
+:is([data-theme='dim'], [data-theme='lights']) .draft {
   background: var(--surface-2);
   box-shadow: 0 14px 36px oklch(0 0 0 / 0.5);
 }
@@ -1011,7 +1018,7 @@ code {
   border-bottom: 1px solid var(--accent-line);
   background: color-mix(in oklab, var(--accent-weak), transparent 30%);
 }
-[data-theme='dark'] .draft-head {
+:is([data-theme='dim'], [data-theme='lights']) .draft-head {
   background: var(--surface-3);
 }
 .draft-head .eyebrow {
@@ -1756,7 +1763,7 @@ code {
   border-top: 1px solid var(--accent-line);
   background: color-mix(in oklab, var(--accent-weak), transparent 30%);
 }
-[data-theme='dark'] .copy-effects {
+:is([data-theme='dim'], [data-theme='lights']) .copy-effects {
   background: var(--surface-3);
 }
 .ce-label {
@@ -1791,7 +1798,7 @@ code {
   border-bottom: 1px solid var(--hairline);
   box-shadow: 0 4px 12px oklch(0 0 0 / 0.06);
 }
-[data-theme='dark'] .floating-banner-slot {
+:is([data-theme='dim'], [data-theme='lights']) .floating-banner-slot {
   box-shadow: 0 4px 12px oklch(0 0 0 / 0.3);
 }
 
@@ -2709,7 +2716,7 @@ code {
   resize: none;
   overflow: hidden;
 }
-[data-theme='dark'] .draft-editor-input {
+:is([data-theme='dim'], [data-theme='lights']) .draft-editor-input {
   background: transparent;
 }
 .draft-editor-input:disabled {

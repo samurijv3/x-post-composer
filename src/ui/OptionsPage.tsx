@@ -117,24 +117,27 @@ export function OptionsPage() {
 }
 
 function ThemeNavButton() {
-  const [pref, setPref] = useState<ThemePreference>('light');
+  // INTERIM (reskin phase 1): cycles light ↔ Dim until phase 6 replaces
+  // this with the four-way Theme row in Settings → Account.
+  const [pref, setPref] = useState<ThemePreference>('auto');
   useEffect(() => {
     void getThemePreference().then(setPref);
     const unsub = subscribeTheme(setPref);
     return () => unsub();
   }, []);
+  const isDarkish = pref === 'dim' || pref === 'lights';
   function toggle(): void {
-    void setThemePreference(pref === 'dark' ? 'light' : 'dark');
+    void setThemePreference(isDarkish ? 'light' : 'dim');
   }
   return (
     <button
       type="button"
       className="opt-nav-btn"
       onClick={toggle}
-      title={pref === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+      title={isDarkish ? 'Switch to light theme' : 'Switch to dark theme'}
     >
-      {pref === 'dark' ? <IcSun /> : <IcMoon />}
-      {pref === 'dark' ? 'Light theme' : 'Dark theme'}
+      {isDarkish ? <IcSun /> : <IcMoon />}
+      {isDarkish ? 'Light theme' : 'Dark theme'}
     </button>
   );
 }
