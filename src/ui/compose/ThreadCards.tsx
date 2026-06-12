@@ -1,6 +1,6 @@
 import type { Span } from '../../lib/exclusion';
 import { X_HARD_LIMIT } from '../../lib/counting';
-import { IcCheck, IcCopy } from '../icons';
+import { IcCheck, IcCopy, IcRefresh, IcSliders } from '../icons';
 import { DraftEditor } from './DraftEditor';
 
 /** One post of a thread draft, as the cards render it. */
@@ -18,8 +18,14 @@ interface ThreadCardsProps {
   posts: DraftPostViewModel[];
   charCap: boolean;
   busy: boolean;
+  /** The post the refine controls are aimed at (scope), or null. */
+  aimedPost: number | null;
   onEditPost: (postIndex: number, text: string) => void;
   onCopyPost: (postIndex: number) => void;
+  /** Scoped fresh take on one post (splice-guarded downstream). */
+  onRewritePost: (postIndex: number) => void;
+  /** Aim chips + the steer box at this post (toggles off on re-click). */
+  onAimPost: (postIndex: number) => void;
 }
 
 /**
@@ -30,11 +36,23 @@ interface ThreadCardsProps {
  * button. Copying every card commits the draft (the lifecycle's
  * all-copied rule).
  */
-export function ThreadCards({ posts, charCap, busy, onEditPost, onCopyPost }: ThreadCardsProps) {
+export function ThreadCards({
+  posts,
+  charCap,
+  busy,
+  aimedPost,
+  onEditPost,
+  onCopyPost,
+  onRewritePost,
+  onAimPost,
+}: ThreadCardsProps) {
   return (
     <ol className="thread-cards">
       {posts.map((post, i) => (
-        <li key={i} className={`thread-card ${post.copied ? 'tc-copied' : ''}`}>
+        <li
+          key={i}
+          className={`thread-card ${post.copied ? 'tc-copied' : ''} ${aimedPost === i ? 'tc-aimed' : ''}`}
+        >
           <div className="tc-head">
             <span className="tc-ordinal">
               {i + 1}/{posts.length}
@@ -47,6 +65,31 @@ export function ThreadCards({ posts, charCap, busy, onEditPost, onCopyPost }: Th
               {post.count}
               {charCap ? ` / ${X_HARD_LIMIT}` : ' chars'}
             </span>
+            <button
+              type="button"
+              className={`icon-btn tc-copy ${aimedPost === i ? 'is-on' : ''}`}
+              title={
+                aimedPost === i
+                  ? 'Chips & steering are aimed at this post — click to un-aim'
+                  : 'Aim chips & steering at this post only'
+              }
+              aria-label={`Aim refines at post ${String(i + 1)}`}
+              aria-pressed={aimedPost === i}
+              disabled={busy}
+              onClick={() => onAimPost(i)}
+            >
+              <IcSliders />
+            </button>
+            <button
+              type="button"
+              className="icon-btn tc-copy"
+              title="Rewrite this post — fresh take, same beat (the rest of the thread is untouched)"
+              aria-label={`Rewrite post ${String(i + 1)}`}
+              disabled={busy}
+              onClick={() => onRewritePost(i)}
+            >
+              <IcRefresh />
+            </button>
             <button
               type="button"
               className={`icon-btn tc-copy ${post.copied ? 'is-on' : ''}`}

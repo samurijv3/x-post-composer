@@ -207,6 +207,10 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   // so the effective request mode derives from both.
   const [composeMode, setComposeMode] = useState<'single' | 'thread'>('single');
   const [threadTarget, setThreadTarget] = useState<number>(DEFAULT_THREAD_TARGET);
+  // Scoped refines (thread cards): when set, chips and the steer box
+  // aim at this post instead of the whole thread. One visible scope,
+  // cleared by its ×, a new generation, or the post disappearing.
+  const [steerScope, setSteerScope] = useState<number | null>(null);
   // The draft lifecycle (empty → generating → active → committed) is a
   // pure reducer in lib/draft — every consequential transition,
   // including stale-request gating and both undo scopes, is decided
@@ -336,6 +340,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     setError(null);
     setExpanded(false);
     setChipCounts({});
+    setSteerScope(null);
     if (!opts.isRegenerate) setSteerText('');
     const myId = ++requestSeq.current;
     // Whether this generate will REPLACE a visible draft decides the
@@ -381,6 +386,9 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     // The bundle that seeded a GENERATE; refines pass null and the
     // reducer keeps the draft's existing seed.
     seedBundleId: string | null = null,
+    // A scoped thread refine: splice exactly this post (the reducer
+    // enforces it — only that post's copied flag resets).
+    scope: number | null = null,
   ): void {
     if (!result.ok) {
       dispatchDraft({ type: 'generation-failed', seq });
@@ -388,6 +396,20 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
       return;
     }
     setError(null);
+    if (scope !== null) {
+      const post = result.draft.posts[0];
+      dispatchDraft({
+        type: 'post-replaced',
+        seq,
+        postIndex: scope,
+        post: {
+          text: post?.text ?? '',
+          residualViolations: post?.residualViolations ?? [],
+        },
+        wasRepaired: result.wasRepaired,
+      });
+      return;
+    }
     dispatchDraft({
       type: 'generation-succeeded',
       seq,
@@ -416,14 +438,29 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     // Pass the per-chip press count as `intensity` — background uses
     // it to escalate the chip's instruction wording so the AI takes
     // each subsequent press more seriously.
-    await runRefine({ type: 'chip', chipId: chip.id, intensity: nextCount });
+    await runRefine({ type: 'chip', chipId: chip.id, intensity: nextCount }, undefined, scopeArg());
   }
 
   async function applySteer(): Promise<void> {
     if (busy || content === null) return;
     if (steerText.trim() === '') return;
     setChipCounts({});
-    await runRefine({ type: 'freeform', instruction: steerText });
+    await runRefine({ type: 'freeform', instruction: steerText }, undefined, scopeArg());
+  }
+
+  // The aim, validated at use: it only means something over a thread
+  // draft and a post that still exists.
+  function scopeArg(): number | undefined {
+    const c = lifecycleRef.current.content;
+    if (c?.kind !== 'thread' || steerScope === null || steerScope >= c.posts.length) {
+      return undefined;
+    }
+    return steerScope;
+  }
+
+  async function rewritePost(postIndex: number): Promise<void> {
+    if (busy || content === null) return;
+    await runRefine({ type: 'rewrite' }, undefined, postIndex);
   }
 
   async function applyPolish(): Promise<void> {
@@ -455,13 +492,18 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     void runRefine({ type: 'refit' }, true);
   }
 
-  async function runRefine(kind: RefineRequest['kind'], capOverride?: boolean): Promise<void> {
+  async function runRefine(
+    kind: RefineRequest['kind'],
+    capOverride?: boolean,
+    scope?: number,
+  ): Promise<void> {
     const myId = ++requestSeq.current;
     // Refine reshapes the CURRENT draft — hand edits included; threads
     // travel joined in the --- wire format. Only the model's output
     // gets re-checked; the user's words went in as-is.
     const current = lifecycleRef.current.content;
     const isThreadDraft = current?.kind === 'thread';
+    const effectiveScope = isThreadDraft && scope !== undefined ? scope : null;
     const previousDraftText = isThreadDraft
       ? joinSegments(current.posts.map((p) => p.text))
       : (current?.posts[0]?.text ?? '');
@@ -472,6 +514,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
       // The refit fires in the same tick as the toggle flip, before the
       // charCap state has re-rendered — the caller passes the new value.
       charCap: capOverride ?? charCap,
+      ...(effectiveScope !== null && { scope: effectiveScope }),
       kind,
     };
     try {
@@ -479,7 +522,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
         Extract<BackgroundReply, { type: 'bg:generation-result' }>
       >({ type: 'panel:refine', request });
       if (myId !== requestSeq.current) return;
-      applyResult(reply.result, myId, false);
+      applyResult(reply.result, myId, false, null, effectiveScope);
     } catch (err) {
       if (myId !== requestSeq.current) return;
       dispatchDraft({ type: 'generation-failed', seq: myId });
@@ -609,6 +652,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     dispatchDraft({ type: 'discarded' });
     setBullets('');
     setSteerText('');
+    setSteerScope(null);
     setExpanded(false);
     setChipCounts({});
     setError(null);
@@ -746,6 +790,17 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
       ? (bundleOptions.find((b) => b.id === content.seedBundleId)?.name ?? null)
       : null;
 
+  // A scope whose post disappeared (repack shrank the thread, mode
+  // changed) silently un-aims — a pill pointing at nothing would lie.
+  useEffect(() => {
+    if (
+      steerScope !== null &&
+      (content?.kind !== 'thread' || steerScope >= (content?.posts.length ?? 0))
+    ) {
+      setSteerScope(null);
+    }
+  }, [steerScope, content]);
+
   const refineControls: RefineControls = {
     chips,
     chipCounts,
@@ -756,6 +811,9 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     onSteerKey: steerKey,
     onApplyChip: (c) => void applyChip(c),
     onApplySteer: () => void applySteer(),
+    scope: steerScope,
+    onAimPost: (i) => setSteerScope((prev) => (prev === i ? null : i)),
+    onClearScope: () => setSteerScope(null),
   };
 
   return (
@@ -790,6 +848,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
           setExpanded={setExpanded}
           error={error}
           onEditPost={editPost}
+          onRewritePost={(i) => void rewritePost(i)}
           shipToVoice={saveShippedDefault ? shipToVoice : null}
           onToggleShipToVoice={() => setShipToVoice((v) => !v)}
           onRegenerate={() => void generate({ isRegenerate: true })}

@@ -1644,6 +1644,24 @@ code {
   width: 2px;
   background: var(--accent-line);
 }
+/* The post the refine controls are aimed at. */
+.thread-card.tc-aimed {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-weak-2);
+}
+/* The aim indicator above the refine blocks. */
+.refine-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-pill);
+  background: var(--accent-weak);
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  width: fit-content;
+}
 .thread-card.tc-copied {
   border-color: color-mix(in oklab, var(--ok) 45%, var(--border));
 }

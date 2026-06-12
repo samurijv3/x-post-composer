@@ -60,6 +60,10 @@ export interface RefineControls {
   onSteerKey: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
   onApplyChip: (c: ChipPreset) => void;
   onApplySteer: () => void;
+  /** Scoped refines (threads): the post chips/steering aim at. */
+  scope: number | null;
+  onAimPost: (postIndex: number) => void;
+  onClearScope: () => void;
 }
 
 interface DraftStateProps {
@@ -87,6 +91,8 @@ interface DraftStateProps {
   setExpanded: (v: boolean) => void;
   error: ErrorKind | null;
   onEditPost: (postIndex: number, text: string) => void;
+  /** Scoped fresh take on one thread card. */
+  onRewritePost: (postIndex: number) => void;
   /** Per-draft corpus-loop override. Null = the global setting is off,
    *  so the control hides entirely (nothing to override). */
   shipToVoice: boolean | null;
@@ -120,6 +126,7 @@ export function DraftState({
   setExpanded,
   error,
   onEditPost,
+  onRewritePost,
   shipToVoice,
   onToggleShipToVoice,
   onRegenerate,
@@ -339,8 +346,11 @@ export function DraftState({
                   posts={draft.posts}
                   charCap={brief.charCap}
                   busy={busy}
+                  aimedPost={refine.scope}
                   onEditPost={onEditPost}
                   onCopyPost={onCopyPost}
+                  onRewritePost={onRewritePost}
+                  onAimPost={refine.onAimPost}
                 />
               </div>
             ) : (
@@ -480,6 +490,21 @@ export function DraftState({
 
       {/* REFINE — chips + steer */}
       <div className={`refine ${busy ? 'is-busy' : ''}`} aria-disabled={busy}>
+        {refine.scope !== null && (
+          <div className="refine-scope" role="status">
+            Aimed at post {refine.scope + 1} — chips and steering change only it
+            <button
+              type="button"
+              className="icon-btn"
+              style={{ width: 22, height: 22 }}
+              title="Back to refining the whole thread"
+              aria-label="Clear the aim"
+              onClick={refine.onClearScope}
+            >
+              <IcX />
+            </button>
+          </div>
+        )}
         {refine.chips.length > 0 && (
           <div className="refine-block">
             <span className="eyebrow">Quick refine</span>
