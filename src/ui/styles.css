@@ -2676,6 +2676,8 @@ code {
 .draft-editor-backdrop mark {
   color: transparent;
   border-radius: 3px;
+  /* The spec's gold violation tint — never the UA's default yellow. */
+  background: rgba(184, 134, 11, 0.24);
 }
 .draft-editor-input {
   /* fully override the global textarea chrome — the editor reads as
@@ -2944,6 +2946,30 @@ code {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+/* The "Replying to @handle ›" peek toggle — a quiet accent text
+   button, never the UA's default button face. */
+.eb-ctx-toggle {
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  padding: 0;
+  cursor: pointer;
+  min-width: 0;
+}
+.eb-ctx-toggle svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+.eb-ctx-toggle:hover {
+  text-decoration: underline;
 }
 .editbrief .eb-input,
 .editbrief textarea.eb-input {
