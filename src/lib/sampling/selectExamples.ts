@@ -27,6 +27,21 @@
  *     member — the bundle keeps its members; the no-item-twice rule
  *     resolves in the bundle's favor.
  *
+ *   THREAD MODE (roadmap Phase 10): thread examples fill the voice
+ *     budget FIRST — each thread debiting `poolSize` by its segment
+ *     count (tweet-equivalent budget, so a thread library can't
+ *     quietly balloon prompts) — and POSTS top up the remainder
+ *     through the same curated/archive tier math (broadcast register;
+ *     replies teach conversation, not threads). Starred threads are
+ *     guaranteed first within the thread fill; the first thread is
+ *     always taken even when over budget (a thread prompt with zero
+ *     thread exemplars while they exist would be worse than an
+ *     overshoot); a thread that doesn't fit is skipped individually
+ *     and the walk continues (a smaller one later may fit). The
+ *     aspirational pool in thread mode is starred POSTS — the prose
+ *     bar, register-appropriate — never joined threads. Thread items
+ *     stay OUT of post/reply sampling by the type filter.
+ *
  * Later phases swap the shuffle for semantic retrieval behind THIS
  * exact signature so callers do not change. The `context` argument is
  * accepted now (and ignored) so retrieval has somewhere to read parent
@@ -35,7 +50,7 @@
 import type { LibraryItem } from '../../types';
 import { resolveBundleMembers } from '../bundles';
 
-export type GenerationMode = 'post' | 'reply';
+export type GenerationMode = 'post' | 'reply' | 'thread';
 
 export interface SamplingContext {
   /** The tweet being replied to (reply mode). Unused until retrieval. */
@@ -47,7 +62,9 @@ export interface SamplingContext {
 }
 
 export interface SamplingOptions {
-  /** Budget for the sampled (non-star) tiers combined. */
+  /** Budget for the sampled (non-star) tiers combined. In thread mode
+   *  this is a TWEET-equivalent budget: each thread debits it by its
+   *  segment count. */
   poolSize: number;
   /** How many starred items ride on top (additive to poolSize). The
    *  effective number is capped at floor(poolSize / 2). */
@@ -67,10 +84,14 @@ export interface SamplingOptions {
 }
 
 export interface SelectedExamples {
-  /** The guaranteed star pool → <aspirational_examples>. */
+  /** The guaranteed star pool → <aspirational_examples>. Starred
+   *  posts in thread mode (the prose bar); type-matched otherwise. */
   aspirational: LibraryItem[];
   /** The curated+archive sample → <voice_examples>. */
   voice: LibraryItem[];
+  /** Thread exemplars → <thread_examples>. Always [] outside thread
+   *  mode. */
+  threads: LibraryItem[];
 }
 
 export function selectExamples(
@@ -81,8 +102,13 @@ export function selectExamples(
 ): SelectedExamples {
   const rng = options.rng ?? Math.random;
   const poolSize = Math.max(0, options.poolSize);
-  const matching = library.filter((item) => item.type === mode);
   const starBudget = Math.min(Math.max(0, options.starCount), Math.floor(poolSize / 2));
+
+  if (mode === 'thread') {
+    return selectForThread(library, options, rng, poolSize, starBudget);
+  }
+
+  const matching = library.filter((item) => item.type === mode);
 
   // Bundle-seeded: the bundle IS the voice pool (see the header). Stars
   // still ride on top, minus members — the bundle keeps its items.
@@ -95,6 +121,7 @@ export function selectExamples(
     return {
       aspirational: shuffleInPlace([...stars], rng).slice(0, starBudget),
       voice: members,
+      threads: [],
     };
   }
 
@@ -108,25 +135,108 @@ export function selectExamples(
   // The sampled tiers split what's left. No item appears twice in one
   // prompt, so anything already starred-in is excluded here.
   const sampled = matching.filter((item) => !starred.has(item.id));
+  return {
+    aspirational,
+    voice: sampleTiers(sampled, poolSize, options.curatedShare, rng),
+    threads: [],
+  };
+}
+
+/** Thread-mode selection — see the THREAD MODE section of the header. */
+function selectForThread(
+  library: LibraryItem[],
+  options: SamplingOptions,
+  rng: () => number,
+  poolSize: number,
+  starBudget: number,
+): SelectedExamples {
+  // Bundle-seeded thread mode: members verbatim, split into their
+  // natural blocks; stars-minus-members from posts (the prose bar),
+  // consistent with the sampled path below.
+  if (options.bundleMemberIds !== undefined) {
+    const { members } = resolveBundleMembers(options.bundleMemberIds, library);
+    const memberIds = new Set(members.map((item) => item.id));
+    const stars = library.filter(
+      (item) =>
+        item.type === 'post' &&
+        item.favorite &&
+        item.source !== 'archive' &&
+        !memberIds.has(item.id),
+    );
+    return {
+      aspirational: shuffleInPlace([...stars], rng).slice(0, starBudget),
+      voice: members.filter((item) => item.type !== 'thread'),
+      threads: members.filter((item) => item.type === 'thread'),
+    };
+  }
+
+  // Threads fill first. Starred threads are guaranteed ahead of the
+  // rest (the star semantic — guaranteed presence — applied
+  // type-appropriately; they never render in the aspirational block).
+  const allThreads = library.filter((item) => item.type === 'thread');
+  const orderedThreads = [
+    ...shuffleInPlace(
+      allThreads.filter((t) => t.favorite),
+      rng,
+    ),
+    ...shuffleInPlace(
+      allThreads.filter((t) => !t.favorite),
+      rng,
+    ),
+  ];
+  const threads: LibraryItem[] = [];
+  let remaining = poolSize;
+  for (const thread of orderedThreads) {
+    const cost = thread.segments?.length ?? 1;
+    // First thread always taken (even over budget); later ones are
+    // skipped individually when they don't fit — keep walking, a
+    // smaller thread may still fit.
+    if (threads.length === 0 || cost <= remaining) {
+      threads.push(thread);
+      remaining = Math.max(0, remaining - cost);
+    }
+  }
+
+  // Post top-up: the prose register threads are made of. Starred posts
+  // form the aspirational pool exactly as in post mode.
+  const posts = library.filter((item) => item.type === 'post');
+  const stars = posts.filter((item) => item.favorite && item.source !== 'archive');
+  const aspirational = shuffleInPlace([...stars], rng).slice(0, starBudget);
+  const starred = new Set(aspirational.map((item) => item.id));
+  const sampled = posts.filter((item) => !starred.has(item.id));
+  return {
+    aspirational,
+    voice: sampleTiers(sampled, remaining, options.curatedShare, rng),
+    threads,
+  };
+}
+
+/**
+ * The curated-first / archive-top-up tier math over one budget —
+ * shared by the post/reply sample and the thread-mode post top-up.
+ * Curated fills to its share first, archive tops up the remainder, and
+ * whatever archive can't supply flows back to curated; zero archive
+ * items reproduces curated-only behavior exactly.
+ */
+function sampleTiers(
+  sampled: LibraryItem[],
+  budget: number,
+  curatedShare: number,
+  rng: () => number,
+): LibraryItem[] {
   const curated = sampled.filter((item) => item.source !== 'archive');
   const archive = sampled.filter((item) => item.source === 'archive');
+  const curatedTarget = Math.round(budget * clamp01(curatedShare));
+  const archiveTake = Math.min(archive.length, budget - Math.min(curated.length, curatedTarget));
+  const curatedTake = Math.min(curated.length, budget - archiveTake);
 
-  // Curated fills first, up to its share; archive tops up the rest;
-  // whatever archive can't supply flows back to curated. With zero
-  // archive items this is exactly the pre-tier curated-only behavior.
-  const curatedTarget = Math.round(poolSize * clamp01(options.curatedShare));
-  const archiveTake = Math.min(archive.length, poolSize - Math.min(curated.length, curatedTarget));
-  const curatedTake = Math.min(curated.length, poolSize - archiveTake);
-
-  const voice = shuffleInPlace(
+  return shuffleInPlace(
     [
       ...shuffleInPlace([...curated], rng).slice(0, curatedTake),
       ...shuffleInPlace([...archive], rng).slice(0, archiveTake),
     ],
     rng,
   );
-
-  return { aspirational, voice };
 }
 
 function clamp01(n: number): number {

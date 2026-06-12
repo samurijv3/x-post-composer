@@ -241,3 +241,110 @@ describe('selectExamples — curated/archive tiers', () => {
     expect(ids(out.voice)).toEqual(['a1', 'p1']);
   });
 });
+
+describe('selectExamples — thread mode (Phase 10)', () => {
+  const thread = (id: string, segCount: number, overrides: Partial<LibraryItem> = {}) =>
+    item(id, 'thread', {
+      segments: Array.from({ length: segCount }, (_, n) => ({
+        text: `${id} seg ${String(n + 1)}`,
+        statusId: null,
+      })),
+      ...overrides,
+    });
+
+  it('threads fill first with tweet-equivalent debits; posts top up the rest', () => {
+    const lib = [
+      thread('t1', 4),
+      thread('t2', 3),
+      ...Array.from({ length: 20 }, (_, n) => item(`p${String(n)}`, 'post')),
+    ];
+    const out = selectExamples('thread', {}, lib, opts({ poolSize: 10 }));
+    expect(out.threads).toHaveLength(2); // 4 + 3 = 7 of the budget
+    expect(out.voice).toHaveLength(3); // posts fill the remaining 3
+    expect(out.voice.every((i) => i.type === 'post')).toBe(true);
+  });
+
+  it('the FIRST thread is always taken, even over budget', () => {
+    const lib = [
+      thread('big', 8),
+      ...Array.from({ length: 5 }, (_, n) => item(`p${String(n)}`, 'post')),
+    ];
+    const out = selectExamples('thread', {}, lib, opts({ poolSize: 3 }));
+    expect(out.threads.map((t) => t.id)).toEqual(['big']);
+    expect(out.voice).toHaveLength(0); // budget fully consumed
+  });
+
+  it('a thread that does not fit is skipped and the walk continues', () => {
+    // Starred 4-seg thread is guaranteed first (cost 4 of 5); the 3-seg
+    // can never fit in the remaining 1; the 1-seg fits whichever order
+    // the shuffle puts the unstarred pair in.
+    const lib = [thread('starred4', 4, { favorite: true }), thread('mid3', 3), thread('tiny1', 1)];
+    const out = selectExamples('thread', {}, lib, opts({ poolSize: 5 }));
+    const ids = out.threads.map((t) => t.id);
+    expect(ids).toContain('starred4');
+    expect(ids).toContain('tiny1');
+    expect(ids).not.toContain('mid3');
+  });
+
+  it('starred threads are guaranteed ahead of unstarred ones', () => {
+    const lib = [thread('plain', 2), thread('canon', 3, { favorite: true })];
+    const out = selectExamples('thread', {}, lib, opts({ poolSize: 3 }));
+    // Only the starred one fits (cost 3); the unstarred 2-seg is skipped.
+    expect(out.threads.map((t) => t.id)).toEqual(['canon']);
+  });
+
+  it('aspirational in thread mode is starred POSTS — never threads or replies', () => {
+    const lib = [
+      thread('t1', 2, { favorite: true }),
+      item('sp', 'post', { favorite: true }),
+      item('sr', 'reply', { favorite: true }),
+      ...Array.from({ length: 5 }, (_, n) => item(`p${String(n)}`, 'post')),
+    ];
+    const out = selectExamples('thread', {}, lib, opts({ poolSize: 10 }));
+    expect(out.aspirational.map((i) => i.id)).toEqual(['sp']);
+    expect(out.threads.map((t) => t.id)).toEqual(['t1']); // starred thread samples as a thread
+  });
+
+  it('replies never top up a thread prompt', () => {
+    const lib = [
+      thread('t1', 2),
+      ...Array.from({ length: 8 }, (_, n) => item(`r${String(n)}`, 'reply')),
+    ];
+    const out = selectExamples('thread', {}, lib, opts({ poolSize: 10 }));
+    expect(out.voice).toHaveLength(0);
+  });
+
+  it('zero saved threads degrades to a pure post sample (cold start works)', () => {
+    const lib = Array.from({ length: 20 }, (_, n) => item(`p${String(n)}`, 'post'));
+    const out = selectExamples('thread', {}, lib, opts({ poolSize: 10 }));
+    expect(out.threads).toEqual([]);
+    expect(out.voice).toHaveLength(10);
+  });
+
+  it('a thread with null segments costs 1 (defensive)', () => {
+    const lib = [item('weird', 'thread'), thread('t2', 2)];
+    const out = selectExamples('thread', {}, lib, opts({ poolSize: 3 }));
+    expect(out.threads).toHaveLength(2);
+  });
+
+  it('thread items stay OUT of post-mode sampling', () => {
+    const lib = [thread('t1', 3, { favorite: true }), item('p1', 'post')];
+    const out = selectExamples('post', {}, lib, opts());
+    expect(out.voice.map((i) => i.id)).toEqual(['p1']);
+    expect(out.aspirational).toEqual([]);
+    expect(out.threads).toEqual([]);
+  });
+
+  it('bundle-seeded thread mode splits members into their natural blocks', () => {
+    const lib = [
+      thread('t1', 2),
+      item('p1', 'post'),
+      item('sp', 'post', { favorite: true }),
+      ...Array.from({ length: 5 }, (_, n) => item(`x${String(n)}`, 'post')),
+    ];
+    const out = selectExamples('thread', {}, lib, opts({ bundleMemberIds: ['p1', 't1'] }));
+    expect(out.threads.map((t) => t.id)).toEqual(['t1']);
+    expect(out.voice.map((i) => i.id)).toEqual(['p1']); // verbatim, no top-up
+    expect(out.aspirational.map((i) => i.id)).toEqual(['sp']); // stars minus members
+  });
+});
