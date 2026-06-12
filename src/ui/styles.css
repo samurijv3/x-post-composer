@@ -1274,6 +1274,20 @@ code {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+/* Generic line clamps — the reply-context card's X-style truncation
+   (6 lines for the tweet, 3 for the earlier-in-thread block). */
+.clamp-3,
+.clamp-6 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.clamp-3 {
+  -webkit-line-clamp: 3;
+}
+.clamp-6 {
+  -webkit-line-clamp: 6;
+}
 .lib-more {
   font: inherit;
   font-size: var(--fs-sm);

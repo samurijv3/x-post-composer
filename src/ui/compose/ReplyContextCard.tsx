@@ -1,7 +1,52 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReplyContext } from '../../types';
 import { Avatar } from '../Avatar';
 import { IcChevR, IcReply, IcX } from '../icons';
 import { formatRelativeTweetTime } from '../../lib/format/relativeTime';
+
+/**
+ * Clamped tweet text with X-style "Show more" — a long captured tweet
+ * must not dominate the panel's vertical space. Display-only: the lock
+ * (and therefore the prompt) always holds the full text. Expands in
+ * place with a "Show less" (the LibRow convention), and re-collapses
+ * when the text changes (a swapped lock starts compact again). The
+ * link renders only when the text actually clamps.
+ */
+function ClampedText({
+  text,
+  lines,
+  className,
+}: {
+  text: string;
+  lines: 3 | 6;
+  className: string;
+}) {
+  const ref = useRef<HTMLParagraphElement | null>(null);
+  const [expanded, setExpanded] = useState<boolean>(false);
+  const [truncatable, setTruncatable] = useState<boolean>(false);
+
+  useLayoutEffect(() => {
+    setExpanded(false);
+  }, [text]);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && !expanded) setTruncatable(el.scrollHeight > el.clientHeight + 2);
+  }, [text, expanded]);
+
+  return (
+    <>
+      <p ref={ref} className={`${className} ${expanded ? '' : `clamp-${lines}`}`}>
+        {text}
+      </p>
+      {(truncatable || expanded) && (
+        <button type="button" className="lib-more" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </>
+  );
+}
 
 interface ReplyContextCardProps {
   context: ReplyContext;
@@ -55,7 +100,7 @@ export function ReplyContextCard({ context, onClear, onCollapse }: ReplyContextC
       {context.grandparentText && (
         <div className="ctx-grand">
           <div className="ctx-thread-label">Earlier in thread</div>
-          <p className="ctx-thread-text">{context.grandparentText}</p>
+          <ClampedText text={context.grandparentText} lines={3} className="ctx-thread-text" />
         </div>
       )}
       <div className="tweet-native">
@@ -78,7 +123,7 @@ export function ReplyContextCard({ context, onClear, onCollapse }: ReplyContextC
               </>
             )}
           </div>
-          <p className="tn-text">{context.targetText}</p>
+          <ClampedText text={context.targetText} lines={6} className="tn-text" />
           {context.hadUnreadableMedia && (
             <p className="help" style={{ marginTop: 6 }}>
               Media (images / quoted posts) were present but not read — v1 captures text only.
