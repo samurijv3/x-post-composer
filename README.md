@@ -14,6 +14,7 @@ This repo is public, MIT-licensed, and ships no telemetry of any kind.
 
 - **Capture** your own tweets from x.com with a click-to-save mode that hard-filters on your handle.
 - **Generate** post and reply drafts in your voice using sampled examples from your captured library + a style guide + your bullets. Starred examples are guaranteed into every prompt as "you at your best."
+- **Compose threads** as first-class drafts: ordered ≤280 cards with per-post copy, a soft ≈N length target, and thread-aware refines — seeded by your own saved threads (captured whole from X with one click on the thread page).
 - **Bundle** specific tweets as a reusable voice seed (e.g. a "day X" series): the bundle's members become the exact voice examples for that draft, and shipped drafts file back into the bundle automatically.
 - **Refine** the on-screen draft via chips (Shorter / Longer / Warmer / Punchier — all editable) or a freeform feedback box in your own words.
 - **Regenerate** to reshuffle examples and bump temperature when a draft doesn't land.
@@ -96,6 +97,12 @@ Then open the panel (toolbar icon), click the gear to open **Settings**, and in 
 3. When you copy a bundle-seeded draft (with "save shipped drafts" on), the shipped example **auto-files into the bundle** — a "day X" bundle grows itself with every entry you ship. The **On copy** row under the Copy button holds both switches (save to Voice, file into the bundle) so a one-off can opt out without touching the series.
 4. Manage bundles in Voice: rename, reorder members (↑/↓), remove members, delete; click a member to jump to its row in Saved examples. Deleted library items show as "missing" in their bundles and are simply skipped when seeding.
 
+### Threads
+
+1. **Save one**: open your thread's page on X (click into it), turn on capture, click any post in it — the visible self-reply chain saves as one thread ("Saved as a thread · N posts"; scroll long threads fully into view first, and expand any "Show more" post). Or paste it via **Add manually → Thread**, separating posts with a line containing only `---`.
+2. **Compose one**: flip the **Post ↔ Thread** switch, set the **≈N** target, generate. The draft arrives as ordered cards — edit any card in place, copy them one by one (the big button always offers the next uncopied post). Copying every card commits the thread; with the shipped loop on it saves back to Voice as a thread.
+3. **Reshape**: chips and the steer box act on the whole thread (denser/warmer/etc.); changing **≈N** over the draft _repacks_ the same content into more or fewer posts; ≤280 applies per post.
+
 ### Compose
 
 1. **Post:** type bullets describing what you want to say, hit **Generate** (⌘↵ works).
@@ -167,7 +174,7 @@ src/
 
 ### Tests
 
-390 tests across 26 files cover every load-bearing piece of deterministic logic: exclusion detectors (em-dash, smart quotes, staccato boundary 2-vs-3 + word-count edges, the narrow label-colon rule), the do-not-say whole-word matcher, mechanical auto-fix, twitter-text weighted counting, the prompt engine (slot rendering/validation, the system/user role boundary, default-template consistency), prompt assembly (slot population, intent-shape framing, refine voice anchor, violation summaries, chip escalation), `selectExamples` (stars, tiers, bundle seeding), bundle member resolution, the draft lifecycle state machine (both undo scopes, stale-request gating, the bundle-seed provenance), library dedupe, the reply-context merge, screening predicates, `validateAuthor`, `classifyType`, the settings merge + template migration, the Anthropic client (header/body shape, full error-mapping table, key never echoed — all against a stubbed `fetch`), the IndexedDB corpus + bundles stores incl. every seeded schema migration (v1 through v5), and the X-markup extraction layer via DOM fixtures (so when X drifts, the failing test names the assumption that died).
+459 tests across 28 files cover every load-bearing piece of deterministic logic: exclusion detectors (em-dash, smart quotes, staccato boundary 2-vs-3 + word-count edges, the narrow label-colon rule), the do-not-say whole-word matcher, mechanical auto-fix, twitter-text weighted counting, the prompt engine (slot rendering/validation, the system/user role boundary, default-template consistency), prompt assembly (slot population, intent-shape framing, refine voice anchor, violation summaries, chip escalation), `selectExamples` (stars, tiers, bundle seeding), bundle member resolution, the draft lifecycle state machine (both undo scopes, stale-request gating, the bundle-seed provenance), library dedupe, the reply-context merge, screening predicates, `validateAuthor`, `classifyType`, the settings merge + template migration, the Anthropic client (header/body shape, full error-mapping table, key never echoed — all against a stubbed `fetch`), the IndexedDB corpus + bundles stores incl. every seeded schema migration (v1 through v5), and the X-markup extraction layer via DOM fixtures (so when X drifts, the failing test names the assumption that died).
 
 Per CLAUDE.md §5 there is no coverage-percentage gate. Behavior that matters is tested; UI glue and `chrome.*` wrappers aren't filler-tested.
 
@@ -188,7 +195,6 @@ Dependency policy: `npm audit --omit=dev` must be clean (it is — production de
 These are intentional v1 omissions. The code shape preserves the seams so they bolt on without a refactor:
 
 - **Bulk archive import**: drag-and-drop an X data export (`.zip` / `tweets.js`) → the screening predicates (already tested, currently dormant) filter the firehose. Exports already carry a schema version for the future import to validate.
-- **Thread mode**: `Draft = { posts: PostDraft[] }` already iterates; the pipeline currently produces length 1.
 - **Semantic retrieval**: `selectExamples(mode, context, library) => examples[]` is the one function to replace. `LibraryItem.embedding` is `null` in v1 but the IndexedDB schema reserves the column (and a `byType` index).
 - **Model picker**: the model id is shown read-only in Account; a picker needs per-family parameter gating (newer Opus models reject `temperature`).
 - **Image / quote-tweet understanding**: reply context capture is text-only today.

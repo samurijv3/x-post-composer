@@ -122,7 +122,7 @@ We do **not** fake at-rest encryption. On a public repo any baked-in key is reve
 
 v1 omits three features, but the code must be shaped now so they bolt on without a refactor. Preserve these even though v1 doesn't exercise them:
 
-- **A draft is an array of posts** (`Draft = { posts: PostDraft[] }`), always length 1 in v1. This reserves the shape for thread mode later. Never assume a draft is a single string.
+- **A draft is an array of posts** (`Draft = { posts: PostDraft[] }`) — _seam exercised 2026-06-12:_ thread mode (roadmap Phase 10) produces real multi-post drafts; singles are the length-1 case. Never assume a draft is a single string.
 - **`LibraryItem` carries a nullable `embedding` field**, unpopulated in v1. This reserves room for semantic retrieval later. The IndexedDB schema must include it.
 - **Example selection sits behind one function: `selectExamples(mode, context, library) => examples[]`.** v1's implementation shuffles manual picks; retrieval becomes an alternate strategy behind the same signature later. Never inline sampling logic into the prompt builder.
 - **The IndexedDB layer is versioned** with a migration path, so adding fields later is clean.
