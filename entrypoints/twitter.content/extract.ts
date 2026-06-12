@@ -149,41 +149,57 @@ export function collectSelfThreadSpine(article: Element): Element[] {
   const startCell = article.closest('[data-testid="cellInnerDiv"]');
   if (!startCell) return single;
 
+  const articleIn = (cell: Element | null): Element | null =>
+    cell?.querySelector('article[data-testid="tweet"]') ?? null;
   const sameAuthorArticle = (cell: Element | null): Element | null => {
-    const candidate = cell?.querySelector('article[data-testid="tweet"]') ?? null;
+    const candidate = articleIn(cell);
     if (!candidate) return null;
     const handle = readAuthorHandle(candidate);
     if (handle === null || handle.toLowerCase() !== author.toLowerCase()) return null;
     return candidate;
   };
+  // Conversation pages interleave article-less cells BETWEEN posts —
+  // the inline reply composer sits directly under the focal tweet,
+  // plus dividers and section headers — so the walk steps to the
+  // nearest ARTICLE-BEARING cell rather than the literal sibling
+  // (field-found: the strict-sibling walk stopped at the composer and
+  // dropped the thread root). The foreign-author check below remains
+  // the boundary that keeps other conversations out.
+  const stepToArticleCell = (from: Element, dir: 'previous' | 'next'): Element | null => {
+    let cell = dir === 'previous' ? from.previousElementSibling : from.nextElementSibling;
+    while (cell !== null && articleIn(cell) === null) {
+      cell = dir === 'previous' ? cell.previousElementSibling : cell.nextElementSibling;
+    }
+    return cell;
+  };
 
   // Up to the spine root.
   let rootCell: Element = startCell;
-  while (sameAuthorArticle(rootCell.previousElementSibling)) {
-    const prev = rootCell.previousElementSibling;
-    if (prev === null) break;
+  for (;;) {
+    const prev = stepToArticleCell(rootCell, 'previous');
+    if (prev === null || sameAuthorArticle(prev) === null) break;
     rootCell = prev;
   }
 
-  // A reply-root means this chain hangs under someone else's tweet.
+  // A reply-root means this chain hangs under someone else's tweet:
+  // any article-bearing cell above the root is, by construction of the
+  // up-walk, a FOREIGN article.
   const rootArticle = sameAuthorArticle(rootCell);
   if (rootArticle === null) return single;
-  const prevCell = rootCell.previousElementSibling;
-  const foreignParentAbove =
-    prevCell?.querySelector('article[data-testid="tweet"]') != null &&
-    sameAuthorArticle(prevCell) === null;
+  const foreignParentAbove = stepToArticleCell(rootCell, 'previous') !== null;
   if (detectReplyContext(rootArticle) || foreignParentAbove) return single;
 
-  // Down from the root, collecting the contiguous same-author run.
-  const spine: Element[] = [];
-  let cell: Element | null = rootCell;
-  while (cell !== null) {
-    const segment = sameAuthorArticle(cell);
-    if (segment === null) break;
+  // Down from the root, collecting the same-author run.
+  const spine: Element[] = [rootArticle];
+  let cell: Element = rootCell;
+  for (;;) {
+    const next = stepToArticleCell(cell, 'next');
+    const segment = sameAuthorArticle(next);
+    if (next === null || segment === null) break;
     spine.push(segment);
-    cell = cell.nextElementSibling;
+    cell = next;
   }
-  return spine.length === 0 ? single : spine;
+  return spine;
 }
 
 /**

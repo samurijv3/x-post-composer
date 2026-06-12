@@ -513,12 +513,24 @@ describe('collectSelfThreadSpine (thread capture, Phase 10)', () => {
     expect(collectSelfThreadSpine(a1)).toEqual([a1, a2]);
   });
 
-  it('an empty spacer cell stops the walk (conversation boundary)', () => {
+  it('article-less cells (the inline composer, dividers) are SKIPPED, not boundaries', () => {
+    // Field-found: X renders the reply composer directly under the
+    // focal tweet, so the root and its first reply are NOT adjacent
+    // cells. The walk must cross junk in both directions.
     setPath('/alice/status/100');
     const a1 = alice('100');
-    const stray = alice('300'); // unrelated tweet after a spacer
-    conversation(cell(a1), cell(null), cell(stray));
-    expect(collectSelfThreadSpine(a1)).toEqual([a1]);
+    const a2 = alice('101');
+    const a3 = alice('102');
+    conversation(cell(a1), cell(null), cell(a2), cell(null), cell(a3));
+    expect(collectSelfThreadSpine(a2)).toEqual([a1, a2, a3]); // up across junk finds the root
+  });
+
+  it('junk cells followed by a FOREIGN article still stop the walk', () => {
+    setPath('/alice/status/100');
+    const a1 = alice('100');
+    const a2 = alice('101');
+    conversation(cell(a1), cell(a2), cell(null), cell(bob('200')), cell(alice('103')));
+    expect(collectSelfThreadSpine(a1)).toEqual([a1, a2]);
   });
 
   it('a chain hanging under someone ELSE’s tweet is a threaded reply, not a thread', () => {
@@ -528,6 +540,13 @@ describe('collectSelfThreadSpine (thread capture, Phase 10)', () => {
     const r2 = alice('102');
     conversation(cell(parent), cell(r1), cell(r2));
     expect(collectSelfThreadSpine(r1)).toEqual([r1]);
+    // …including when junk cells separate the foreign parent.
+    document.body.replaceChildren();
+    const parent2 = bob('200');
+    const r3 = alice('103');
+    const r4 = alice('104');
+    conversation(cell(parent2), cell(null), cell(r3), cell(r4));
+    expect(collectSelfThreadSpine(r3)).toEqual([r3]);
   });
 
   it('a root wearing the Replying-to marker degrades to a single', () => {

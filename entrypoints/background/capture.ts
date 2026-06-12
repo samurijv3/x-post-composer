@@ -180,13 +180,22 @@ export async function handleCapturedThread(capture: RawThreadCapture): Promise<v
   };
 
   const bundleTarget = await getCaptureBundleTarget();
-  // Identity: the root's status id (record id), any segment id, or
-  // text — the thread-aware dedupe finds a previously-captured root
-  // or an earlier capture of this same thread and upgrades in place.
-  const existing = findLibraryDuplicate(await getAllItems(), {
-    statusId: rootStatusId,
-    text: joined,
-  });
+  // Identity: try the whole thread first (root id / joined text), then
+  // EACH segment — so a fuller re-capture finds and upgrades an
+  // earlier PARTIAL capture of the same thread (whose record id is a
+  // different segment's status id), and a previously hand-captured
+  // single segment promotes into the thread instead of duplicating.
+  const items = await getAllItems();
+  let existing = findLibraryDuplicate(items, { statusId: rootStatusId, text: joined });
+  if (!existing) {
+    for (const segment of capture.segments) {
+      existing = findLibraryDuplicate(items, {
+        statusId: segment.statusId,
+        text: segment.text,
+      });
+      if (existing) break;
+    }
+  }
   if (existing) {
     const priorSource = existing.source;
     const merged = mergeLibraryDuplicate(existing, item);
