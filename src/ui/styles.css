@@ -327,15 +327,18 @@ body {
   margin: 2px 0;
 }
 
+/* DE-CARDED (reskin phase 2): surfaces divide with hairlines, not
+   bordered containers. The class survives as a plain padding block
+   until each screen's phase rebuilds its layout. */
 .card {
-  background: var(--surface);
-  border: var(--card-border);
-  border-radius: var(--card-radius);
-  box-shadow: var(--card-shadow);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   padding: var(--pad-card);
 }
 .card.inset {
-  background: var(--inset);
+  background: transparent;
 }
 
 label.fld {
@@ -392,16 +395,16 @@ textarea::placeholder {
 .btn {
   font: inherit;
   font-size: var(--fs-base);
-  font-weight: 550;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 8px 13px;
-  border-radius: var(--r-sm);
+  padding: 7px 16px;
+  border-radius: var(--r-pill);
   cursor: pointer;
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
+  border: 1px solid var(--line-2);
+  background: transparent;
   color: var(--text);
   transition:
     background 0.12s,
@@ -410,7 +413,7 @@ textarea::placeholder {
     color 0.12s;
 }
 .btn:hover:not(:disabled) {
-  background: var(--surface-3);
+  background: var(--hover);
 }
 .btn:active {
   transform: translateY(0.5px);
@@ -433,8 +436,21 @@ textarea::placeholder {
   color: var(--text-2);
 }
 .btn.ghost:hover:not(:disabled) {
-  background: var(--surface-3);
+  background: var(--hover);
   color: var(--text);
+}
+/* The X-native monochrome pill — Voice/settings-side primaries
+   ("Save", "Save to Voice", "Export as JSON", "Done — next draft").
+   Inverts with the theme (black-on-light, white-on-dark), X's own
+   subscribe-pill pattern. Compose-side primaries stay blue. */
+.btn.dark {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+.btn.dark:hover:not(:disabled) {
+  background: var(--text);
+  opacity: 0.88;
 }
 .btn.primary {
   background: var(--accent);
@@ -469,8 +485,8 @@ textarea::placeholder {
   width: 100%;
 }
 .btn.lg {
-  padding: 11px 16px;
-  font-size: var(--fs-md);
+  padding: 9px 18px;
+  font-size: var(--fs-base);
 }
 .btn.danger {
   color: var(--danger);
@@ -498,20 +514,20 @@ textarea::placeholder {
 /* segmented control */
 .seg {
   display: flex;
-  padding: 3px;
-  gap: 3px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+  padding: 2px;
+  gap: 2px;
+  background: var(--field);
+  border: 0;
+  border-radius: var(--r-pill);
 }
 .seg button {
   flex: 1;
   font: inherit;
-  font-size: var(--fs-base);
-  font-weight: 600;
-  padding: 8px 10px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  padding: 6px 12px;
   border: 0;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-pill);
   cursor: pointer;
   background: transparent;
   color: var(--text-3);
@@ -529,12 +545,10 @@ textarea::placeholder {
   height: 16px;
 }
 .seg button.active {
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow-sm);
-}
-:is([data-theme='dim'], [data-theme='lights']) .seg button.active {
-  background: var(--surface-3);
+  /* Active = monochrome fill (X's mini-seg pattern), never blue. */
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: none;
 }
 
 /* pills + chips */
@@ -593,7 +607,7 @@ textarea::placeholder {
     transform 0.06s;
 }
 .chip:hover:not(:disabled) {
-  background: var(--accent-weak);
+  background: var(--hover);
   color: var(--accent);
   border-color: var(--accent-line);
 }
@@ -629,29 +643,27 @@ textarea::placeholder {
 }
 
 /* badges */
+/* Outline badges (reskin): tone lives in the TEXT color only — green
+   is status, never a fill; post/reply color coding retired. */
 .badge {
   font-size: var(--fs-xs);
   font-weight: 600;
-  letter-spacing: 0.03em;
   padding: 2px 8px;
   border-radius: var(--r-pill);
-  background: var(--surface-3);
+  background: transparent;
+  border: 1px solid var(--line-2);
   color: var(--text-2);
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
-.badge.post {
-  background: var(--ok-weak);
-  color: var(--ok);
-}
+.badge.post,
 .badge.reply {
-  background: var(--accent-weak);
-  color: var(--accent);
+  color: var(--text-2);
 }
 .badge.warn {
-  background: var(--warn-weak);
   color: var(--warn);
+  border-color: currentColor;
 }
 .badge.danger-badge {
   background: var(--danger-weak);
@@ -746,10 +758,11 @@ textarea::placeholder {
 .callout {
   font-size: var(--fs-sm);
   line-height: 1.55;
-  border-radius: var(--r-sm);
-  padding: 10px 12px;
+  border-radius: 0;
+  padding: 2px 0;
   display: flex;
   gap: 9px;
+  color: var(--text-2);
 }
 .callout svg {
   width: 16px;
@@ -757,15 +770,10 @@ textarea::placeholder {
   flex-shrink: 0;
   margin-top: 1px;
 }
-.callout.warn {
-  background: var(--warn-weak);
-  color: oklch(0.42 0.07 60);
+.callout.warn svg {
+  color: var(--warn);
 }
-:is([data-theme='dim'], [data-theme='lights']) .callout.warn {
-  color: oklch(0.85 0.08 80);
-}
-.callout.info {
-  background: var(--accent-weak);
+.callout.info svg {
   color: var(--accent);
 }
 .callout strong {
@@ -962,11 +970,11 @@ code {
   letter-spacing: 0.01em;
 }
 .tn-type-chip.post {
-  background: var(--ok-weak);
+  background: transparent;
   color: var(--ok);
 }
 .tn-type-chip.reply {
-  background: var(--accent-weak);
+  background: transparent;
   color: var(--accent);
 }
 .tn-text {
@@ -985,10 +993,10 @@ code {
   font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--accent);
-  padding: 6px 5px 6px 11px;
-  border: 1px solid var(--accent-line);
-  border-radius: var(--r-sm);
-  background: var(--accent-weak);
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .brief-ctx svg {
   width: 15px;
@@ -997,29 +1005,22 @@ code {
 }
 
 /* draft card (focal point) */
+/* DE-CARDED (reskin phase 2): the tinted draft card is gone; phase 3
+   rebuilds this as tweet anatomy (avatar, name line, ring). */
 .draft {
-  border: 1.5px solid var(--accent-line);
-  border-radius: var(--r-lg);
-  background: var(--accent-weak);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
-  box-shadow:
-    0 10px 30px color-mix(in oklab, var(--accent) 16%, transparent),
-    0 2px 8px oklch(0.4 0.02 260 / 0.08);
-}
-:is([data-theme='dim'], [data-theme='lights']) .draft {
-  background: var(--surface-2);
-  box-shadow: 0 14px 36px oklch(0 0 0 / 0.5);
+  box-shadow: none;
 }
 .draft-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 13px;
-  border-bottom: 1px solid var(--accent-line);
-  background: color-mix(in oklab, var(--accent-weak), transparent 30%);
-}
-:is([data-theme='dim'], [data-theme='lights']) .draft-head {
-  background: var(--surface-3);
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
 }
 .draft-head .eyebrow {
   color: var(--accent);
@@ -1224,16 +1225,10 @@ code {
 .error-card {
   display: flex;
   gap: 10px;
-  border-radius: var(--r);
-  padding: 12px 13px;
-}
-.error-card.danger {
-  background: var(--danger-weak);
-  border: 1px solid color-mix(in oklab, var(--danger) 40%, var(--border));
-}
-.error-card.warn {
-  background: var(--warn-weak);
-  border: 1px solid color-mix(in oklab, var(--warn) 40%, var(--border));
+  border-radius: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 .error-card .ec-ic {
   width: 20px;
@@ -1917,18 +1912,17 @@ code {
 }
 
 /* capture banner */
+/* DE-CARDED (reskin phase 2): a plain hairline row — no tinted band,
+   no green. Armed state lives in the pulsing blue dot alone. */
 .capture-banner {
-  border-radius: var(--r);
-  padding: 12px 13px;
-  border: 1px solid var(--border);
-  background: var(--inset);
+  border-radius: 0;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-.capture-banner.on {
-  border-color: color-mix(in oklab, var(--ok) 45%, var(--border));
-  background: var(--ok-weak);
 }
 .cb-top {
   display: flex;
@@ -1943,8 +1937,8 @@ code {
   flex-shrink: 0;
 }
 .capture-banner.on .cb-dot {
-  background: var(--ok);
-  box-shadow: 0 0 0 4px color-mix(in oklab, var(--ok) 28%, transparent);
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-weak);
   animation: pulse 1.8s ease-in-out infinite;
 }
 @keyframes pulse {
@@ -1960,14 +1954,19 @@ code {
 }
 
 /* save-result banners — six tones */
+/* DE-CARDED (reskin phase 2): notices are plain rows on the panel
+   background — the tone lives in the icon disc, never a band fill.
+   Phase 5 finishes the anatomy (30px discs, hairline division). */
 .save-result {
   position: relative;
   display: flex;
   gap: 11px;
   align-items: flex-start;
   padding: 12px 38px 12px 12px;
-  border-radius: var(--r);
-  border: 1px solid;
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
   overflow: hidden;
   animation: srin 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -1981,22 +1980,7 @@ code {
     transform: none;
   }
 }
-.save-result.ok {
-  background: var(--ok-weak);
-  border-color: color-mix(in oklab, var(--ok) 48%, var(--border));
-}
-.save-result.info {
-  background: var(--accent-weak);
-  border-color: var(--accent-line);
-}
-.save-result.danger {
-  background: var(--danger-weak);
-  border-color: color-mix(in oklab, var(--danger) 48%, var(--border));
-}
-.save-result.warn {
-  background: var(--warn-weak);
-  border-color: color-mix(in oklab, var(--warn) 50%, var(--border));
-}
+/* Tone variants carry no fill — the .sr-ic disc says it all. */
 .sr-ic {
   width: 26px;
   height: 26px;
@@ -2278,13 +2262,13 @@ code {
   height: 17px;
 }
 .opt-nav-btn:hover {
-  background: var(--surface-2);
+  background: var(--hover);
   color: var(--text);
 }
 .opt-nav-btn.active {
-  background: var(--accent-weak);
-  color: var(--accent);
-  font-weight: 650;
+  background: var(--hover);
+  color: var(--text);
+  font-weight: 700;
 }
 .opt-foot {
   font-size: var(--fs-xs);
@@ -2534,7 +2518,8 @@ code {
   height: 11px;
 }
 .slot.ok {
-  background: var(--ok-weak);
+  background: transparent;
+  border-color: currentColor;
   color: var(--ok);
 }
 .slot.missing {
@@ -2724,7 +2709,8 @@ code {
   cursor: default;
 }
 .badge.ok {
-  background: color-mix(in oklab, var(--ok) 14%, transparent);
+  background: transparent;
+  border-color: currentColor;
   color: var(--ok);
 }
 
@@ -2732,20 +2718,19 @@ code {
    draft takes over the canvas. */
 .brief-peek {
   font: inherit;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   font-weight: 600;
-  letter-spacing: 0.01em;
-  padding: 2px 8px;
-  border-radius: var(--r-pill);
+  padding: 2px 0;
+  border-radius: 0;
   border: 0;
-  background: var(--accent-weak);
+  background: transparent;
   color: var(--accent);
   cursor: pointer;
   white-space: nowrap;
   flex: 0 0 auto;
 }
 .brief-peek:hover {
-  background: var(--accent-weak-2);
+  text-decoration: underline;
 }
 .brief-ctx-toggle {
   font: inherit;
