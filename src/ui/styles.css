@@ -1692,7 +1692,15 @@ code {
   flex-direction: column;
   gap: 8px;
 }
-/* The compose-side voice-seed picker. */
+/* The compose-side voice-seed picker (+ its zero-bundles hint). */
+.bundle-seed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.seed-hint {
+  padding-left: 2px;
+}
 .bundle-pick {
   display: flex;
   align-items: center;

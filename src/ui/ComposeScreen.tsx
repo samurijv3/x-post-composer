@@ -781,10 +781,11 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
   // describes the CURRENT draft's seed. A seed whose bundle was
   // deleted resolves to null — the note hides, matching the fact that
   // copying would no longer file anywhere.
-  const bundlePicker: BundlePickerControls | null =
-    bundleOptions.length === 0
-      ? null
-      : { bundles: bundleOptions, selectedId: seedBundleId, onSelect: setSeedBundleId };
+  const bundlePicker: BundlePickerControls = {
+    bundles: bundleOptions,
+    selectedId: seedBundleId,
+    onSelect: setSeedBundleId,
+  };
   const seedBundleName =
     content?.seedBundleId != null
       ? (bundleOptions.find((b) => b.id === content.seedBundleId)?.name ?? null)

@@ -48,10 +48,11 @@ export interface BundleOption {
   memberCount: number;
 }
 
-/** The voice-seed picker (Phase 6). ComposeScreen passes null when no
- *  bundles exist, hiding the control entirely — a power feature stays
- *  out of the default path. `selectedId` drives the NEXT generation;
- *  an active draft's own seed is shown separately from its content. */
+/** The voice-seed picker (Phase 6). Always rendered — with zero
+ *  bundles it shows the default-sample option plus a create-one-in-
+ *  Voice hint, so the feature is discoverable before it's usable.
+ *  `selectedId` drives the NEXT generation; an active draft's own seed
+ *  is shown separately from its content. */
 export interface BundlePickerControls {
   bundles: BundleOption[];
   selectedId: string | null;

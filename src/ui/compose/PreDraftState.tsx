@@ -16,7 +16,7 @@ interface PreDraftProps {
   reply: ReplyContextControls;
   brief: BriefControls;
   /** Null when no bundles exist — the picker hides entirely. */
-  bundlePicker: BundlePickerControls | null;
+  bundlePicker: BundlePickerControls;
   /** Null while a reply context exists (threads are posts-only v1). */
   threadControls: ThreadModeControls | null;
   busy: boolean;
@@ -42,7 +42,7 @@ export function PreDraftState({
 }: PreDraftProps) {
   const hasContext = reply.replyContext !== null;
   const canGenerate = brief.bullets.trim() !== '' && !busy;
-  const seedBundle = bundlePicker?.bundles.find((b) => b.id === bundlePicker.selectedId) ?? null;
+  const seedBundle = bundlePicker.bundles.find((b) => b.id === bundlePicker.selectedId) ?? null;
   return (
     <>
       {/* The grounding cluster: what to react to (reply context) and
@@ -57,7 +57,7 @@ export function PreDraftState({
             onToggle={reply.onToggleReplyContextMode}
           />
         )}
-        {bundlePicker && <BundlePicker picker={bundlePicker} />}
+        <BundlePicker picker={bundlePicker} />
         {threadControls && <ModeControls controls={threadControls} />}
       </div>
 

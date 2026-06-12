@@ -73,7 +73,7 @@ interface DraftStateProps {
   refine: RefineControls;
   /** Null when no bundles exist. Shown in the expanded brief so a
    *  regenerate can switch or drop the seed. */
-  bundlePicker: BundlePickerControls | null;
+  bundlePicker: BundlePickerControls;
   /** Name of the bundle that seeded the CURRENT draft (its content's
    *  seedBundleId resolved by ComposeScreen), or null when sampled.
    *  Distinct from the picker, which drives the NEXT generation. */
@@ -249,7 +249,7 @@ export function DraftState({
           )}
           {/* Same grounding cluster as PreDraftState: the seed sits
               with the context, above the angle. */}
-          {bundlePicker && <BundlePicker picker={bundlePicker} />}
+          <BundlePicker picker={bundlePicker} />
           <label className="fld">
             <span className="fld-label">
               {hasContext ? 'Your angle' : 'What do you want to say?'}
