@@ -322,6 +322,42 @@ export function isXModalOpen(): boolean {
 }
 
 /**
+ * Step from `current` to the adjacent tweet article in DOM order —
+ * the brain of arrow-key navigation in capture modes. Modal-aware:
+ * while X has a modal open, stepping is confined to modal-resident
+ * articles (the same layer scoping as overlay painting); otherwise to
+ * page-layer articles. A null, disconnected, or out-of-layer `current`
+ * starts from the viewport: stepping down picks the first article not
+ * yet scrolled past, stepping up the last one on screen (with the
+ * list's edges as fallback). Returns null at the rendered list's
+ * edges — the caller lets the keypress scroll natively, which makes
+ * X's virtualization render more articles for the next press.
+ */
+export function stepToAdjacentArticle(current: Element | null, direction: 1 | -1): Element | null {
+  const scope = isXModalOpen() ? 'modal' : 'page';
+  const articles = Array.from(document.querySelectorAll('article[data-testid="tweet"]')).filter(
+    (article) => articleInLayer(article, scope),
+  );
+  if (articles.length === 0) return null;
+  const index = current === null ? -1 : articles.indexOf(current);
+  if (index === -1) {
+    // No cursor yet — start at the viewport, not the document top.
+    // (happy-dom rects are all zero, so fixtures pin the edge
+    // fallbacks; the viewport refinement is field behavior.)
+    if (direction === 1) {
+      return articles.find((a) => a.getBoundingClientRect().bottom > 60) ?? articles[0] ?? null;
+    }
+    const viewportBottom = (window.innerHeight || 0) - 60;
+    return (
+      [...articles].reverse().find((a) => a.getBoundingClientRect().top < viewportBottom) ??
+      articles[articles.length - 1] ??
+      null
+    );
+  }
+  return articles[index + direction] ?? null;
+}
+
+/**
  * Position-based reply detection — STATUS DETAIL PAGES ONLY. There,
  * vertical order genuinely encodes the conversation: everything below
  * the focal tweet is a reply, and X omits the textual "Replying to"

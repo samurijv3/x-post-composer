@@ -45,6 +45,7 @@ import {
   isXModalOpen,
   collectSelfThreadSpine,
   extractThread,
+  stepToAdjacentArticle,
 } from './extract';
 import { createOverlaySystem } from './overlay';
 
@@ -293,9 +294,17 @@ export default defineContentScript({
     });
 
     // ---------------------------------------------------------------
-    // Hover detection — drives preview overlay
+    // Hover detection — drives preview overlay. The same cursor is
+    // ALSO driven by arrow keys (below); the two hand off naturally:
+    // real mouse movement always wins, but the synthetic mouseover
+    // Chrome fires when OUR scrollIntoView slides the page under a
+    // stationary pointer must not snap the cursor back to the mouse —
+    // hence the unmoved-coords suppression window after a key step.
     // ---------------------------------------------------------------
     let hoveredArticle: Element | null = null;
+    let lastPointerX = -1;
+    let lastPointerY = -1;
+    let keyboardNavUntil = 0;
 
     document.addEventListener('mouseover', (event) => {
       // No mode active or panel closed → no preview, no work to do.
@@ -304,6 +313,14 @@ export default defineContentScript({
       // previews its dead click handler can never act on — probing
       // flips extensionAlive, and the rAF loop tears everything down.
       if (captureMode === 'none' || !panelOpen || !isAlive()) return;
+      // Scroll-induced mouseover (pointer didn't actually move) right
+      // after an arrow step is our own scrollIntoView echoing back —
+      // ignore it. Wheel-scroll hover updates outside the window keep
+      // working; any genuine pointer movement takes over immediately.
+      const pointerMoved = event.clientX !== lastPointerX || event.clientY !== lastPointerY;
+      lastPointerX = event.clientX;
+      lastPointerY = event.clientY;
+      if (!pointerMoved && Date.now() < keyboardNavUntil) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       const article = target.closest('article[data-testid="tweet"]');
@@ -374,6 +391,58 @@ export default defineContentScript({
           runLibraryCapture(article);
         } else if (captureMode === 'reply-context') {
           runReplyContextSelect(article);
+        }
+      },
+      { capture: true },
+    );
+
+    // ---------------------------------------------------------------
+    // Keyboard navigation — ↑/↓ move the hover cursor, Enter is the
+    // click. Active ONLY while a capture mode is on (the same carve as
+    // click interception: an explicitly-armed mode changes how input
+    // acts on this page, visibly). Hard guards: never while focus is
+    // in an editable field, never with modifiers held. At the rendered
+    // list's edges the press deliberately passes through — the native
+    // scroll makes X's virtualization render more tweets, so the next
+    // press continues.
+    // ---------------------------------------------------------------
+    function isEditableTarget(target: EventTarget | null): boolean {
+      if (!(target instanceof Element)) return false;
+      return (
+        target.closest(
+          'input, textarea, select, [contenteditable="true"], [role="textbox"], [role="combobox"]',
+        ) !== null
+      );
+    }
+
+    document.addEventListener(
+      'keydown',
+      (event) => {
+        if (captureMode === 'none' || !panelOpen || !isAlive()) return;
+        if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+        if (event.isComposing) return;
+        if (isEditableTarget(event.target)) return;
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          const cursor =
+            hoveredArticle !== null && hoveredArticle.isConnected ? hoveredArticle : null;
+          const next = stepToAdjacentArticle(cursor, event.key === 'ArrowDown' ? 1 : -1);
+          if (next === null) return;
+          event.preventDefault();
+          event.stopPropagation();
+          hoveredArticle = next;
+          applyOverlayState();
+          keyboardNavUntil = Date.now() + 600;
+          next.scrollIntoView({ block: 'center' });
+        } else if (event.key === 'Enter') {
+          if (hoveredArticle === null || !hoveredArticle.isConnected) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (captureMode === 'library') {
+            runLibraryCapture(hoveredArticle);
+          } else if (captureMode === 'reply-context') {
+            runReplyContextSelect(hoveredArticle);
+          }
         }
       },
       { capture: true },

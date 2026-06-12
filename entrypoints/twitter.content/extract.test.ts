@@ -19,6 +19,7 @@ import {
   readStatusId,
   readTimestamp,
   readVisibleText,
+  stepToAdjacentArticle,
 } from './extract';
 
 /**
@@ -253,6 +254,55 @@ describe('detectReplyByDomStructure', () => {
     const post = tweetArticle({ statusId: '2' });
     document.body.append(cell(above), cell(post));
     expect(detectReplyByDomStructure(post)).toBe(false);
+  });
+});
+
+describe('stepToAdjacentArticle (arrow-key navigation)', () => {
+  it('walks rendered articles in DOM order, both directions', () => {
+    const a = tweetArticle({ statusId: '1' });
+    const b = tweetArticle({ statusId: '2' });
+    const c = tweetArticle({ statusId: '3' });
+    document.body.append(cell(a), cell(b), cell(c));
+    expect(stepToAdjacentArticle(a, 1)).toBe(b);
+    expect(stepToAdjacentArticle(b, 1)).toBe(c);
+    expect(stepToAdjacentArticle(b, -1)).toBe(a);
+  });
+
+  it('returns null at the rendered edges (the caller lets the press scroll natively)', () => {
+    const a = tweetArticle({ statusId: '1' });
+    const b = tweetArticle({ statusId: '2' });
+    document.body.append(cell(a), cell(b));
+    expect(stepToAdjacentArticle(b, 1)).toBeNull();
+    expect(stepToAdjacentArticle(a, -1)).toBeNull();
+  });
+
+  it('with no cursor, falls back to the list edges per direction', () => {
+    const a = tweetArticle({ statusId: '1' });
+    const b = tweetArticle({ statusId: '2' });
+    document.body.append(cell(a), cell(b));
+    // happy-dom rects are all zero, so the viewport refinement defers
+    // to the fallbacks: first going down, last going up.
+    expect(stepToAdjacentArticle(null, 1)).toBe(a);
+    expect(stepToAdjacentArticle(null, -1)).toBe(b);
+  });
+
+  it('treats a disconnected cursor as no cursor', () => {
+    const a = tweetArticle({ statusId: '1' });
+    const gone = tweetArticle({ statusId: '9' }); // never appended
+    document.body.append(cell(a));
+    expect(stepToAdjacentArticle(gone, 1)).toBe(a);
+  });
+
+  it('is confined to the modal layer while a modal is open', () => {
+    const dialog = fromHTML('<div role="dialog" aria-modal="true"></div>');
+    const m1 = tweetArticle({ statusId: '10' });
+    const m2 = tweetArticle({ statusId: '11' });
+    dialog.append(m1, m2);
+    const pageArticle = tweetArticle({ statusId: '12' });
+    document.body.append(dialog, cell(pageArticle));
+    expect(stepToAdjacentArticle(m1, 1)).toBe(m2);
+    expect(stepToAdjacentArticle(m2, 1)).toBeNull(); // never escapes to the page
+    expect(stepToAdjacentArticle(pageArticle, 1)).toBe(m1); // out-of-layer cursor restarts in the modal
   });
 });
 
