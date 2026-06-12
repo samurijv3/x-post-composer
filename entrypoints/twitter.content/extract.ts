@@ -321,24 +321,32 @@ export function isXModalOpen(): boolean {
   return document.querySelector('[aria-modal="true"]') !== null;
 }
 
+/**
+ * Position-based reply detection — STATUS DETAIL PAGES ONLY. There,
+ * vertical order genuinely encodes the conversation: everything below
+ * the focal tweet is a reply, and X omits the textual "Replying to"
+ * line because the parent is visually present.
+ *
+ * On feeds (profile, home, with_replies) this deliberately returns
+ * false. A previous branch treated "previous cell holds a tweet" as
+ * a parent there, assuming X separates unrelated stream tweets with
+ * empty spacer cells — field-falsified 2026-06-12: profile streams
+ * render adjacent tweets in adjacent non-empty cells, so every post
+ * below the first classified as a reply. On feeds the "Replying to"
+ * marker (classifyType signal 1) is the only signal we trust; a
+ * paired reply rendered without it classifies as 'post', and the
+ * Voice tab override is the recourse for that rarer, milder miss.
+ */
 export function detectReplyByDomStructure(article: Element): boolean {
   const statusMatch = /^\/[^/]+\/status\/(\d+)/.exec(window.location.pathname);
-  if (statusMatch) {
-    const urlStatusId = statusMatch[1];
-    const articleStatusId = readStatusId(article);
-    if (articleStatusId !== null && articleStatusId !== urlStatusId) {
-      return true;
-    }
-    const allArticles = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
-    return allArticles.indexOf(article) > 0;
+  if (!statusMatch) return false;
+  const urlStatusId = statusMatch[1];
+  const articleStatusId = readStatusId(article);
+  if (articleStatusId !== null && articleStatusId !== urlStatusId) {
+    return true;
   }
-  const cell = article.closest('[data-testid="cellInnerDiv"]');
-  if (!cell) return false;
-  const prevCell = cell.previousElementSibling;
-  if (!prevCell) return false;
-  if (prevCell.querySelector('article[data-testid="tweet"]')) return true;
-  const sep = prevCell.textContent?.trim() ?? '';
-  return sep === 'Show more replies' || sep === 'Show this thread';
+  const allArticles = Array.from(document.querySelectorAll('article[data-testid="tweet"]'));
+  return allArticles.indexOf(article) > 0;
 }
 
 /**

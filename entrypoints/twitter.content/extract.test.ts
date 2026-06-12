@@ -243,18 +243,15 @@ describe('detectReplyByDomStructure', () => {
     expect(detectReplyByDomStructure(focal)).toBe(false);
   });
 
-  it('on a feed, a tweet whose previous cell holds a tweet is a reply', () => {
+  it('on a feed, stream adjacency is NOT a reply signal (field bug 2026-06-12)', () => {
+    // Profile streams render unrelated tweets in adjacent non-empty
+    // cells — position means nothing there. A standalone post below
+    // another post must classify as a post; only the "Replying to"
+    // marker (a different classify signal) may say reply on feeds.
     setPath('/alice/with_replies');
-    const parent = tweetArticle({ statusId: '1' });
-    const child = tweetArticle({ statusId: '2' });
-    document.body.append(cell(parent), cell(child));
-    expect(detectReplyByDomStructure(child)).toBe(true);
-  });
-
-  it('on a feed, an empty spacer cell above means standalone post', () => {
-    setPath('/alice/with_replies');
-    const post = tweetArticle({ statusId: '3' });
-    document.body.append(cell(null), cell(post));
+    const above = tweetArticle({ statusId: '1' });
+    const post = tweetArticle({ statusId: '2' });
+    document.body.append(cell(above), cell(post));
     expect(detectReplyByDomStructure(post)).toBe(false);
   });
 });

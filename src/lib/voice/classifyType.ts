@@ -25,12 +25,12 @@ export interface TweetContext {
   hasReplyContextNode: boolean;
   /** The parent status id when visible in the DOM. Null when absent. */
   inReplyToStatusId: string | null;
-  /** Set by the content script when the captured article's wrapping
-   *  `cellInnerDiv` is preceded by another cellInnerDiv that itself
-   *  contains a tweet `<article>`. X uses an empty cellInnerDiv as a
-   *  spacer between unrelated tweets, so a non-empty previous cell is
-   *  the parent of a reply (or a self-thread head). Works across
-   *  `/with_replies`, profile timelines, and status detail pages. */
+  /** Set by the content script ONLY on `/handle/status/id` detail
+   *  pages, where vertical order genuinely encodes the conversation
+   *  (everything below the focal tweet is a reply). Always false on
+   *  feeds: profile/home streams render unrelated tweets in adjacent
+   *  non-empty cells, so position means nothing there (field-falsified
+   *  2026-06-12) — on feeds, signal 1 is the only reply signal. */
   isPrecededByParentArticle: boolean;
 }
 
