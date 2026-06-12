@@ -124,6 +124,64 @@ describe('selectExamples — the star pool', () => {
   });
 });
 
+describe('selectExamples — bundle-seeded (Phase 6)', () => {
+  it('bundle members ARE the voice pool — verbatim, in bundle order, unshuffled', () => {
+    const lib = [
+      item('a', 'post'),
+      item('b', 'post'),
+      item('c', 'post'),
+      ...Array.from({ length: 20 }, (_, n) => item(`p${String(n)}`, 'post')),
+    ];
+    const out = selectExamples('post', {}, lib, opts({ bundleMemberIds: ['c', 'a', 'b'] }));
+    expect(out.voice.map((i) => i.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('runs lean under budget — never tops up from the general pool', () => {
+    const lib = [
+      item('m1', 'post'),
+      ...Array.from({ length: 30 }, (_, n) => item(`p${String(n)}`, 'post')),
+    ];
+    const out = selectExamples('post', {}, lib, opts({ poolSize: 20, bundleMemberIds: ['m1'] }));
+    expect(out.voice.map((i) => i.id)).toEqual(['m1']);
+  });
+
+  it('takes every member over budget — an explicit selection is its own budget', () => {
+    const memberIds = Array.from({ length: 12 }, (_, n) => `m${String(n)}`);
+    const lib = memberIds.map((id) => item(id, 'post'));
+    const out = selectExamples('post', {}, lib, opts({ poolSize: 5, bundleMemberIds: memberIds }));
+    expect(out.voice).toHaveLength(12);
+  });
+
+  it('does not mode-filter members — the user picked every one', () => {
+    const lib = [item('r1', 'reply'), item('p1', 'post')];
+    const out = selectExamples('post', {}, lib, opts({ bundleMemberIds: ['r1', 'p1'] }));
+    expect(out.voice.map((i) => i.id)).toEqual(['r1', 'p1']);
+  });
+
+  it('drops dangling ids, preserving the order of the rest', () => {
+    const lib = [item('a', 'post'), item('b', 'post')];
+    const out = selectExamples('post', {}, lib, opts({ bundleMemberIds: ['b', 'deleted', 'a'] }));
+    expect(out.voice.map((i) => i.id)).toEqual(['b', 'a']);
+  });
+
+  it('stars still ride on top, minus bundle members (the bundle keeps its items)', () => {
+    const lib = [
+      item('s1', 'post', { favorite: true }),
+      item('s2', 'post', { favorite: true }),
+      item('m1', 'post'),
+    ];
+    const out = selectExamples('post', {}, lib, opts({ bundleMemberIds: ['m1', 's1'] }));
+    expect(out.voice.map((i) => i.id)).toEqual(['m1', 's1']); // starred member stays a member
+    expect(ids(out.aspirational)).toEqual(['s2']); // only the non-member star
+  });
+
+  it('an empty (or all-dangling) bundle runs with no voice examples — not a sample', () => {
+    const lib = Array.from({ length: 10 }, (_, n) => item(`p${String(n)}`, 'post'));
+    const out = selectExamples('post', {}, lib, opts({ bundleMemberIds: [] }));
+    expect(out.voice).toEqual([]);
+  });
+});
+
 describe('selectExamples — curated/archive tiers', () => {
   const curatedN = (n: number) =>
     Array.from({ length: n }, (_, i) => item(`c${String(i)}`, 'post', { source: 'manual' }));
