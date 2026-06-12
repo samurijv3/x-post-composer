@@ -27,6 +27,7 @@ import {
   reduceDraftLifecycle,
   stripBulletPrefixes,
 } from '../lib/draft';
+import { DEFAULT_THREAD_TARGET, joinSegments } from '../lib/thread';
 import type {
   ChipPreset,
   GenerationRequest,
@@ -44,6 +45,7 @@ import type {
   BundleOption,
   BundlePickerControls,
   ReplyContextControls,
+  ThreadModeControls,
 } from './compose/types';
 
 interface Props {
@@ -200,6 +202,11 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
 
   // ---- composition state ----
   const [bullets, setBullets] = useState<string>('');
+  // Thread mode (Phase 10): the post↔thread switch + the ≈N target.
+  // Reply context forces single-tweet reply mode (posts-only threads),
+  // so the effective request mode derives from both.
+  const [composeMode, setComposeMode] = useState<'single' | 'thread'>('single');
+  const [threadTarget, setThreadTarget] = useState<number>(DEFAULT_THREAD_TARGET);
   // The draft lifecycle (empty → generating → active → committed) is a
   // pure reducer in lib/draft — every consequential transition,
   // including stale-request gating and both undo scopes, is decided
@@ -240,7 +247,6 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
 
   const hasContext = replyContext !== null;
   const content = lifecycle.content;
-  const draft = content?.posts[0]?.text ?? '';
   const hasDraft = lifecycle.phase !== 'empty';
   const busy = lifecycle.phase === 'generating';
 
@@ -339,8 +345,9 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     setShipToVoice(saveShippedDefaultRef.current);
     setFileToBundle(true);
     dispatchDraft({ type: 'generation-started', seq: myId });
+    const effectiveMode = hasContext ? 'reply' : composeMode === 'thread' ? 'thread' : 'post';
     const request: GenerationRequest = {
-      mode: hasContext ? 'reply' : 'post',
+      mode: effectiveMode,
       bullets,
       charCap,
       replyContext: hasContext ? replyContext : null,
@@ -350,6 +357,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
       // The picker's selection seeds THIS generation; the background
       // resolves it (and errors honestly if it was just deleted).
       bundleId: seedBundleId,
+      ...(effectiveMode === 'thread' && { targetCount: threadTarget }),
     };
     try {
       const reply = await sendToBackground<
@@ -432,6 +440,9 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     if (!next || busy) return;
     const lc = lifecycleRef.current;
     if (lc.phase !== 'active' || lc.content === null) return;
+    // Thread reshaping on cap-flip is wired with the repack (next
+    // commit) — flipping the cap pre-wiring is just a setting.
+    if (lc.content.kind === 'thread') return;
     if (weightedLength(lc.content.posts[0]?.text ?? '') <= X_HARD_LIMIT) return; // already fits
     // REFIT, never regenerate: the draft's content is the fixed point.
     onToast('Refitting to \u2264280 \u2014 same draft, shorter');
@@ -440,12 +451,17 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
 
   async function runRefine(kind: RefineRequest['kind'], capOverride?: boolean): Promise<void> {
     const myId = ++requestSeq.current;
-    // Refine reshapes the CURRENT text — hand edits included. Only the
-    // model's output gets re-checked; the user's words went in as-is.
-    const previousDraftText = lifecycleRef.current.content?.posts[0]?.text ?? '';
+    // Refine reshapes the CURRENT draft — hand edits included; threads
+    // travel joined in the --- wire format. Only the model's output
+    // gets re-checked; the user's words went in as-is.
+    const current = lifecycleRef.current.content;
+    const isThreadDraft = current?.kind === 'thread';
+    const previousDraftText = isThreadDraft
+      ? joinSegments(current.posts.map((p) => p.text))
+      : (current?.posts[0]?.text ?? '');
     dispatchDraft({ type: 'refine-started', seq: myId });
     const request: RefineRequest = {
-      mode: hasContext ? 'reply' : 'post',
+      mode: isThreadDraft ? 'thread' : hasContext ? 'reply' : 'post',
       previousDraftText,
       // The refit fires in the same tick as the toggle flip, before the
       // charCap state has re-rendered — the caller passes the new value.
@@ -471,38 +487,75 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     setChipCounts({});
   }
 
-  function editDraft(text: string): void {
-    dispatchDraft({ type: 'hand-edited', postIndex: 0, text });
+  function editPost(postIndex: number, text: string): void {
+    dispatchDraft({ type: 'hand-edited', postIndex, text });
   }
 
-  const copy = useCallback(async (): Promise<void> => {
-    const current = lifecycleRef.current;
-    if (current.content === null || current.phase === 'generating') return;
-    try {
-      const text = current.content.posts[0]?.text ?? '';
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      // Copy signals two separate facts: post-copied(0) commits a
-      // single immediately (the N=1 case of the all-copied rule), and
-      // the corpus EVENT fires — Phase 4's shipped-tweet loop
-      // subscribes via onDraftCommit.
-      dispatchDraft({ type: 'post-copied', postIndex: 0 });
-      emitDraftCommit({
-        text,
-        segments: null,
-        mode: replyContextRef.current !== null ? 'reply' : 'post',
-        handEdited: current.content.handEdited,
-        // Explicit provenance, read from the draft itself — never
-        // inferred from the picker, which may have moved on.
-        seedBundleId: current.content.seedBundleId,
-        committedAt: Date.now(),
-      });
-      onToast('Copied to clipboard');
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      onToast('Could not copy.');
-    }
-  }, [onToast]);
+  // Copy ONE post — clipboard + the lifecycle's post-copied. The
+  // corpus event fires from the committed-transition effect below, so
+  // copying here is deliberately side-effect-light.
+  const copyPost = useCallback(
+    async (postIndex: number): Promise<void> => {
+      const current = lifecycleRef.current;
+      if (current.content === null || current.phase === 'generating') return;
+      const text = current.content.posts[postIndex]?.text;
+      if (text === undefined) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        dispatchDraft({ type: 'post-copied', postIndex });
+        onToast(
+          current.content.kind === 'thread'
+            ? `Copied post ${String(postIndex + 1)}/${String(current.content.posts.length)}`
+            : 'Copied to clipboard',
+        );
+        window.setTimeout(() => setCopied(false), 1500);
+      } catch {
+        onToast('Could not copy.');
+      }
+    },
+    [onToast],
+  );
+
+  // Copy-next: the single draft's one post, or the first uncopied post
+  // of a thread — the ⌃⇧↵ shortcut and the big button share this
+  // (sequential paste-into-X workflow). All-copied re-copies post 1,
+  // which is idempotent.
+  const copyNext = useCallback(async (): Promise<void> => {
+    const content = lifecycleRef.current.content;
+    if (content === null) return;
+    const next = content.posts.findIndex((post) => !post.copied);
+    await copyPost(next === -1 ? 0 : next);
+  }, [copyPost]);
+
+  // The corpus half of "done": fire the commit EVENT exactly when the
+  // lifecycle crosses into committed (every post copied since its last
+  // change). Singles cross on their one copy; threads on the last
+  // card. Re-copying an unchanged committed draft doesn't re-cross, so
+  // nothing double-fires; editing un-commits, and the next full copy
+  // crosses again (the dedupe downstream makes that refresh, not a
+  // duplicate).
+  const prevPhaseRef = useRef(lifecycle.phase);
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    prevPhaseRef.current = lifecycle.phase;
+    if (lifecycle.phase !== 'committed' || prev === 'committed') return;
+    const content = lifecycleRef.current.content;
+    if (content === null) return;
+    const isThread = content.kind === 'thread';
+    const texts = content.posts.map((post) => post.text);
+    emitDraftCommit({
+      text: isThread ? joinSegments(texts) : (texts[0] ?? ''),
+      segments: isThread ? texts : null,
+      mode: isThread ? 'thread' : replyContextRef.current !== null ? 'reply' : 'post',
+      handEdited: content.handEdited,
+      // Explicit provenance, read from the draft itself — never
+      // inferred from the picker, which may have moved on.
+      seedBundleId: content.seedBundleId,
+      committedAt: Date.now(),
+    });
+    if (isThread) onToast('All posts copied — thread committed');
+  }, [lifecycle.phase, onToast]);
 
   // The Phase 4 corpus loop listener: the commit hook fires on copy;
   // when the global setting AND the per-draft override allow, the
@@ -540,11 +593,11 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
       if (e.key !== 'Enter' || !(e.metaKey || e.ctrlKey) || !e.shiftKey) return;
       e.preventDefault();
       e.stopPropagation();
-      void copy();
+      void copyNext();
     }
     window.addEventListener('keydown', onKey, { capture: true });
     return () => window.removeEventListener('keydown', onKey, { capture: true });
-  }, [copy]);
+  }, [copyNext]);
 
   function discard(): void {
     dispatchDraft({ type: 'discarded' });
@@ -609,8 +662,6 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     }
   }
 
-  const count = weightedLength(draft);
-  const over = charCap && count > X_HARD_LIMIT;
   const briefText =
     stripBulletPrefixes(bullets)
       .trim()
@@ -635,16 +686,34 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     onGenKey: genKey,
   };
   const draftView: DraftView = {
-    text: draft,
-    residualViolations: content?.posts[0]?.residualViolations ?? [],
+    kind: content?.kind ?? 'single',
+    posts: (content?.posts ?? []).map((post) => {
+      const count = weightedLength(post.text);
+      return {
+        text: post.text,
+        residualViolations: post.residualViolations,
+        copied: post.copied,
+        count,
+        over: charCap && count > X_HARD_LIMIT,
+      };
+    }),
     refined: lifecycle.refineSnapshot !== null,
     handEdited: content?.handEdited ?? false,
     committed: lifecycle.phase === 'committed',
-    count,
-    over,
     copied,
     canUndo: lifecycle.refineSnapshot !== null,
   };
+  // Thread controls hide while a reply context exists — threads are
+  // standalone posts in v1, so reply mode forces single composition.
+  const threadControls: ThreadModeControls | null = hasContext
+    ? null
+    : {
+        composeMode,
+        onSetMode: setComposeMode,
+        target: threadTarget,
+        onSetTarget: setThreadTarget,
+        busy,
+      };
   // The picker drives the NEXT generation; the note in DraftState
   // describes the CURRENT draft's seed. A seed whose bundle was
   // deleted resolves to null — the note hides, matching the fact that
@@ -677,6 +746,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
           reply={reply}
           brief={brief}
           bundlePicker={bundlePicker}
+          threadControls={threadControls}
           busy={busy}
           libraryCount={libraryCount}
           error={error}
@@ -694,18 +764,20 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
           seedBundleName={seedBundleName}
           fileToBundle={fileToBundle}
           onToggleFileToBundle={() => setFileToBundle((v) => !v)}
+          threadControls={threadControls}
           briefText={briefText}
           busy={busy}
           expanded={expanded}
           setExpanded={setExpanded}
           error={error}
-          onEditDraft={editDraft}
+          onEditPost={editPost}
           shipToVoice={saveShippedDefault ? shipToVoice : null}
           onToggleShipToVoice={() => setShipToVoice((v) => !v)}
           onRegenerate={() => void generate({ isRegenerate: true })}
           onPolish={() => void applyPolish()}
           onUndo={undo}
-          onCopy={() => void copy()}
+          onCopy={() => void copyNext()}
+          onCopyPost={(i) => void copyPost(i)}
           onDiscard={discard}
           onRetry={retry}
           onOpenOptions={onOpenOptions}

@@ -1558,6 +1558,80 @@ code {
 .bundle-create .field-row {
   margin-top: 4px;
 }
+/* ---- thread mode (Phase 10) ---- */
+
+.mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.thread-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.thread-target .tt-step {
+  width: 24px;
+  height: 24px;
+}
+.tt-count {
+  min-width: 18px;
+  text-align: center;
+  font-size: var(--fs-base);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Thread drafts as ordered cards — one per post, X-composer style. */
+.thread-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.thread-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 8px 10px 10px;
+  background: var(--surface);
+}
+/* The connector line between cards — the thread visual. */
+.thread-card + .thread-card::before {
+  content: '';
+  position: absolute;
+  left: 22px;
+  top: -11px;
+  height: 10px;
+  width: 2px;
+  background: var(--accent-line);
+}
+.thread-card.tc-copied {
+  border-color: color-mix(in oklab, var(--ok) 45%, var(--border));
+}
+.tc-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.tc-ordinal {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.tc-copy {
+  width: 26px;
+  height: 26px;
+}
+.thread-card.tc-copied .tc-copy {
+  color: var(--ok);
+}
+
 /* The grounding cluster: reply context + voice seed, tighter than the
    screen gap so the two anchors read as one group. */
 .grounding {

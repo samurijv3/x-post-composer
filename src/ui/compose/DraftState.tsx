@@ -1,8 +1,9 @@
 import { useState, type KeyboardEvent } from 'react';
 import type { ChipPreset } from '../../types';
-import type { Span } from '../../lib/exclusion';
 import { X_HARD_LIMIT } from '../../lib/counting';
 import { DraftEditor } from './DraftEditor';
+import { ModeControls } from './ModeControls';
+import { ThreadCards, type DraftPostViewModel } from './ThreadCards';
 import { LastPromptInspector } from '../LastPromptInspector';
 import {
   IcCheck,
@@ -22,21 +23,28 @@ import { CapToggle } from './CapToggle';
 import { ErrorCard, type ErrorKind } from './ErrorCard';
 import { ReplyContextBanner } from './ReplyContextBanner';
 import { ReplyContextCard } from './ReplyContextCard';
-import type { BriefControls, BundlePickerControls, ReplyContextControls } from './types';
+import type {
+  BriefControls,
+  BundlePickerControls,
+  ReplyContextControls,
+  ThreadModeControls,
+} from './types';
 
 const FREEFORM_MAX = 280;
 
 /** What the draft card needs to render the current result. */
 export interface DraftView {
-  text: string;
-  residualViolations: Span[];
+  /** Single card vs thread cards. */
+  kind: 'single' | 'thread';
+  /** Per-post views: length 1 for singles, the segments otherwise.
+   *  Empty only while the FIRST generation is in flight (shimmer). */
+  posts: DraftPostViewModel[];
   refined: boolean;
   /** The user typed in the draft — their text is ground truth now. */
   handEdited: boolean;
-  /** Lifecycle phase is `committed` (copied, no edits since). */
+  /** Lifecycle phase is `committed` (every post copied, no edits since). */
   committed: boolean;
-  count: number;
-  over: boolean;
+  /** The single big button's transient flash (singles only). */
   copied: boolean;
   canUndo: boolean;
 }
@@ -71,12 +79,14 @@ interface DraftStateProps {
    *  a bundle's voice for a one-off shouldn't grow the series. */
   fileToBundle: boolean;
   onToggleFileToBundle: () => void;
+  /** Null while a reply context exists (threads are posts-only v1). */
+  threadControls: ThreadModeControls | null;
   briefText: string;
   busy: boolean;
   expanded: boolean;
   setExpanded: (v: boolean) => void;
   error: ErrorKind | null;
-  onEditDraft: (text: string) => void;
+  onEditPost: (postIndex: number, text: string) => void;
   /** Per-draft corpus-loop override. Null = the global setting is off,
    *  so the control hides entirely (nothing to override). */
   shipToVoice: boolean | null;
@@ -84,7 +94,10 @@ interface DraftStateProps {
   onRegenerate: () => void;
   onPolish: () => void;
   onUndo: () => void;
+  /** Copies the single draft, or the first uncopied post of a thread. */
   onCopy: () => void;
+  /** Per-card copy (thread cards). */
+  onCopyPost: (postIndex: number) => void;
   onDiscard: () => void;
   onRetry: () => void;
   onOpenOptions: () => void;
@@ -102,22 +115,29 @@ export function DraftState({
   onToggleFileToBundle,
   briefText,
   busy,
+  threadControls,
   expanded,
   setExpanded,
   error,
-  onEditDraft,
+  onEditPost,
   shipToVoice,
   onToggleShipToVoice,
   onRegenerate,
   onPolish,
   onUndo,
   onCopy,
+  onCopyPost,
   onDiscard,
   onRetry,
   onOpenOptions,
 }: DraftStateProps) {
   const hasContext = reply.replyContext !== null;
   const mode: 'post' | 'reply' = hasContext ? 'reply' : 'post';
+  const isThread = draft.kind === 'thread';
+  const badgeText = isThread ? 'thread' : mode;
+  const first = draft.posts[0];
+  const copiedCount = draft.posts.filter((p) => p.copied).length;
+  const nextUncopied = draft.posts.findIndex((p) => !p.copied);
   // Peek at the tweet being replied to: the draft dominates the canvas,
   // but the full context card (exactly as it looked pre-draft) is one
   // click away — from the collapsed bar's "to @handle" or the expanded
@@ -147,7 +167,7 @@ export function DraftState({
                 reply to @{reply.replyContext?.targetAuthorHandle ?? '—'}
               </button>
             ) : !hasContext ? (
-              <span className={`badge ${mode}`}>{mode}</span>
+              <span className={`badge ${isThread ? 'reply' : mode}`}>{badgeText}</span>
             ) : null}
             <button
               type="button"
@@ -235,6 +255,7 @@ export function DraftState({
             />
           </label>
           <CapToggle charCap={brief.charCap} setCharCap={brief.setCharCap} />
+          {threadControls && <ModeControls controls={threadControls} />}
           <div className="pillrow">
             <button type="button" className="btn primary" onClick={onRegenerate}>
               <IcRefresh /> Regenerate
@@ -258,7 +279,7 @@ export function DraftState({
       {/* DRAFT CARD — focal point */}
       <div className="draft">
         <div className="draft-head">
-          <span className="eyebrow">Your draft</span>
+          <span className="eyebrow">{isThread ? 'Your thread' : 'Your draft'}</span>
           {draft.refined && !busy && <span className="badge reply">refined</span>}
           {draft.handEdited && !busy && (
             <span className="badge" title="You've edited this draft — your text is kept as-is">
@@ -277,7 +298,7 @@ export function DraftState({
             title={
               brief.charCap
                 ? '≤280 cap is ON — click to switch to uncapped'
-                : draft.over
+                : draft.posts.some((p) => p.over || p.count > X_HARD_LIMIT)
                   ? 'Uncapped — click to REFIT this draft to ≤280 (content preserved, never regenerated)'
                   : 'Uncapped — click to enforce ≤280'
             }
@@ -285,22 +306,26 @@ export function DraftState({
           >
             ≤280
           </button>
-          {busy && draft.text !== '' ? (
+          {busy && draft.posts.length > 0 ? (
             <span className="upd">
               <span className="upd-dot" />
               updating…
             </span>
+          ) : isThread ? (
+            <span className="count" title="Posts copied so far — copying every post commits">
+              {copiedCount}/{draft.posts.length} copied
+            </span>
           ) : (
             <span
-              className={`count ${draft.over ? 'over' : ''}`}
+              className={`count ${(first?.over ?? false) ? 'over' : ''}`}
               title="X-weighted count — URLs always count as 23, some characters as 2"
             >
-              {draft.count}
+              {first?.count ?? 0}
               {brief.charCap ? ` / ${X_HARD_LIMIT}` : ' chars'}
             </span>
           )}
         </div>
-        {busy && draft.text === '' ? (
+        {busy && draft.posts.length === 0 ? (
           <div className="drafting">
             <div className="shim" style={{ width: '92%' }} />
             <div className="shim" style={{ width: '100%' }} />
@@ -308,21 +333,33 @@ export function DraftState({
           </div>
         ) : (
           <>
-            <div className="draft-body">
-              <DraftEditor
-                text={draft.text}
-                violations={draft.residualViolations}
-                disabled={busy}
-                onEdit={onEditDraft}
-              />
-            </div>
-            {draft.over && (
+            {isThread ? (
+              <div className="draft-body">
+                <ThreadCards
+                  posts={draft.posts}
+                  charCap={brief.charCap}
+                  busy={busy}
+                  onEditPost={onEditPost}
+                  onCopyPost={onCopyPost}
+                />
+              </div>
+            ) : (
+              <div className="draft-body">
+                <DraftEditor
+                  text={first?.text ?? ''}
+                  violations={first?.residualViolations ?? []}
+                  disabled={busy}
+                  onEdit={(text) => onEditPost(0, text)}
+                />
+              </div>
+            )}
+            {!isThread && (first?.over ?? false) && (
               <div className="draft-warn">
                 <div className="callout warn">
                   <IcWarn />
                   <span>
-                    Over by {draft.count - X_HARD_LIMIT}. A tighten pass already ran — trim by hand
-                    or regenerate.
+                    Over by {(first?.count ?? 0) - X_HARD_LIMIT}. A tighten pass already ran — trim
+                    by hand or regenerate.
                   </span>
                 </div>
               </div>
@@ -332,10 +369,25 @@ export function DraftState({
                 type="button"
                 className="btn primary lg"
                 onClick={onCopy}
-                disabled={busy}
-                title="Copy the draft — Ctrl+Shift+Enter while the panel is focused"
+                disabled={busy || (isThread && nextUncopied === -1)}
+                title={
+                  isThread
+                    ? 'Copy the next post — Ctrl+Shift+Enter while the panel is focused'
+                    : 'Copy the draft — Ctrl+Shift+Enter while the panel is focused'
+                }
               >
-                {draft.copied ? (
+                {isThread ? (
+                  nextUncopied === -1 ? (
+                    <>
+                      <IcCheck /> All copied
+                    </>
+                  ) : (
+                    <>
+                      <IcCopy /> Copy {nextUncopied + 1}/{draft.posts.length}{' '}
+                      <span className="kbd kbd-on">⌃⇧↵</span>
+                    </>
+                  )
+                ) : draft.copied ? (
                   <>
                     <IcCheck /> Copied
                   </>

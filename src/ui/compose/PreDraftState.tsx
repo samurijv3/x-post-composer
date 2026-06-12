@@ -2,15 +2,23 @@ import { IcSparkle } from '../icons';
 import { BundlePicker } from './BundlePicker';
 import { CapToggle } from './CapToggle';
 import { ErrorCard, type ErrorKind } from './ErrorCard';
+import { ModeControls } from './ModeControls';
 import { ReplyContextBanner } from './ReplyContextBanner';
 import { ReplyContextCard } from './ReplyContextCard';
-import type { BriefControls, BundlePickerControls, ReplyContextControls } from './types';
+import type {
+  BriefControls,
+  BundlePickerControls,
+  ReplyContextControls,
+  ThreadModeControls,
+} from './types';
 
 interface PreDraftProps {
   reply: ReplyContextControls;
   brief: BriefControls;
   /** Null when no bundles exist — the picker hides entirely. */
   bundlePicker: BundlePickerControls | null;
+  /** Null while a reply context exists (threads are posts-only v1). */
+  threadControls: ThreadModeControls | null;
   busy: boolean;
   libraryCount: number;
   error: ErrorKind | null;
@@ -24,6 +32,7 @@ export function PreDraftState({
   reply,
   brief,
   bundlePicker,
+  threadControls,
   busy,
   libraryCount,
   error,
@@ -49,6 +58,7 @@ export function PreDraftState({
           />
         )}
         {bundlePicker && <BundlePicker picker={bundlePicker} />}
+        {threadControls && <ModeControls controls={threadControls} />}
       </div>
 
       <label className="fld compose-input">
@@ -82,7 +92,12 @@ export function PreDraftState({
           'Drafting…'
         ) : (
           <>
-            <IcSparkle /> {hasContext ? 'Generate reply' : 'Generate post'}
+            <IcSparkle />{' '}
+            {hasContext
+              ? 'Generate reply'
+              : threadControls?.composeMode === 'thread'
+                ? 'Generate thread'
+                : 'Generate post'}
             <span className="kbd kbd-on">⌘↵</span>
           </>
         )}

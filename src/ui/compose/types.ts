@@ -24,6 +24,21 @@ export interface BriefControls {
   onGenKey: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
 }
 
+/** Thread-mode controls (roadmap Phase 10): the post↔thread switch and
+ *  the ≈N post-target stepper. ComposeScreen passes null while a reply
+ *  context exists — threads are standalone posts in v1, so reply mode
+ *  forces single-tweet composition and the control disappears. */
+export interface ThreadModeControls {
+  composeMode: 'single' | 'thread';
+  onSetMode: (mode: 'single' | 'thread') => void;
+  /** The ≈N target. Pre-draft it just seeds the next generation; over
+   *  an ACTIVE thread draft, changing it fires a repack refine. */
+  target: number;
+  onSetTarget: (n: number) => void;
+  /** Disables the stepper while a request is in flight. */
+  busy: boolean;
+}
+
 /** One bundle as the picker shows it — the count is the RESOLVED
  *  member count (dangling ids excluded), i.e. exactly how many voice
  *  examples seeding from it would send. */
