@@ -421,6 +421,67 @@ describe('commit (post-copied) and discard', () => {
   });
 });
 
+describe('done (the post-ship exit)', () => {
+  const lock = {
+    targetText: 'the replied-to tweet',
+    targetAuthorHandle: 'alice',
+    targetAuthorDisplayName: null,
+    targetAuthorAvatarUrl: null,
+    targetTimestamp: null,
+    targetStatusId: '1',
+    grandparentText: null,
+    hadUnreadableMedia: false,
+  };
+
+  function committedWith(text = 'shipped'): DraftLifecycleState {
+    return reduceDraftLifecycle(activeWith(text), { type: 'post-copied', postIndex: 0 });
+  }
+
+  it('clears a committed draft into the timed-undo snapshot, workbench included', () => {
+    const cleared = reduceDraftLifecycle(committedWith(), {
+      type: 'done',
+      bullets: 'the angle',
+      previousContext: lock,
+    });
+    expect(cleared.phase).toBe('empty');
+    expect(cleared.content).toBeNull();
+    expect(cleared.replaced?.content.posts[0]?.text).toBe('shipped');
+    expect(cleared.replaced?.workbench).toEqual({ bullets: 'the angle', replyContext: lock });
+  });
+
+  it('is ill-timed everywhere but committed', () => {
+    const done: DraftEvent = { type: 'done', bullets: '', previousContext: null };
+    expect(run(done)).toEqual(INITIAL_DRAFT_LIFECYCLE);
+    const active = activeWith();
+    expect(reduceDraftLifecycle(active, done)).toBe(active);
+    const generating = run({ type: 'generation-started', seq: 1 });
+    expect(reduceDraftLifecycle(generating, done)).toBe(generating);
+  });
+
+  it('one Undo brings the draft back as work-in-hand', () => {
+    const cleared = reduceDraftLifecycle(committedWith('shipped'), {
+      type: 'done',
+      bullets: 'the angle',
+      previousContext: null,
+    });
+    const restored = reduceDraftLifecycle(cleared, { type: 'replacement-undone' });
+    expect(restored.phase).toBe('active');
+    expect(firstText(restored)).toBe('shipped');
+    expect(restored.content?.posts[0]?.copied).toBe(true);
+    expect(restored.replaced).toBeNull();
+  });
+
+  it('the window elapsing lets the clear stand', () => {
+    const cleared = reduceDraftLifecycle(committedWith(), {
+      type: 'done',
+      bullets: '',
+      previousContext: null,
+    });
+    const expired = reduceDraftLifecycle(cleared, { type: 'replacement-expired' });
+    expect(expired).toEqual(INITIAL_DRAFT_LIFECYCLE);
+  });
+});
+
 describe('threads (multi-post drafts)', () => {
   const activeThread = (texts = ['one', 'two', 'three']) =>
     run(

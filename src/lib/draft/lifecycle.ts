@@ -19,9 +19,10 @@
  * The two undo scopes (deliberately separate):
  *   - `replaced` — the TIMED undo (~5 s, Gmail-undo-send convention).
  *     Guards draft REPLACEMENT: a generate/regenerate landing over an
- *     existing draft, or a new reply context clearing it. The shell owns
- *     the timer and dispatches `replacement-expired`; touching the new
- *     draft (hand edit / refine) adopts it and drops the snapshot.
+ *     existing draft, a new reply context clearing it, or the Done
+ *     exit clearing a committed draft. The shell owns the timer and
+ *     dispatches `replacement-expired`; touching the new draft (hand
+ *     edit / refine) adopts it and drops the snapshot.
  *   - `refineSnapshot` — the ONE-LEVEL refine undo (chips / steering).
  *     Set when a refine starts, restored by `refine-undone`. Survives
  *     hand edits by design.
@@ -167,6 +168,12 @@ export type DraftEvent =
    *  Carries the cleared workbench — the angle text and the previous
    *  lock — so the timed undo restores everything together. */
   | { type: 'new-context'; bullets: string; previousContext: ReplyContext | null }
+  /** The post-ship exit ("Done — next draft"): the committed draft and
+   *  its workbench (angle text + reply lock) clear together, guarded by
+   *  the same timed undo as a replacement. Completion, not discard —
+   *  only meaningful from `committed`; anywhere else it's ill-timed
+   *  and ignored. */
+  | { type: 'done'; bullets: string; previousContext: ReplyContext | null }
   /** Explicit discard ("start over"). */
   | { type: 'discarded' };
 
@@ -379,6 +386,25 @@ export function reduceDraftLifecycle(
                 workbench: { bullets: event.bullets, replyContext: event.previousContext },
               }
             : state.replaced,
+      };
+
+    case 'done':
+      // The committed exit only — everywhere else "clear my bench" is
+      // discard (destructive) and must look like it. The snapshot keeps
+      // the whole workbench so one Undo restores it all; the text
+      // itself is non-negotiably safe regardless (commit already fired
+      // the corpus event).
+      if (state.phase !== 'committed' || state.content === null) return state;
+      return {
+        phase: 'empty',
+        content: null,
+        pendingSeq: null,
+        pendingKind: null,
+        refineSnapshot: null,
+        replaced: {
+          content: state.content,
+          workbench: { bullets: event.bullets, replyContext: event.previousContext },
+        },
       };
 
     case 'discarded':

@@ -104,6 +104,8 @@ interface DraftStateProps {
   onCopy: () => void;
   /** Per-card copy (thread cards). */
   onCopyPost: (postIndex: number) => void;
+  /** The post-ship exit — clears the bench once committed (timed undo). */
+  onDone: () => void;
   onDiscard: () => void;
   onRetry: () => void;
   onOpenOptions: () => void;
@@ -134,6 +136,7 @@ export function DraftState({
   onUndo,
   onCopy,
   onCopyPost,
+  onDone,
   onDiscard,
   onRetry,
   onOpenOptions,
@@ -375,38 +378,70 @@ export function DraftState({
               </div>
             )}
             <div className="draft-actions">
-              <button
-                type="button"
-                className="btn primary lg"
-                onClick={onCopy}
-                disabled={busy || (isThread && nextUncopied === -1)}
-                title={
-                  isThread
-                    ? 'Copy the next post — Ctrl+Shift+Enter while the panel is focused'
-                    : 'Copy the draft — Ctrl+Shift+Enter while the panel is focused'
-                }
-              >
-                {isThread ? (
-                  nextUncopied === -1 ? (
+              {/* The two exits mean what they look like: the trash up in
+                  the brief bar abandons (destructive), Done completes.
+                  Once committed the draft is already saved/filed, so the
+                  primary action becomes the clean-bench exit; re-copy
+                  stays one click away (singles keep a copy button,
+                  thread cards each have their own). */}
+              {draft.committed ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn primary lg"
+                    onClick={onDone}
+                    disabled={busy}
+                    title="Wrap up — clear the bench for the next one (Undo for a few seconds)"
+                  >
+                    <IcCheck /> Done — next draft
+                  </button>
+                  {!isThread && (
+                    <button
+                      type="button"
+                      className="btn lg"
+                      onClick={onCopy}
+                      disabled={busy}
+                      title="Copy again"
+                      aria-label="Copy again"
+                    >
+                      <IcCopy />
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn primary lg"
+                  onClick={onCopy}
+                  disabled={busy || (isThread && nextUncopied === -1)}
+                  title={
+                    isThread
+                      ? 'Copy the next post — Ctrl+Shift+Enter while the panel is focused'
+                      : 'Copy the draft — Ctrl+Shift+Enter while the panel is focused'
+                  }
+                >
+                  {isThread ? (
+                    nextUncopied === -1 ? (
+                      <>
+                        <IcCheck /> All copied
+                      </>
+                    ) : (
+                      <>
+                        <IcCopy /> Copy {nextUncopied + 1}/{draft.posts.length}{' '}
+                        <span className="kbd kbd-on">⌃⇧↵</span>
+                      </>
+                    )
+                  ) : draft.copied ? (
                     <>
-                      <IcCheck /> All copied
+                      <IcCheck /> Copied
                     </>
                   ) : (
                     <>
-                      <IcCopy /> Copy {nextUncopied + 1}/{draft.posts.length}{' '}
-                      <span className="kbd kbd-on">⌃⇧↵</span>
+                      <IcCopy /> Copy to X <span className="kbd kbd-on">⌃⇧↵</span>
                     </>
-                  )
-                ) : draft.copied ? (
-                  <>
-                    <IcCheck /> Copied
-                  </>
-                ) : (
-                  <>
-                    <IcCopy /> Copy to X <span className="kbd kbd-on">⌃⇧↵</span>
-                  </>
-                )}
-              </button>
+                  )}
+                </button>
+              )}
               <button
                 type="button"
                 className="btn lg"

@@ -464,3 +464,17 @@ Dogfooding ask: act on ONE post of a thread, not just the whole. Decisions:
 ### 2026-06-12 — the voice-seed picker is always visible (zero-bundles empty state)
 
 Dogfooding found the original call wrong: hiding the picker until a bundle exists ("a power feature stays out of the default path") meant the feature was undiscoverable exactly when the user had no bundles — the only state where they need pointing at it. Reversal: `BundlePicker` always renders in the grounding cluster. With zero bundles the select shows its one truthful option ("Sampled from your library" — which IS the live behavior, so the control isn't disabled or lying) plus a quiet `.help` hint: create a bundle in Voice to hand-pick what shapes a draft. No navigation plumbing — the screen switch is one corner button away. The `bundlePicker` prop drops its null arm (the null case meant only "no bundles", now an in-component state).
+
+### 2026-06-12 — the Done exit (completion is not discard)
+
+Dogfooding: after shipping a tweet, the only way back to a neutral bench was the trash can — wrong position (up in the brief bar, secondary to the draft) and wrong semantics (success isn't disposal). The fix recognizes TWO exits that mean different things:
+
+- **Abandon** (the trash, unchanged): the draft text is lost — destructive, so a trash can in a secondary position is honest for it.
+- **Complete** (new): once committed, the draft is already saved/filed, so clearing it destroys nothing — it earns a confident primary button, **"Done — next draft"**, appearing exactly when the lifecycle crosses into `committed` (the state already existed; the UI just never cashed it in).
+
+Decisions:
+
+- **`done` is a lifecycle event, committed-only.** The reducer is the authority: from any other phase it's ill-timed and ignored. It reuses the existing `ReplacementSnapshot` + workbench mechanism (built for new-context), so one timed Undo restores draft + angle + lock exactly — which also covers the voice-saving-off case, where the committed text exists nowhere else.
+- **Done clears the reply lock; keeps the voice seed and post/thread mode.** The context and angle belonged to the shipped tweet (a stale lock would aim the NEXT post at the old one); the seed and mode are series tools.
+- **Auto-reset rejected.** We never see whether the paste landed in X (read-only invariant), so clearing on our own initiative would be presumptuous — and state vanishing by itself cuts against the no-magic ethos. The user says when they're done.
+- **Re-copy survives the swap**: singles keep a copy-again button beside Done; thread cards each have their own. ⌃⇧↵ stays copy-only — binding it to Done would make the commit keystroke clear the bench.

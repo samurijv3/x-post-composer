@@ -123,7 +123,7 @@ The draft appears with an X-weighted character counter. Reshape it without reshu
 
 ### Copy out
 
-Click **Copy to X**. Paste into X's compose box. Finish by hand.
+Click **Copy to X**. Paste into X's compose box. Finish by hand. Once everything is copied, the button becomes **Done — next draft**: it clears the bench (draft, angle, reply context — your bundle seed and post/thread mode stay) with a few seconds of Undo. The trash icon up by the brief remains the other exit, for abandoning a draft you _didn't_ ship.
 
 ---
 

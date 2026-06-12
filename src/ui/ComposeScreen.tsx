@@ -659,6 +659,26 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
     onToast('Started over');
   }
 
+  // The post-ship exit: same clean bench as discard, opposite meaning —
+  // the draft succeeded and is already saved/filed, so clearing it is
+  // non-destructive. The angle and the reply lock clear with it (both
+  // belonged to the shipped tweet; a stale lock would aim the NEXT post
+  // at the old tweet), guarded together by the timed undo. The voice
+  // seed and the post/thread mode deliberately survive — series tools,
+  // not per-draft inputs.
+  function done(): void {
+    const previousContext = replyContextRef.current;
+    dispatchDraft({ type: 'done', bullets, previousContext });
+    setBullets('');
+    setSteerText('');
+    setSteerScope(null);
+    setExpanded(false);
+    setChipCounts({});
+    setError(null);
+    if (previousContext !== null) void setReplyContextLock(null);
+    fireReplacementToast('Done — cleared for the next one');
+  }
+
   function retry(): void {
     setError(null);
     void generate({ isRegenerate: lifecycleRef.current.content !== null });
@@ -857,6 +877,7 @@ export function ComposeScreen({ onToast, onOpenOptions }: Props) {
           onUndo={undo}
           onCopy={() => void copyNext()}
           onCopyPost={(i) => void copyPost(i)}
+          onDone={done}
           onDiscard={discard}
           onRetry={retry}
           onOpenOptions={onOpenOptions}
