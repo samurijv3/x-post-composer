@@ -22,6 +22,8 @@ export {
   buildThreadExamplesBlock,
   buildThreadConstraintInstruction,
   buildRepackInstruction,
+  REWRITE_POST_INSTRUCTION,
+  buildScopedThreadInstruction,
   buildTightenSegmentsInstruction,
   buildCountNudgeLine,
   formatExamples,

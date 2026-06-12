@@ -80,6 +80,12 @@ export interface RefineRequest {
   previousDraftText: string;
   /** Same constraint as the original composition. */
   charCap: boolean;
+  /** Scoped thread refine: the 0-based post this refine targets. The
+   *  call still sends the whole thread for context; the pipeline
+   *  extracts the one post (count-guarded) and the panel splices it —
+   *  scoped means scoped by code, not by model obedience. Only
+   *  meaningful with mode 'thread'. */
+  scope?: number;
   kind: RefineKind;
 }
 
@@ -105,7 +111,10 @@ export type RefineKind =
    *  content is the fixed point, only the packaging changes
    *  (buildRepackInstruction). Count is re-validated against this
    *  target. */
-  | { type: 'repack'; targetCount: number };
+  | { type: 'repack'; targetCount: number }
+  /** A thread card's Rewrite — a fresh take on the scoped post
+   *  (REWRITE_POST_INSTRUCTION; requires `scope`). */
+  | { type: 'rewrite' };
 
 export interface GenerationResultOk {
   ok: true;

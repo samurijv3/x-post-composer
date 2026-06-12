@@ -251,6 +251,26 @@ export const REFIT_INSTRUCTION =
 export const THREAD_REFIT_INSTRUCTION =
   'Each post in the thread must now fit the 280-character X limit. Refit the thread: keep its content, voice, and intent exactly; change only what the per-post length requires.';
 
+/** Instruction behind a thread card's Rewrite button — a fresh take on
+ *  ONE post, scoped by `buildScopedThreadInstruction`. Code-supplied. */
+export const REWRITE_POST_INSTRUCTION =
+  'Rewrite this post with a fresh take — the same beat in the thread’s flow, a different execution. Keep its job in the thread (what it sets up and what it hands off to) intact.';
+
+/**
+ * Wrap an instruction so it applies to exactly ONE post of a thread.
+ * The model is asked to output the WHOLE thread (it needs to — the
+ * panel splices deterministically and needs stable positions), with
+ * every other post verbatim. The splice guard in the pipeline enforces
+ * what this asks for; the model's obedience is never assumed.
+ */
+export function buildScopedThreadInstruction(ordinal: number, instruction: string): string {
+  return `You are revising exactly ONE post of the thread: post ${String(ordinal)}.
+
+${instruction}
+
+Apply this to post ${String(ordinal)} ONLY. Then output the ENTIRE thread — every other post EXACTLY as written, post ${String(ordinal)} revised — as posts separated by a line containing only ---.`;
+}
+
 /** Instruction the pipeline feeds the refine template's {{instruction}}
  *  slot for the (at most one) tighten pass. Code-supplied: tighten is a
  *  pipeline backstop, not a user-authored ask. */

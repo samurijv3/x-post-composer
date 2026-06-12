@@ -33,6 +33,8 @@ import {
   buildCountNudgeLine,
   buildRepackInstruction,
   buildRepairInstruction,
+  buildScopedThreadInstruction,
+  REWRITE_POST_INSTRUCTION,
   buildTightenSegmentsInstruction,
   escalateChipInstruction,
   POLISH_INSTRUCTION,
@@ -130,6 +132,7 @@ export async function runGeneration(request: GenerationRequest): Promise<Generat
     settings,
     mode: request.mode,
     kind: request.mode === 'thread' ? 'thread' : 'single',
+    scope: null,
     // Generates validate the count; refines don't (chips may
     // legitimately change it) — repack re-supplies a target.
     targetCount: request.mode === 'thread' ? (request.targetCount ?? DEFAULT_THREAD_TARGET) : null,
@@ -197,9 +200,35 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
   } else if (kind.type === 'repack') {
     instruction = buildRepackInstruction(kind.targetCount);
     initialLabel = `refine (repack to \u2248${String(kind.targetCount)})`;
+  } else if (kind.type === 'rewrite') {
+    instruction = REWRITE_POST_INSTRUCTION;
+    initialLabel = `refine (rewrite post ${String((request.scope ?? 0) + 1)})`;
   } else {
     instruction = request.mode === 'thread' ? THREAD_REFIT_INSTRUCTION : REFIT_INSTRUCTION;
     initialLabel = 'refine (refit to \u2264280)';
+  }
+
+  // Scoped thread refines (a card's Rewrite, an aimed chip/steer):
+  // validate the scope against the draft the panel sent, then wrap the
+  // instruction so it applies to exactly one post. The pipeline
+  // extracts that post (count-guarded) and the panel splices it.
+  const prevCount =
+    request.mode === 'thread' ? parseThreadSegments(request.previousDraftText).length : 0;
+  let scope: { index: number; prevCount: number } | null = null;
+  if (request.mode === 'thread' && request.scope !== undefined) {
+    if (request.scope < 0 || request.scope >= prevCount) {
+      return {
+        ok: false,
+        kind: 'bad-request',
+        message: 'That post no longer exists in the draft — refine the whole thread instead.',
+      };
+    }
+    scope = { index: request.scope, prevCount };
+    instruction = buildScopedThreadInstruction(request.scope + 1, instruction);
+  } else if (kind.type === 'rewrite') {
+    // Rewrite is scoped by definition; without a thread scope it has
+    // no meaning.
+    return { ok: false, kind: 'bad-request', message: 'Rewrite targets one post of a thread.' };
   }
 
   // The cap is a constraint; the instruction is a direction \u2014
@@ -227,6 +256,7 @@ export async function runRefine(request: RefineRequest): Promise<GenerationResul
     settings,
     mode: request.mode,
     kind: request.mode === 'thread' ? 'thread' : 'single',
+    scope,
     // Only a repack re-validates the post count — other refines act
     // holistically and may legitimately change it.
     targetCount: kind.type === 'repack' ? kind.targetCount : null,
@@ -261,6 +291,11 @@ interface PipelineOptions {
   mode: 'post' | 'reply' | 'thread';
   /** Single card vs thread cards — decides parsing and per-post math. */
   kind: 'single' | 'thread';
+  /** Scoped thread refine: extract exactly this post from the parsed
+   *  response (count-guarded against the previous draft) and run the
+   *  backstops on it alone. The result returns kind 'single' — the
+   *  panel splices it back via the post-replaced event. */
+  scope: { index: number; prevCount: number } | null;
   /** Thread ≈N target to validate (generate/repack); null skips the
    *  count check. */
   targetCount: number | null;
@@ -297,16 +332,20 @@ function processDraftText(
 }
 
 async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
-  const { apiKey, settings, mode, kind, targetCount, charCap, initialPrompt, initialLabel } = opts;
+  const { apiKey, settings, mode, kind, scope, targetCount, charCap, initialPrompt, initialLabel } =
+    opts;
   const fixOptions = {
     fixEmDash: settings.structuralRules.noEmDash,
     fixSmartQuotes: settings.structuralRules.noSmartQuotes,
   };
   const maxTokens = kind === 'thread' ? THREAD_MAX_TOKENS : MAX_TOKENS;
+  // A scoped refine parses the thread on call 1, then continues as a
+  // SINGLE-post pipeline over the extracted post (backstops included).
+  let activeKind: 'single' | 'thread' = kind;
   const joined = (posts: ProcessedPost[]): string =>
-    kind === 'thread' ? joinSegments(posts.map((p) => p.text)) : (posts[0]?.text ?? '');
+    activeKind === 'thread' ? joinSegments(posts.map((p) => p.text)) : (posts[0]?.text ?? '');
   const countDrifted = (posts: ProcessedPost[]): boolean =>
-    kind === 'thread' && targetCount !== null && Math.abs(posts.length - targetCount) > 1;
+    activeKind === 'thread' && targetCount !== null && Math.abs(posts.length - targetCount) > 1;
 
   const firstCall = await callAnthropic({
     apiKey,
@@ -329,6 +368,22 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
   }
 
   let processed = processDraftText(firstCall.text, kind, settings, fixOptions);
+  // The scoped splice guard: the model must hand back the same number
+  // of posts for positions to be trustworthy. Anything else is an
+  // honest failure, never a silent reshuffle.
+  if (scope !== null) {
+    const target = processed.posts[scope.index];
+    if (processed.posts.length !== scope.prevCount || target === undefined) {
+      return {
+        ok: false,
+        kind: 'other',
+        message:
+          'The model didn’t keep the change to one post — try again, or refine the whole thread.',
+      };
+    }
+    processed = { posts: [target], appliedFixes: processed.appliedFixes };
+    activeKind = 'single';
+  }
   let appliedAutoFixes: Span[] = processed.appliedFixes;
   let wasRepaired = false;
   // Every call in the invocation, recorded exactly as sent — the
@@ -339,7 +394,7 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
   if (hasRepairableViolations({ violations: allViolations })) {
     const violationsSummary = summarizeViolations(allViolations);
     let repairInstruction = buildRepairInstruction(violationsSummary);
-    if (kind === 'thread') {
+    if (activeKind === 'thread') {
       // Fold the count nudge into the repair when both fired — one
       // combined instruction, no extra call.
       if (countDrifted(processed.posts)) {
@@ -359,7 +414,7 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
     });
 
     if (repairCall.ok) {
-      const repaired = processDraftText(repairCall.text, kind, settings, fixOptions);
+      const repaired = processDraftText(repairCall.text, activeKind, settings, fixOptions);
       processed = repaired;
       appliedAutoFixes = [...appliedAutoFixes, ...repaired.appliedFixes];
       wasRepaired = true;
@@ -382,7 +437,7 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
   if (overOrdinals.length > 0 || needsCount) {
     let reshapeInstruction: string;
     let reshapeLabel: string;
-    if (kind === 'single') {
+    if (activeKind === 'single') {
       reshapeInstruction = TIGHTEN_INSTRUCTION;
       reshapeLabel = `tighten (${String(weightedLength(processed.posts[0]?.text ?? ''))} → target ≤280)`;
     } else {
@@ -415,7 +470,7 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
       maxTokens,
     });
     if (reshapeCall.ok) {
-      const reshaped = processDraftText(reshapeCall.text, kind, settings, fixOptions);
+      const reshaped = processDraftText(reshapeCall.text, activeKind, settings, fixOptions);
       processed = reshaped;
       appliedAutoFixes = [...appliedAutoFixes, ...reshaped.appliedFixes];
       wasRepaired = true;
@@ -435,7 +490,7 @@ async function runPipeline(opts: PipelineOptions): Promise<GenerationResult> {
 
   return {
     ok: true,
-    kind,
+    kind: activeKind,
     targetCount,
     draft: {
       posts: processed.posts.map((p) => ({

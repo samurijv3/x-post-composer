@@ -6,6 +6,8 @@ import {
   buildCountNudgeLine,
   buildExclusionInstructions,
   buildRepackInstruction,
+  buildScopedThreadInstruction,
+  REWRITE_POST_INSTRUCTION,
   buildRepairInstruction,
   buildThreadConstraintInstruction,
   buildThreadContextBlock,
@@ -311,5 +313,21 @@ describe('THREAD_REFIT_INSTRUCTION', () => {
     expect(THREAD_REFIT_INSTRUCTION).toContain('Each post');
     expect(THREAD_REFIT_INSTRUCTION).toContain('280');
     expect(THREAD_REFIT_INSTRUCTION).toContain('keep its content, voice, and intent exactly');
+  });
+});
+
+describe('scoped thread refines (per-card)', () => {
+  it('REWRITE_POST_INSTRUCTION asks for a fresh take that keeps the beat', () => {
+    expect(REWRITE_POST_INSTRUCTION).toContain('fresh take');
+    expect(REWRITE_POST_INSTRUCTION).toContain('Keep its job in the thread');
+  });
+
+  it('buildScopedThreadInstruction names the post and demands the whole thread back', () => {
+    const wrapped = buildScopedThreadInstruction(3, 'Make it punchier.');
+    expect(wrapped).toContain('exactly ONE post of the thread: post 3');
+    expect(wrapped).toContain('Make it punchier.');
+    expect(wrapped).toContain('ENTIRE thread');
+    expect(wrapped).toContain('every other post EXACTLY as written');
+    expect(wrapped).toContain('---');
   });
 });
