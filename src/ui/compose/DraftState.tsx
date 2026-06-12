@@ -246,30 +246,11 @@ export function DraftState({
         </div>
       )}
 
-      {/* The compose UI states plainly when a bundle drove the current
-          draft's examples — and whether copying files it back in. The
-          filing override only renders while it could apply (a save is
-          actually going to happen). */}
+      {/* Pure provenance — the compose UI states plainly when a bundle
+          drove the current draft's examples. What copying DOES with it
+          lives in the "On copy" row below, beside its sibling switch. */}
       {seedBundleName && (
-        <p className="help bundle-note">
-          <span>Voice examples from bundle “{seedBundleName}”.</span>
-          {shipToVoice === true && (
-            <label
-              className="voice-toggle"
-              title={
-                fileToBundle
-                  ? 'Copying files this draft back into the bundle — click to keep this one out'
-                  : 'This draft won’t be filed into the bundle on copy — click to include it'
-              }
-            >
-              <span className="switch">
-                <input type="checkbox" checked={fileToBundle} onChange={onToggleFileToBundle} />
-                <span className="track" />
-              </span>
-              <span>file back in on copy</span>
-            </label>
-          )}
-        </p>
+        <p className="help bundle-note">Voice examples from bundle “{seedBundleName}”.</p>
       )}
 
       {error && <ErrorCard kind={error} onRetry={onRetry} onSettings={onOpenOptions} />}
@@ -278,22 +259,6 @@ export function DraftState({
       <div className="draft">
         <div className="draft-head">
           <span className="eyebrow">Your draft</span>
-          {shipToVoice !== null && (
-            <label
-              className="voice-toggle"
-              title={
-                shipToVoice
-                  ? "Copying saves this draft to Voice as a 'shipped' example — click to keep this one out"
-                  : "This draft won't be saved to Voice on copy — click to include it"
-              }
-            >
-              <span className="switch">
-                <input type="checkbox" checked={shipToVoice} onChange={onToggleShipToVoice} />
-                <span className="track" />
-              </span>
-              <span>voice</span>
-            </label>
-          )}
           {draft.refined && !busy && <span className="badge reply">refined</span>}
           {draft.handEdited && !busy && (
             <span className="badge" title="You've edited this draft — your text is kept as-is">
@@ -411,6 +376,52 @@ export function DraftState({
                 <IcUndo />
               </button>
             </div>
+            {/* Copy's side effects, stated in one place. The bundle
+                switch depends on the voice switch (no save → nothing
+                to file) — shown disabled, not hidden, so the
+                dependency is visible. */}
+            {shipToVoice !== null && (
+              <div className="copy-effects">
+                <span className="ce-label">On copy</span>
+                <label
+                  className="voice-toggle"
+                  title={
+                    shipToVoice
+                      ? "Copying saves this draft to Voice as a 'shipped' example — click to keep this one out"
+                      : "This draft won't be saved to Voice on copy — click to include it"
+                  }
+                >
+                  <span className="switch">
+                    <input type="checkbox" checked={shipToVoice} onChange={onToggleShipToVoice} />
+                    <span className="track" />
+                  </span>
+                  <span>save to Voice</span>
+                </label>
+                {seedBundleName && (
+                  <label
+                    className={`voice-toggle ${!shipToVoice ? 'dep-off' : ''}`}
+                    title={
+                      !shipToVoice
+                        ? 'Saving to Voice is off for this draft — nothing to file into the bundle'
+                        : fileToBundle
+                          ? 'The shipped example also joins the bundle — click to keep this one out'
+                          : 'This draft won’t be filed into the bundle — click to include it'
+                    }
+                  >
+                    <span className="switch">
+                      <input
+                        type="checkbox"
+                        checked={shipToVoice && fileToBundle}
+                        disabled={!shipToVoice}
+                        onChange={onToggleFileToBundle}
+                      />
+                      <span className="track" />
+                    </span>
+                    <span>file into “{seedBundleName}”</span>
+                  </label>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

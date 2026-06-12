@@ -1528,14 +1528,31 @@ code {
   min-width: 0;
   padding: 6px 8px;
 }
-/* "This draft was seeded by bundle X" — quiet, but always stated; the
-   filing override sits inline when a save is going to happen. */
+/* "This draft was seeded by bundle X" — quiet, but always stated. */
 .bundle-note {
+  margin: 0;
+}
+/* Copy's side effects in one row: save-to-Voice + file-into-bundle.
+   Sits at the foot of the draft card, under the Copy action it
+   describes. */
+.copy-effects {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
   flex-wrap: wrap;
-  margin: 0;
+  padding: 9px 2px 0;
+}
+.ce-label {
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-faint);
+}
+/* The bundle switch with its dependency (voice save) off. */
+.voice-toggle.dep-off {
+  opacity: 0.55;
+  cursor: default;
 }
 
 /* Floating save-result banner slot — sticks to the top of the panel
