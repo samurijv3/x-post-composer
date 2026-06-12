@@ -3,6 +3,7 @@ import type { LibraryItem } from '../../types';
 import { Avatar } from '../Avatar';
 import { IcEdit, IcStar, IcTrash } from '../icons';
 import { formatRelativeTweetTime } from '../../lib/format/relativeTime';
+import { ThreadEditor, ThreadText } from './ThreadRow';
 
 interface LibRowProps {
   item: LibraryItem;
@@ -82,7 +83,16 @@ export function LibRow({
       // when it's locked (already in the destination bundle).
       onClick={pickable ? selection.onToggle : undefined}
     >
-      {editing ? (
+      {editing && item.type === 'thread' ? (
+        <ThreadEditor
+          item={item}
+          onSave={(patch) => {
+            onSave(patch);
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : editing ? (
         <div className="lib-edit">
           <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} autoFocus />
           <div className="field-row">
@@ -131,7 +141,11 @@ export function LibRow({
                   <span className="tn-time">{relTime}</span>
                 </>
               )}
-              <span className={`tn-type-chip ${item.type}`}>{item.type}</span>
+              <span className={`tn-type-chip ${item.type}`}>
+                {item.type === 'thread'
+                  ? `thread · ${String(item.segments?.length ?? '?')}`
+                  : item.type}
+              </span>
               {item.source === 'shipped' && (
                 <span
                   className="badge ok"
@@ -186,18 +200,16 @@ export function LibRow({
                       <IcStar />
                     </button>
                   )}
-                  {item.type !== 'thread' && (
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      style={{ width: 26, height: 26 }}
-                      title="Edit"
-                      aria-label="Edit"
-                      onClick={() => setEditing(true)}
-                    >
-                      <IcEdit />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    style={{ width: 26, height: 26 }}
+                    title="Edit"
+                    aria-label="Edit"
+                    onClick={() => setEditing(true)}
+                  >
+                    <IcEdit />
+                  </button>
                   <button
                     type="button"
                     className="icon-btn"
@@ -211,10 +223,14 @@ export function LibRow({
                 </div>
               )}
             </div>
-            <p ref={textRef} className={`tn-text lib-text ${open ? '' : 'clamp'}`}>
-              {item.text}
-            </p>
-            {(truncatable || open) && (
+            {item.type === 'thread' ? (
+              <ThreadText item={item} open={open} onToggle={onToggle} />
+            ) : (
+              <p ref={textRef} className={`tn-text lib-text ${open ? '' : 'clamp'}`}>
+                {item.text}
+              </p>
+            )}
+            {item.type !== 'thread' && (truncatable || open) && (
               <button
                 type="button"
                 className="lib-more"

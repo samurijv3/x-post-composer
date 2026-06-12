@@ -38,7 +38,7 @@ interface Props {
   onLocateItem: (id: string) => void;
 }
 
-type Filter = 'all' | 'post' | 'reply' | 'starred';
+type Filter = 'all' | 'post' | 'reply' | 'thread' | 'starred';
 
 /**
  * Voice — the saved-examples library. Owns the list state and storage
@@ -119,9 +119,11 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   // pill's VISIBILITY and the stuck-filter reset follow the whole
   // library, so typing can't blink the pill away or yank the filter.
   const starredTotal = items.filter((i) => i.favorite).length;
+  const threadsTotal = items.filter((i) => i.type === 'thread').length;
   const searchFiltered = items.filter((i) => matchesSearch(i.text, query));
   const posts = searchFiltered.filter((i) => i.type === 'post').length;
   const replies = searchFiltered.filter((i) => i.type === 'reply').length;
+  const threads = searchFiltered.filter((i) => i.type === 'thread').length;
   // The visible starred count IS the control: it nudges toward a small
   // canon (Core Concept A) — deliberately no ranking or bulk tools.
   const starred = searchFiltered.filter((i) => i.favorite).length;
@@ -136,7 +138,8 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   // leave the filter stuck on a state with no control to escape it.
   useEffect(() => {
     if (filter === 'starred' && starredTotal === 0) setFilter('all');
-  }, [filter, starredTotal]);
+    if (filter === 'thread' && threadsTotal === 0) setFilter('all');
+  }, [filter, starredTotal, threadsTotal]);
 
   async function remove(item: LibraryItem): Promise<void> {
     await deleteItem(item.id);
@@ -478,6 +481,15 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
               >
                 Replies {replies}
               </button>
+              {threadsTotal > 0 && (
+                <button
+                  type="button"
+                  className={`pill ${filter === 'thread' ? 'active' : ''}`}
+                  onClick={() => setFilter('thread')}
+                >
+                  Threads {threads}
+                </button>
+              )}
               {starredTotal > 0 && (
                 <button
                   type="button"
@@ -518,11 +530,14 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
         ) : (
           <div className="empty">
             <IcVoice className="ei" />
-            No {filter === 'post'
+            No{' '}
+            {filter === 'post'
               ? 'posts'
               : filter === 'reply'
                 ? 'replies'
-                : 'starred examples'}{' '}
+                : filter === 'thread'
+                  ? 'threads'
+                  : 'starred examples'}{' '}
             saved yet — switch to <strong>All</strong> to see the rest.
           </div>
         )

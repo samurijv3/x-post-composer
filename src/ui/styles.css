@@ -1560,6 +1560,41 @@ code {
 }
 /* ---- thread mode (Phase 10) ---- */
 
+/* Thread rows in the library: connected segment blocks when expanded. */
+.thread-segs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ts-seg {
+  position: relative;
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+}
+.ts-seg + .ts-seg::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: -8px;
+  height: 7px;
+  width: 2px;
+  background: var(--accent-line);
+}
+.ts-ordinal {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text-3);
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+.tn-type-chip.thread {
+  white-space: nowrap;
+}
+
 .mode-controls {
   display: flex;
   align-items: center;
