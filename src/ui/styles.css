@@ -1380,6 +1380,16 @@ code {
   color: var(--text-3);
   flex: 0 0 auto;
 }
+/* Already in the destination bundle: checked but inert. */
+.pick-badge.locked {
+  border-color: var(--border-strong);
+  background: var(--surface-3);
+  color: var(--text-3);
+}
+.pick-mark input:disabled,
+.pick-mark input:disabled + .pick-badge {
+  cursor: default;
+}
 
 .bundle-section {
   display: flex;

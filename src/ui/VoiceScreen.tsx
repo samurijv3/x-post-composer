@@ -52,10 +52,13 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   // ---- bundles (roadmap Phase 6) ----
   const [bundles, setBundles] = useState<Bundle[]>([]);
   // Bundle-building selection mode: pickedIds is in SELECTION order —
-  // that order is the bundle's stored member order.
+  // that order is the bundle's stored member order. The destination is
+  // an existing bundle's id that the picks append to, or null for a
+  // brand-new bundle (named below).
   const [picking, setPicking] = useState<boolean>(false);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [bundleName, setBundleName] = useState<string>('');
+  const [pickTarget, setPickTarget] = useState<string | null>(null);
   // The two screen sections collapse independently; both default open.
   const [bundlesOpen, setBundlesOpen] = useState<boolean>(true);
   const [examplesOpen, setExamplesOpen] = useState<boolean>(true);
@@ -168,8 +171,9 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
     setPickedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
-  function startPicking(): void {
+  function startPicking(target: string | null = null): void {
     setPicking(true);
+    setPickTarget(target);
     // Picking needs both sections: the create bar lives in Bundles,
     // the pick targets are the examples list.
     setBundlesOpen(true);
@@ -180,20 +184,55 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
     setPicking(false);
     setPickedIds([]);
     setBundleName('');
+    setPickTarget(null);
   }
 
-  async function saveBundle(): Promise<void> {
-    const name = bundleName.trim();
-    if (name === '' || pickedIds.length === 0) return;
+  function retargetPicks(target: string | null): void {
+    setPickTarget(target);
+    // Picks that are already members of the new destination would be
+    // silently dropped at save — prune them now so the count is honest
+    // (their rows flip to the locked check).
+    if (target !== null) {
+      const memberIds = bundles.find((b) => b.id === target)?.memberIds ?? [];
+      setPickedIds((prev) => prev.filter((id) => !memberIds.includes(id)));
+    }
+  }
+
+  // The destination decides what Save needs: a new bundle needs a name
+  // (picks optional — an empty bundle is a valid start, filled from X
+  // via the capture target); appending to an existing one needs picks.
+  const canSavePicks = pickTarget === null ? bundleName.trim() !== '' : pickedIds.length > 0;
+
+  async function savePicks(): Promise<void> {
+    if (!canSavePicks) return;
     try {
-      await addBundle({
-        id: crypto.randomUUID(),
-        name,
-        memberIds: pickedIds,
-        createdAt: Date.now(),
-      });
+      if (pickTarget === null) {
+        const name = bundleName.trim();
+        await addBundle({
+          id: crypto.randomUUID(),
+          name,
+          memberIds: pickedIds,
+          createdAt: Date.now(),
+        });
+        onToast(
+          pickedIds.length === 0
+            ? `Bundle “${name}” created — fill it anytime`
+            : `Bundle “${name}” saved`,
+        );
+      } else {
+        const target = bundles.find((b) => b.id === pickTarget);
+        if (!target) {
+          onToast('That bundle no longer exists.');
+          stopPicking();
+          return;
+        }
+        const fresh = pickedIds.filter((id) => !target.memberIds.includes(id));
+        await updateBundle({ ...target, memberIds: [...target.memberIds, ...fresh] });
+        onToast(
+          `Added ${fresh.length} ${fresh.length === 1 ? 'tweet' : 'tweets'} to “${target.name}”`,
+        );
+      }
       stopPicking();
-      onToast(`Bundle “${name}” saved`);
       await refreshBundles();
     } catch (err) {
       onToast(err instanceof Error ? err.message : 'Could not save the bundle.');
@@ -298,14 +337,18 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
         items={items}
         open={bundlesOpen}
         onToggleOpen={() => setBundlesOpen((v) => !v)}
-        onStartPicking={!picking && items.length > 0 ? startPicking : null}
+        onStartPicking={!picking ? () => startPicking(null) : null}
+        onAddMembers={!picking && items.length > 0 ? (b) => startPicking(b.id) : null}
         creation={
           picking
             ? {
                 name: bundleName,
                 setName: setBundleName,
+                target: pickTarget,
+                setTarget: retargetPicks,
                 pickedCount: pickedIds.length,
-                onSave: () => void saveBundle(),
+                canSave: canSavePicks,
+                onSave: () => void savePicks(),
                 onCancel: stopPicking,
               }
             : null
@@ -440,6 +483,12 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
                 picking
                   ? {
                       index: pickedIds.includes(it.id) ? pickedIds.indexOf(it.id) + 1 : null,
+                      // Appending to an existing bundle: its members
+                      // show a locked check, not a pickable row.
+                      locked:
+                        pickTarget !== null &&
+                        (bundles.find((b) => b.id === pickTarget)?.memberIds.includes(it.id) ??
+                          false),
                       onToggle: () => togglePick(it.id),
                     }
                   : undefined

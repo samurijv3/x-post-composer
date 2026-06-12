@@ -6,7 +6,14 @@ import { IcChevDown, IcChevR, IcChevUp, IcEdit, IcPlus, IcTrash, IcX } from '../
 interface BundleCreation {
   name: string;
   setName: (v: string) => void;
+  /** Destination: an existing bundle's id that the picks append to,
+   *  or null for a brand-new bundle (named via `name`). */
+  target: string | null;
+  setTarget: (v: string | null) => void;
   pickedCount: number;
+  /** New bundle: name required (picks optional — empty is a valid
+   *  start). Existing bundle: at least one pick. Decided by the owner. */
+  canSave: boolean;
   onSave: () => void;
   onCancel: () => void;
 }
@@ -17,9 +24,12 @@ interface BundleSectionProps {
   items: LibraryItem[];
   open: boolean;
   onToggleOpen: () => void;
-  /** Starts bundle-building selection mode. Null hides the + (picking
-   *  already active, or nothing in the library to pick from). */
+  /** Starts bundle-building selection mode targeting a NEW bundle.
+   *  Null hides the + (picking already active). */
   onStartPicking: (() => void) | null;
+  /** Starts selection mode targeting an existing bundle (its row's +).
+   *  Null hides the per-row control (picking active, or empty library). */
+  onAddMembers: ((bundle: Bundle) => void) | null;
   /** Non-null while selection mode is active — renders the name/save
    *  bar inside this section, where the new bundle will appear. */
   creation: BundleCreation | null;
@@ -49,6 +59,7 @@ export function BundleSection({
   open,
   onToggleOpen,
   onStartPicking,
+  onAddMembers,
   creation,
   onRename,
   onRemoveMember,
@@ -86,30 +97,51 @@ export function BundleSection({
 
       {open && creation && (
         <div className="card inset bundle-create">
-          <span className="eyebrow">New bundle</span>
+          <span className="eyebrow">{creation.target === null ? 'New bundle' : 'Add tweets'}</span>
           <p className="help" style={{ margin: '4px 0 8px' }}>
-            Tap tweets below in the order you want them. The bundle becomes the exact set of voice
-            examples for drafts you compose from it.
+            {creation.target === null
+              ? 'Tap tweets below in the order you want them — or save it empty and fill it from X with the capture banner’s “Also file into”.'
+              : 'Tap tweets below to add them — they append at the end of the bundle. Checked rows are already in it.'}
           </p>
+          {bundles.length > 0 && (
+            <label className="bundle-pick" style={{ marginBottom: 8 }}>
+              <span className="fld-label">Into</span>
+              <select
+                value={creation.target ?? ''}
+                onChange={(e) => creation.setTarget(e.target.value === '' ? null : e.target.value)}
+                title="Where the tapped tweets go"
+              >
+                <option value="">New bundle…</option>
+                {bundles.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    Bundle: {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="field-row">
-            <input
-              className="bundle-name-input"
-              placeholder="Bundle name — e.g. “Day X series”"
-              value={creation.name}
-              autoFocus
-              onChange={(e) => creation.setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') creation.onSave();
-                if (e.key === 'Escape') creation.onCancel();
-              }}
-            />
+            {creation.target === null && (
+              <input
+                className="bundle-name-input"
+                placeholder="Bundle name — e.g. “Day X series”"
+                value={creation.name}
+                autoFocus
+                onChange={(e) => creation.setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') creation.onSave();
+                  if (e.key === 'Escape') creation.onCancel();
+                }}
+              />
+            )}
             <button
               type="button"
               className="btn primary sm"
-              disabled={creation.name.trim() === '' || creation.pickedCount === 0}
+              disabled={!creation.canSave}
               onClick={creation.onSave}
             >
-              Save{creation.pickedCount > 0 ? ` (${creation.pickedCount})` : ''}
+              {creation.target === null ? 'Create' : 'Add'}
+              {creation.pickedCount > 0 ? ` (${creation.pickedCount})` : ''}
             </button>
             <button type="button" className="btn ghost sm" onClick={creation.onCancel}>
               Cancel
@@ -139,6 +171,7 @@ export function BundleSection({
                 onRemoveMember={(itemId) => onRemoveMember(b, itemId)}
                 onLocateMember={onLocateMember}
                 onMoveMember={(itemId, dir) => onMoveMember(b, itemId, dir)}
+                onAddMembers={onAddMembers ? () => onAddMembers(b) : null}
                 onDelete={() => onDelete(b)}
               />
             ))}
@@ -158,6 +191,7 @@ interface BundleRowProps {
   onRemoveMember: (itemId: string) => void;
   onLocateMember: (itemId: string) => void;
   onMoveMember: (itemId: string, direction: 'up' | 'down') => void;
+  onAddMembers: (() => void) | null;
   onDelete: () => void;
 }
 
@@ -170,6 +204,7 @@ function BundleRow({
   onRemoveMember,
   onLocateMember,
   onMoveMember,
+  onAddMembers,
   onDelete,
 }: BundleRowProps) {
   const [renaming, setRenaming] = useState<boolean>(false);
@@ -218,6 +253,18 @@ function BundleRow({
           </button>
         )}
         <span className="head-spacer" />
+        {onAddMembers && (
+          <button
+            type="button"
+            className="icon-btn"
+            style={{ width: 26, height: 26 }}
+            title="Add saved tweets to this bundle"
+            aria-label="Add saved tweets to this bundle"
+            onClick={onAddMembers}
+          >
+            <IcPlus />
+          </button>
+        )}
         <button
           type="button"
           className="icon-btn"

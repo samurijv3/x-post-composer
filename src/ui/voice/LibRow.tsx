@@ -14,8 +14,10 @@ interface LibRowProps {
   /** Bundle-building selection mode: when non-null, the row renders a
    *  pick control instead of its actions, and the value is this row's
    *  1-based position in the selection (members are stored in selection
-   *  order — the number makes that order visible) or null if unpicked. */
-  selection?: { index: number | null; onToggle: () => void };
+   *  order — the number makes that order visible) or null if unpicked.
+   *  `locked` = already a member of the destination bundle: a checked,
+   *  inert mark instead of a silent skip at save time. */
+  selection?: { index: number | null; locked: boolean; onToggle: () => void };
 }
 
 /** One saved example — clamped to 2 lines with Show more/less, inline edit. */
@@ -64,16 +66,19 @@ export function LibRow({
   const hl = highlight === 'added' ? 'just-added' : highlight === 'locate' ? 'flash-locate' : '';
   const relTime = formatRelativeTweetTime(item.timestamp);
   const displayName = item.authorDisplayName ?? item.authorHandle;
-  const picked = selection?.index != null;
+  const locked = selection?.locked ?? false;
+  const picked = selection?.index != null || locked;
+  const pickable = selection !== undefined && !editing && !locked;
 
   return (
     <li
       ref={rowRef}
-      className={`lib-row ${hl} ${editing ? 'editing' : ''} ${selection && !editing ? 'pickable' : ''} ${picked ? 'picked' : ''}`}
+      className={`lib-row ${hl} ${editing ? 'editing' : ''} ${pickable ? 'pickable' : ''} ${picked ? 'picked' : ''}`}
       // In selection mode the whole row is the pick target (the
       // checkbox inside carries keyboard access) — except while this
-      // row's inline editor is open, where clicks belong to the editor.
-      onClick={selection && !editing ? selection.onToggle : undefined}
+      // row's inline editor is open (clicks belong to the editor) or
+      // when it's locked (already in the destination bundle).
+      onClick={pickable ? selection.onToggle : undefined}
     >
       {editing ? (
         <div className="lib-edit">
@@ -135,14 +140,27 @@ export function LibRow({
               )}
               <span className="head-spacer" />
               {selection ? (
-                <label className="pick-mark" onClick={(e) => e.stopPropagation()}>
+                <label
+                  className="pick-mark"
+                  title={locked ? 'Already in this bundle' : undefined}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <input
                     type="checkbox"
                     checked={picked}
+                    disabled={locked}
                     onChange={selection.onToggle}
-                    aria-label={picked ? 'Remove from bundle' : 'Add to bundle'}
+                    aria-label={
+                      locked
+                        ? 'Already in this bundle'
+                        : picked
+                          ? 'Remove from bundle'
+                          : 'Add to bundle'
+                    }
                   />
-                  <span className="pick-badge">{selection.index ?? ''}</span>
+                  <span className={`pick-badge ${locked ? 'locked' : ''}`}>
+                    {locked ? '✓' : (selection.index ?? '')}
+                  </span>
                 </label>
               ) : (
                 <div className="lib-actions">
