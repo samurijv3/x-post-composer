@@ -16,7 +16,7 @@
  * repair, tighten — carries a system block (role + precedence + style
  * guide + exclusions), so no pass is ever voice-blind.
  */
-import { getAllItems, getApiKey, getSettings, setLastPrompt } from '../../src/storage';
+import { getAllItems, getApiKey, getBundle, getSettings, setLastPrompt } from '../../src/storage';
 import type { PromptCall } from '../../src/storage';
 import type { GenerationRequest, GenerationResult, RefineRequest, Settings } from '../../src/types';
 import { selectExamples } from '../../src/lib/sampling';
@@ -67,6 +67,22 @@ export async function runGeneration(request: GenerationRequest): Promise<Generat
     };
   }
 
+  // Bundle-seeded generation: resolve the picked bundle up front. A
+  // missing bundle (deleted between pick and generate) is an honest
+  // error, never a silent fallback to sampling — the user asked for a
+  // specific seed and should know they didn't get it.
+  let bundle = null;
+  if (request.bundleId != null) {
+    bundle = await getBundle(request.bundleId);
+    if (bundle === null) {
+      return {
+        ok: false,
+        kind: 'bad-request',
+        message: 'That bundle no longer exists. Pick another, or generate without one.',
+      };
+    }
+  }
+
   const library = await getAllItems();
   const examples = selectExamples(
     request.mode,
@@ -80,6 +96,7 @@ export async function runGeneration(request: GenerationRequest): Promise<Generat
       poolSize: settings.poolSize,
       starCount: settings.starCount,
       curatedShare: settings.curatedArchiveBalance,
+      ...(bundle !== null && { bundleMemberIds: bundle.memberIds }),
     },
   );
 
@@ -94,13 +111,16 @@ export async function runGeneration(request: GenerationRequest): Promise<Generat
     ? settings.temperature.regenerate
     : settings.temperature.generate;
 
+  // The inspector label carries the seed so a bundle-driven prompt is
+  // visibly bundle-driven (transparency is load-bearing).
+  const baseLabel = request.isRegenerate ? 'regenerate' : 'generate';
   return runPipeline({
     apiKey,
     settings,
     mode: request.mode,
     charCap: request.charCap,
     initialPrompt,
-    initialLabel: request.isRegenerate ? 'regenerate' : 'generate',
+    initialLabel: bundle !== null ? `${baseLabel} (bundle: ${bundle.name})` : baseLabel,
     temperature,
   });
 }

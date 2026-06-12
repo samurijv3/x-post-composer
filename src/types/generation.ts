@@ -52,6 +52,11 @@ export interface GenerationRequest {
    *  "fragments" signal for the intent framing, stronger than letting
    *  the heuristic re-guess from the text. */
   bulletedInput?: boolean;
+  /** Bundle seeding this generation (roadmap Phase 6): the bundle's
+   *  members replace the sampled voice pool. Null/absent = sample the
+   *  general corpus. The background resolves the id and errors honestly
+   *  if the bundle has been deleted — never a silent fallback. */
+  bundleId?: string | null;
 }
 
 /**
