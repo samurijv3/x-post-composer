@@ -295,16 +295,27 @@ export default defineContentScript({
 
     // ---------------------------------------------------------------
     // Hover detection — drives preview overlay. The same cursor is
-    // ALSO driven by arrow keys (below); the two hand off naturally:
-    // real mouse movement always wins, but the synthetic mouseover
-    // Chrome fires when OUR scrollIntoView slides the page under a
-    // stationary pointer must not snap the cursor back to the mouse —
-    // hence the unmoved-coords suppression window after a key step.
+    // ALSO driven by arrow keys (below); `keyboardNavActive` arbitrates
+    // (the pattern lifted from Undercurrent's list nav): while the
+    // keyboard is driving, hover events don't move the cursor at all —
+    // including the synthetic mouseover/mousemove Chrome fires when
+    // our own scroll slides the page under a stationary pointer. Only
+    // GENUINE pointer movement (coordinates changed) hands control
+    // back to the mouse, and then the next hover takes over.
     // ---------------------------------------------------------------
     let hoveredArticle: Element | null = null;
+    let keyboardNavActive = false;
     let lastPointerX = -1;
     let lastPointerY = -1;
-    let keyboardNavUntil = 0;
+
+    document.addEventListener('mousemove', (event) => {
+      const moved = event.clientX !== lastPointerX || event.clientY !== lastPointerY;
+      lastPointerX = event.clientX;
+      lastPointerY = event.clientY;
+      // Scroll-end synthetic mousemove keeps the old coordinates —
+      // only real movement ends keyboard control.
+      if (moved && keyboardNavActive) keyboardNavActive = false;
+    });
 
     document.addEventListener('mouseover', (event) => {
       // No mode active or panel closed → no preview, no work to do.
@@ -313,14 +324,7 @@ export default defineContentScript({
       // previews its dead click handler can never act on — probing
       // flips extensionAlive, and the rAF loop tears everything down.
       if (captureMode === 'none' || !panelOpen || !isAlive()) return;
-      // Scroll-induced mouseover (pointer didn't actually move) right
-      // after an arrow step is our own scrollIntoView echoing back —
-      // ignore it. Wheel-scroll hover updates outside the window keep
-      // working; any genuine pointer movement takes over immediately.
-      const pointerMoved = event.clientX !== lastPointerX || event.clientY !== lastPointerY;
-      lastPointerX = event.clientX;
-      lastPointerY = event.clientY;
-      if (!pointerMoved && Date.now() < keyboardNavUntil) return;
+      if (keyboardNavActive) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
       const article = target.closest('article[data-testid="tweet"]');
@@ -348,6 +352,8 @@ export default defineContentScript({
       // target is null). Element-to-element mouseouts inside the
       // document are noisy and the corresponding mouseover handles them.
       if (event.relatedTarget !== null) return;
+      // A keyboard-placed cursor is not the mouse's to clear.
+      if (keyboardNavActive) return;
       if (hoveredArticle !== null) {
         hoveredArticle = null;
         applyOverlayState();
@@ -404,7 +410,8 @@ export default defineContentScript({
     // in an editable field, never with modifiers held. At the rendered
     // list's edges the press deliberately passes through — the native
     // scroll makes X's virtualization render more tweets, so the next
-    // press continues.
+    // press continues. Held keys accelerate (1 → 2 → 3 tweets per
+    // press; tweets are tall, so the ramp stays gentle).
     // ---------------------------------------------------------------
     function isEditableTarget(target: EventTarget | null): boolean {
       if (!(target instanceof Element)) return false;
@@ -415,6 +422,27 @@ export default defineContentScript({
       );
     }
 
+    /**
+     * Nudge the cursor article into the comfortable band of the
+     * viewport — scroll only when it sits within MARGIN of an edge (or
+     * off screen), and only BY the overshoot, smoothly. Mid-viewport
+     * steps don't scroll at all; a taller-than-band tweet anchors its
+     * top so reading starts at the start.
+     */
+    const SCROLL_MARGIN = 100;
+    function nudgeArticleIntoView(article: Element): void {
+      const rect = article.getBoundingClientRect();
+      const topBound = SCROLL_MARGIN;
+      const bottomBound = window.innerHeight - SCROLL_MARGIN;
+      if (rect.height > bottomBound - topBound || rect.top < topBound) {
+        window.scrollBy({ top: rect.top - topBound, behavior: 'smooth' });
+      } else if (rect.bottom > bottomBound) {
+        window.scrollBy({ top: rect.bottom - bottomBound, behavior: 'smooth' });
+      }
+    }
+
+    let navRepeatCount = 0;
+
     document.addEventListener(
       'keydown',
       (event) => {
@@ -424,16 +452,26 @@ export default defineContentScript({
         if (isEditableTarget(event.target)) return;
 
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-          const cursor =
+          // The keyboard takes the cursor even when the step itself
+          // can't move (edge): the suppression must already hold when
+          // the passed-through native scroll fires echo mouseovers.
+          keyboardNavActive = true;
+          navRepeatCount = event.repeat ? navRepeatCount + 1 : 0;
+          const step = navRepeatCount < 5 ? 1 : navRepeatCount < 15 ? 2 : 3;
+          let cursor =
             hoveredArticle !== null && hoveredArticle.isConnected ? hoveredArticle : null;
-          const next = stepToAdjacentArticle(cursor, event.key === 'ArrowDown' ? 1 : -1);
+          if (cursor === null && captureMode === 'reply-context') {
+            // Nav resumes from the current selection — the locked
+            // tweet — when it's rendered, rather than the viewport.
+            cursor = findLockArticle(isXModalOpen() ? 'modal' : 'page');
+          }
+          const next = stepToAdjacentArticle(cursor, event.key === 'ArrowDown' ? 1 : -1, step);
           if (next === null) return;
           event.preventDefault();
           event.stopPropagation();
           hoveredArticle = next;
           applyOverlayState();
-          keyboardNavUntil = Date.now() + 600;
-          next.scrollIntoView({ block: 'center' });
+          nudgeArticleIntoView(next);
         } else if (event.key === 'Enter') {
           if (hoveredArticle === null || !hoveredArticle.isConnected) return;
           event.preventDefault();

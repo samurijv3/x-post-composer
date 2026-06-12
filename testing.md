@@ -2,7 +2,7 @@
 
 Normative rule: CLAUDE.md §5 — every load-bearing piece of deterministic logic has a behavioral test; **no coverage-percentage gate, no filler tests**. This file is the how.
 
-Current state: **480 tests, 29 files**, all green via `npm run test`.
+Current state: **481 tests, 29 files**, all green via `npm run test`.
 
 ## Stack and config
 
@@ -33,7 +33,7 @@ Current state: **480 tests, 29 files**, all green via `npm run test`.
 | Settings merge + migration                                               | `src/storage/config.test.ts`                                 | Decides whether saved settings survive upgrades (blanked-template restore, nested merges, empty-banlist preservation)                                                                                                                             |
 | Corpus + IDB migration                                                   | `src/storage/corpus.test.ts` + `src/storage/bundles.test.ts` | CRUD (items + bundles), duplicate-id constraint, single-tx clear of BOTH stores, and real seeded migrations (v1→v3 chain, v2→v3 taxonomy collapse, v3→v4 favorite backfill, v4→v5 bundles store)                                                  |
 | Anthropic client                                                         | `src/api/anthropic.test.ts`                                  | Request shape (key in header only, never in body/errors), the full HTTP-status → error-kind table, text-block extraction — all against a stubbed `fetch`, no network                                                                              |
-| X-markup extraction                                                      | `entrypoints/twitter.content/extract.test.ts` (64 tests)     | Each test pins one assumption about X's DOM — incl. the self-reply spine walk (root finding, foreign-stop, reply-root degrade, truncation); when X drifts, the failing test **names the assumption that died**                                    |
+| X-markup extraction                                                      | `entrypoints/twitter.content/extract.test.ts` (65 tests)     | Each test pins one assumption about X's DOM — incl. the self-reply spine walk (root finding, foreign-stop, reply-root degrade, truncation); when X drifts, the failing test **names the assumption that died**                                    |
 
 ## Deliberately untested (don't add filler here)
 

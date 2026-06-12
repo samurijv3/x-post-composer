@@ -293,6 +293,17 @@ describe('stepToAdjacentArticle (arrow-key navigation)', () => {
     expect(stepToAdjacentArticle(gone, 1)).toBe(a);
   });
 
+  it('accelerated steps clamp to the list ends instead of overshooting to null', () => {
+    const a = tweetArticle({ statusId: '1' });
+    const b = tweetArticle({ statusId: '2' });
+    const c = tweetArticle({ statusId: '3' });
+    document.body.append(cell(a), cell(b), cell(c));
+    expect(stepToAdjacentArticle(a, 1, 2)).toBe(c);
+    expect(stepToAdjacentArticle(a, 1, 8)).toBe(c); // clamped, still moves
+    expect(stepToAdjacentArticle(c, 1, 8)).toBeNull(); // no move possible
+    expect(stepToAdjacentArticle(c, -1, 8)).toBe(a);
+  });
+
   it('is confined to the modal layer while a modal is open', () => {
     const dialog = fromHTML('<div role="dialog" aria-modal="true"></div>');
     const m1 = tweetArticle({ statusId: '10' });

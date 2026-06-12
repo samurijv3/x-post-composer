@@ -322,18 +322,23 @@ export function isXModalOpen(): boolean {
 }
 
 /**
- * Step from `current` to the adjacent tweet article in DOM order —
+ * Step from `current` toward the adjacent tweet article in DOM order —
  * the brain of arrow-key navigation in capture modes. Modal-aware:
  * while X has a modal open, stepping is confined to modal-resident
  * articles (the same layer scoping as overlay painting); otherwise to
  * page-layer articles. A null, disconnected, or out-of-layer `current`
  * starts from the viewport: stepping down picks the first article not
  * yet scrolled past, stepping up the last one on screen (with the
- * list's edges as fallback). Returns null at the rendered list's
- * edges — the caller lets the keypress scroll natively, which makes
- * X's virtualization render more articles for the next press.
+ * list's edges as fallback). `step` > 1 (held-key acceleration) clamps
+ * to the rendered list's ends. Returns null only when there is no
+ * move at all — the caller lets the keypress scroll natively, which
+ * makes X's virtualization render more articles for the next press.
  */
-export function stepToAdjacentArticle(current: Element | null, direction: 1 | -1): Element | null {
+export function stepToAdjacentArticle(
+  current: Element | null,
+  direction: 1 | -1,
+  step = 1,
+): Element | null {
   const scope = isXModalOpen() ? 'modal' : 'page';
   const articles = Array.from(document.querySelectorAll('article[data-testid="tweet"]')).filter(
     (article) => articleInLayer(article, scope),
@@ -354,7 +359,9 @@ export function stepToAdjacentArticle(current: Element | null, direction: 1 | -1
       null
     );
   }
-  return articles[index + direction] ?? null;
+  const target = Math.max(0, Math.min(articles.length - 1, index + direction * step));
+  if (target === index) return null;
+  return articles[target] ?? null;
 }
 
 /**
