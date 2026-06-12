@@ -1,53 +1,140 @@
 import { useState } from 'react';
 import type { Bundle, LibraryItem } from '../../types';
 import { resolveBundleMembers } from '../../lib/bundles';
-import { IcChevDown, IcChevR, IcEdit, IcTrash, IcX } from '../icons';
+import { IcChevDown, IcChevR, IcEdit, IcPlus, IcTrash, IcX } from '../icons';
+
+interface BundleCreation {
+  name: string;
+  setName: (v: string) => void;
+  pickedCount: number;
+  onSave: () => void;
+  onCancel: () => void;
+}
 
 interface BundleSectionProps {
   bundles: Bundle[];
   /** Current library, for resolving members and showing honest counts. */
   items: LibraryItem[];
+  open: boolean;
+  onToggleOpen: () => void;
+  /** Starts bundle-building selection mode. Null hides the + (picking
+   *  already active, or nothing in the library to pick from). */
+  onStartPicking: (() => void) | null;
+  /** Non-null while selection mode is active — renders the name/save
+   *  bar inside this section, where the new bundle will appear. */
+  creation: BundleCreation | null;
   onRename: (bundle: Bundle, name: string) => void;
   onRemoveMember: (bundle: Bundle, itemId: string) => void;
   onDelete: (bundle: Bundle) => void;
 }
 
 /**
- * The saved-bundles list on the Voice screen — deliberately quiet
- * management for a power feature: expand a bundle to see (and prune)
- * its members, rename inline, delete. Member counts are honest: ids
- * whose items were deleted from the library show as "missing" rather
- * than being silently absorbed.
+ * The Bundles section of the Voice screen — a sibling of Saved
+ * examples with the same header pattern (chevron + count + the
+ * section's own action button). Always rendered so the create entry
+ * point lives where the result appears; the list is height-bounded
+ * (internal scroll) so a pile of bundles can never shove the examples
+ * off-screen. Member counts are honest: ids whose items were deleted
+ * show as "missing" rather than being silently absorbed.
  */
 export function BundleSection({
   bundles,
   items,
+  open,
+  onToggleOpen,
+  onStartPicking,
+  creation,
   onRename,
   onRemoveMember,
   onDelete,
 }: BundleSectionProps) {
   const [openId, setOpenId] = useState<string | null>(null);
-  if (bundles.length === 0) return null;
   return (
     <div className="bundle-section">
-      <span className="eyebrow">Bundles</span>
-      <p className="help" style={{ marginTop: 2 }}>
-        Pick one in Compose to seed a draft from these exact tweets instead of the usual sample.
-      </p>
-      <ul className="bundle-list">
-        {bundles.map((b) => (
-          <BundleRow
-            key={b.id}
-            bundle={b}
-            items={items}
-            open={openId === b.id}
-            onToggle={() => setOpenId(openId === b.id ? null : b.id)}
-            onRename={(name) => onRename(b, name)}
-            onRemoveMember={(itemId) => onRemoveMember(b, itemId)}
-            onDelete={() => onDelete(b)}
-          />
-        ))}
-      </ul>
+      <div className="sec-head">
+        <button
+          type="button"
+          className="sec-toggle"
+          aria-expanded={open}
+          onClick={onToggleOpen}
+          title={open ? 'Collapse bundles' : 'Show bundles'}
+        >
+          {open ? <IcChevDown /> : <IcChevR />}
+          <span className="eyebrow">Bundles{bundles.length > 0 ? ` · ${bundles.length}` : ''}</span>
+        </button>
+        <span className="head-spacer" />
+        {onStartPicking && (
+          <button
+            type="button"
+            className="icon-btn"
+            title="New bundle — pick specific tweets as a reusable voice seed"
+            aria-label="New bundle"
+            onClick={onStartPicking}
+          >
+            <IcPlus />
+          </button>
+        )}
+      </div>
+
+      {open && creation && (
+        <div className="card inset bundle-create">
+          <span className="eyebrow">New bundle</span>
+          <p className="help" style={{ margin: '4px 0 8px' }}>
+            Tap tweets below in the order you want them. The bundle becomes the exact set of voice
+            examples for drafts you compose from it.
+          </p>
+          <div className="field-row">
+            <input
+              className="bundle-name-input"
+              placeholder="Bundle name — e.g. “Day X series”"
+              value={creation.name}
+              autoFocus
+              onChange={(e) => creation.setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') creation.onSave();
+                if (e.key === 'Escape') creation.onCancel();
+              }}
+            />
+            <button
+              type="button"
+              className="btn primary sm"
+              disabled={creation.name.trim() === '' || creation.pickedCount === 0}
+              onClick={creation.onSave}
+            >
+              Save{creation.pickedCount > 0 ? ` (${creation.pickedCount})` : ''}
+            </button>
+            <button type="button" className="btn ghost sm" onClick={creation.onCancel}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {open && bundles.length === 0 && !creation && (
+        <p className="help" style={{ margin: 0 }}>
+          A bundle seeds a draft from specific tweets — e.g. a “day X” series — instead of the usual
+          sample. Start one with <strong>+</strong>.
+        </p>
+      )}
+
+      {open && bundles.length > 0 && (
+        <div className="bundle-scroll">
+          <ul className="bundle-list">
+            {bundles.map((b) => (
+              <BundleRow
+                key={b.id}
+                bundle={b}
+                items={items}
+                open={openId === b.id}
+                onToggle={() => setOpenId(openId === b.id ? null : b.id)}
+                onRename={(name) => onRename(b, name)}
+                onRemoveMember={(itemId) => onRemoveMember(b, itemId)}
+                onDelete={() => onDelete(b)}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

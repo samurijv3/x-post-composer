@@ -1297,14 +1297,38 @@ code {
   gap: 9px;
 }
 
-.lib-header {
+/* Shared section header (Bundles / Saved examples): chevron + title +
+   count on the left, the section's own action button on the right. */
+.sec-head {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: center;
+  gap: 6px;
+}
+.sec-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  padding: 2px 0;
+  cursor: pointer;
+  color: var(--text);
+}
+.sec-toggle svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-3);
 }
 
 /* ---- bundles (Phase 6) ---- */
+
+/* Bounded real estate: a pile of bundles scrolls internally instead of
+   shoving the examples list off-screen. */
+.bundle-scroll {
+  max-height: 264px;
+  overflow-y: auto;
+}
 
 /* Selection mode: the whole row is the pick target. */
 .lib-row.pickable {

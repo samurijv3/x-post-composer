@@ -12,7 +12,7 @@ import {
 } from '../storage';
 import { isMessageOfType, onNotice, sendToBackground, type BackgroundReply } from '../messaging';
 import type { Bundle, LibraryItem } from '../types';
-import { IcPlus, IcVoice } from './icons';
+import { IcChevDown, IcChevR, IcPlus, IcVoice } from './icons';
 import type { ToastData } from './Toast';
 import { AddForm } from './voice/AddForm';
 import { BundleSection } from './voice/BundleSection';
@@ -50,6 +50,9 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
   const [picking, setPicking] = useState<boolean>(false);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [bundleName, setBundleName] = useState<string>('');
+  // The two screen sections collapse independently; both default open.
+  const [bundlesOpen, setBundlesOpen] = useState<boolean>(true);
+  const [examplesOpen, setExamplesOpen] = useState<boolean>(true);
 
   // "Show me" promised to show THE row — if a type filter would hide
   // it, the flash would be invisible and the CTA would read as broken.
@@ -156,6 +159,14 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
     setPickedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
+  function startPicking(): void {
+    setPicking(true);
+    // Picking needs both sections: the create bar lives in Bundles,
+    // the pick targets are the examples list.
+    setBundlesOpen(true);
+    setExamplesOpen(true);
+  }
+
   function stopPicking(): void {
     setPicking(false);
     setPickedIds([]);
@@ -254,18 +265,39 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
       <BundleSection
         bundles={bundles}
         items={items}
+        open={bundlesOpen}
+        onToggleOpen={() => setBundlesOpen((v) => !v)}
+        onStartPicking={!picking && items.length > 0 ? startPicking : null}
+        creation={
+          picking
+            ? {
+                name: bundleName,
+                setName: setBundleName,
+                pickedCount: pickedIds.length,
+                onSave: () => void saveBundle(),
+                onCancel: stopPicking,
+              }
+            : null
+        }
         onRename={(b, name) => void renameBundle(b, name)}
         onRemoveMember={(b, itemId) => void removeBundleMember(b, itemId)}
         onDelete={(b) => void removeBundle(b)}
       />
 
-      <div className="lib-header">
-        <div>
-          <span className="eyebrow">Saved examples</span>
-          <p className="help" style={{ marginTop: 2 }}>
-            The writing your drafts learn from. Edit or retype anytime.
-          </p>
-        </div>
+      <div className="sec-head">
+        <button
+          type="button"
+          className="sec-toggle"
+          aria-expanded={examplesOpen}
+          onClick={() => setExamplesOpen((v) => !v)}
+          title={examplesOpen ? 'Collapse saved examples' : 'Show saved examples'}
+        >
+          {examplesOpen ? <IcChevDown /> : <IcChevR />}
+          <span className="eyebrow">
+            Saved examples{items.length > 0 ? ` · ${items.length}` : ''}
+          </span>
+        </button>
+        <span className="head-spacer" />
         {/* Only show + when the form is closed. While open, the
             dismiss control lives inside the form's own header so it's
             visually attached to the thing being dismissed. */}
@@ -275,106 +307,73 @@ export function VoiceScreen({ onToast, flashRow }: Props) {
             className="icon-btn"
             title="Add manually"
             aria-label="Add manually"
-            onClick={() => setAdding(true)}
+            onClick={() => {
+              setExamplesOpen(true);
+              setAdding(true);
+            }}
           >
             <IcPlus />
           </button>
         )}
       </div>
 
-      {adding && (
-        <AddForm
-          onAdd={(text, type) => void manualAdd(text, type)}
-          onCancel={() => setAdding(false)}
-        />
-      )}
-
-      {picking && (
-        <div className="card inset bundle-create">
-          <span className="eyebrow">New bundle</span>
-          <p className="help" style={{ margin: '4px 0 8px' }}>
-            Tap tweets below in the order you want them. The bundle becomes the exact set of voice
-            examples for drafts you compose from it.
+      {examplesOpen && (
+        <>
+          <p className="help" style={{ margin: '-6px 0 0' }}>
+            The writing your drafts learn from. Edit or retype anytime.
           </p>
-          <div className="field-row">
-            <input
-              className="bundle-name-input"
-              placeholder="Bundle name — e.g. “Day X series”"
-              value={bundleName}
-              autoFocus
-              onChange={(e) => setBundleName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void saveBundle();
-                if (e.key === 'Escape') stopPicking();
-              }}
+
+          {adding && (
+            <AddForm
+              onAdd={(text, type) => void manualAdd(text, type)}
+              onCancel={() => setAdding(false)}
             />
-            <button
-              type="button"
-              className="btn primary sm"
-              disabled={bundleName.trim() === '' || pickedIds.length === 0}
-              onClick={() => void saveBundle()}
-            >
-              Save{pickedIds.length > 0 ? ` (${pickedIds.length})` : ''}
-            </button>
-            <button type="button" className="btn ghost sm" onClick={stopPicking}>
-              Cancel
-            </button>
+          )}
+
+          <div className="field-row">
+            <div className="pillrow">
+              <button
+                type="button"
+                className={`pill ${filter === 'all' ? 'active' : ''}`}
+                onClick={() => setFilter('all')}
+              >
+                All {items.length}
+              </button>
+              <button
+                type="button"
+                className={`pill ${filter === 'post' ? 'active' : ''}`}
+                onClick={() => setFilter('post')}
+              >
+                Posts {posts}
+              </button>
+              <button
+                type="button"
+                className={`pill ${filter === 'reply' ? 'active' : ''}`}
+                onClick={() => setFilter('reply')}
+              >
+                Replies {replies}
+              </button>
+              {starred > 0 && (
+                <button
+                  type="button"
+                  className={`pill ${filter === 'starred' ? 'active' : ''}`}
+                  title="Starred items are guaranteed in every prompt — keep the set small"
+                  onClick={() => setFilter('starred')}
+                >
+                  ★ {starred}
+                </button>
+              )}
+            </div>
+            {visible.length > 0 && (
+              <button type="button" className="btn ghost sm" onClick={toggleAll}>
+                {allOpen ? 'Collapse all' : 'Expand all'}
+              </button>
+            )}
           </div>
-        </div>
+        </>
       )}
 
-      <div className="field-row">
-        <div className="pillrow">
-          <button
-            type="button"
-            className={`pill ${filter === 'all' ? 'active' : ''}`}
-            onClick={() => setFilter('all')}
-          >
-            All {items.length}
-          </button>
-          <button
-            type="button"
-            className={`pill ${filter === 'post' ? 'active' : ''}`}
-            onClick={() => setFilter('post')}
-          >
-            Posts {posts}
-          </button>
-          <button
-            type="button"
-            className={`pill ${filter === 'reply' ? 'active' : ''}`}
-            onClick={() => setFilter('reply')}
-          >
-            Replies {replies}
-          </button>
-          {starred > 0 && (
-            <button
-              type="button"
-              className={`pill ${filter === 'starred' ? 'active' : ''}`}
-              title="Starred items are guaranteed in every prompt — keep the set small"
-              onClick={() => setFilter('starred')}
-            >
-              ★ {starred}
-            </button>
-          )}
-        </div>
-        {!picking && items.length > 0 && (
-          <button
-            type="button"
-            className="btn ghost sm"
-            title="Pick specific tweets as a reusable voice seed"
-            onClick={() => setPicking(true)}
-          >
-            New bundle
-          </button>
-        )}
-        {visible.length > 0 && (
-          <button type="button" className="btn ghost sm" onClick={toggleAll}>
-            {allOpen ? 'Collapse all' : 'Expand all'}
-          </button>
-        )}
-      </div>
-
-      {visible.length === 0 ? (
+      {!examplesOpen ? null : visible.length === 0 ? (
         items.length === 0 ? (
           <div className="empty">
             <IcVoice className="ei" />
