@@ -102,6 +102,7 @@ Then open the panel (toolbar icon), click the gear to open **Settings**, and in 
 1. **Save one**: open your thread's page on X (click into it), turn on capture, click any post in it — the visible self-reply chain saves as one thread ("Saved as a thread · N posts"; scroll long threads fully into view first, and expand any "Show more" post). Or paste it via **Add manually → Thread**, separating posts with a line containing only `---`.
 2. **Compose one**: flip the **Post ↔ Thread** switch, set the **≈N** target, generate. The draft arrives as ordered cards — edit any card in place, copy them one by one (the big button always offers the next uncopied post). Copying every card commits the thread; with the shipped loop on it saves back to Voice as a thread.
 3. **Reshape**: chips and the steer box act on the whole thread (denser/warmer/etc.); changing **≈N** over the draft _repacks_ the same content into more or fewer posts; ≤280 applies per post.
+4. **Refine one post**: each card has a **Rewrite** button (fresh take on that post, same beat — the rest of the thread untouched) and an **Aim** toggle that points the chips and the steer box at just that card. Only the changed card's copied check resets; **Undo** reverses a scoped refine like any other.
 
 ### Compose
 
