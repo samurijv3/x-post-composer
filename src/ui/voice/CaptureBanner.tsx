@@ -58,33 +58,52 @@ export function CaptureBanner({ handle, bundles, onCreateBundle }: CaptureBanner
   }
 
   return (
-    <div className={`capture-banner ${on ? 'on' : ''}`}>
-      <div className="cb-top">
-        <span className="cb-dot" />
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600 }}>{on ? 'Saving from X' : 'Save tweets from X'}</div>
-          <p className="help" style={{ marginTop: 1 }}>
-            {on
-              ? 'Click your posts on x.com and they’ll land here.'
-              : handle
-                ? `Click your own posts on x.com to save them. Only @${handle}’s writing gets in.`
-                : 'Set your handle in Settings → Account first.'}
-          </p>
+    <div className={`capt-row ${on ? 'on' : ''}`}>
+      <span className="capt-dot" />
+      <div className="capt-main">
+        <div className="capt-title">{on ? 'Saving from X' : 'Save tweets from X'}</div>
+        <div className="capt-sub">
+          {on ? (
+            <>
+              Click your posts on x.com ·{' '}
+              <BundleTargetSelect
+                label="filing into"
+                bundles={bundles}
+                value={target}
+                onChange={(id) => void setCaptureBundleTarget(id)}
+                onCreateBundle={onCreateBundle}
+              />
+            </>
+          ) : handle ? (
+            `Click your own posts on x.com to save them. Only @${handle}’s writing gets in.`
+          ) : (
+            <>
+              Set your handle in{' '}
+              <button
+                type="button"
+                className="textlink"
+                onClick={() => void chrome.runtime.openOptionsPage()}
+              >
+                Settings → Account
+              </button>{' '}
+              first.
+            </>
+          )}
         </div>
-        <label className="switch">
-          <input type="checkbox" checked={on} onChange={() => void toggle()} />
-          <span className="track track-ok" />
-        </label>
       </div>
-      {on && (
-        <BundleTargetSelect
-          label="Also file into"
-          bundles={bundles}
-          value={target}
-          onChange={(id) => void setCaptureBundleTarget(id)}
-          onCreateBundle={onCreateBundle}
-        />
-      )}
+      <label
+        className="switch"
+        title={
+          !handle
+            ? 'Set your handle first'
+            : on
+              ? 'Stop saving from X'
+              : 'Click your posts on x.com and they’ll land here'
+        }
+      >
+        <input type="checkbox" checked={on} disabled={!handle} onChange={() => void toggle()} />
+        <span className="track" />
+      </label>
     </div>
   );
 }

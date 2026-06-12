@@ -289,11 +289,9 @@ body {
    Primitives
    ============================================================ */
 .eyebrow {
-  font-size: var(--fs-xs);
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-3);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--text);
 }
 .section-title {
   font-size: var(--fs-lg);
@@ -3527,4 +3525,249 @@ code {
 .tseg .draft-editor-layer {
   font-size: var(--fs-base);
   line-height: 1.45;
+}
+
+/* ============================================================
+   Reskin phase 4 — Voice: capture row, search pill, chips,
+   full-bleed rows, bundles, add form, edit-in-place.
+   ============================================================ */
+.screen.flush {
+  padding: 0;
+  gap: 0;
+}
+
+/* Capture: one row, pulsing blue dot when armed. */
+.capt-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+}
+.capt-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line-2);
+  flex-shrink: 0;
+}
+.capt-row.on .capt-dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-weak);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+.capt-main {
+  flex: 1;
+  min-width: 0;
+}
+.capt-title {
+  font-size: var(--fs-base);
+  font-weight: 700;
+}
+.capt-sub {
+  font-size: var(--fs-sm);
+  color: var(--text-2);
+  margin-top: 1px;
+}
+.capt-sub .textlink {
+  font: inherit;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+}
+.capt-sub .textlink:hover {
+  text-decoration: underline;
+}
+.capt-sub .bundle-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.capt-sub .bundle-pick .fld-label {
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--text-2);
+}
+.capt-sub .bundle-pick select {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  padding: 0 2px;
+  width: auto;
+  min-width: 0;
+}
+
+/* Search: X's filled pill. */
+.screen.flush .lib-search {
+  position: relative;
+  margin: 2px 16px 12px;
+}
+.lib-search input[type='search'] {
+  font: inherit;
+  font-size: var(--fs-md);
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  background: var(--field);
+  color: var(--text);
+  padding: 9px 16px 9px 38px;
+  outline: none;
+  box-shadow: none;
+}
+.lib-search input[type='search']:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+  box-shadow: none;
+}
+.lib-search .ls-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  color: var(--text-2);
+  pointer-events: none;
+}
+
+/* Filter chips: outline pills, active = black fill. */
+.filterrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 12px 16px;
+  overflow-x: auto;
+}
+.pill {
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  padding: 5px 13px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-2);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.pill:hover {
+  background: var(--hover);
+}
+.pill.active {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+/* Bundles: the collapsed section row + management rows. */
+.bundle-section .sec-head {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 11px 10px 11px 16px;
+}
+.screen.flush .lib-list {
+  margin: 0;
+  padding: 0;
+}
+.pickbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--accent-weak);
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.bundle-member .pick-badge.static {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--field);
+  border: 0;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.bundle-member.missing .help {
+  font-style: italic;
+}
+
+/* Library rows: full-bleed, hairline-divided. */
+.screen.flush .lib-row {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 12px 16px;
+  margin: 0;
+}
+.screen.flush .lib-row.editing {
+  background: var(--accent-weak);
+}
+.lib-row.editing textarea {
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+}
+.star-btn.starred {
+  color: var(--accent);
+}
+
+/* Add form. */
+.addform {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.af-title {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--text);
+}
+.addform textarea {
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  background: var(--field);
+  padding: 11px 14px;
+}
+.addform textarea:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+  box-shadow: none;
+}
+.addform textarea.af-mono {
+  font-family: var(--mono);
+  font-size: var(--fs-mono);
+}
+
+/* Empty states: centered icon + bold lede + one sentence. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  padding: 36px 24px;
+  color: var(--text-2);
+  font-size: var(--fs-md);
+}
+.empty .ei {
+  width: 28px;
+  height: 28px;
+  color: var(--line-2);
+}
+.empty .empty-lede {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: var(--text);
 }

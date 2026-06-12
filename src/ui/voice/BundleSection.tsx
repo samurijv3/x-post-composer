@@ -96,7 +96,7 @@ export function BundleSection({
       </div>
 
       {open && creation && (
-        <div className="card inset bundle-create">
+        <div className="pickbar">
           <span className="eyebrow">{creation.target === null ? 'New bundle' : 'Add tweets'}</span>
           <p className="help" style={{ margin: '4px 0 8px' }}>
             {creation.target === null

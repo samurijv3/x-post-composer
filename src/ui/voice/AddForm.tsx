@@ -24,10 +24,10 @@ export function AddForm({ bundles, onCreateBundle, onAdd, onCancel }: AddFormPro
   const [bundleId, setBundleId] = useState<string | null>(null);
   const ready = text.trim() !== '' && confirmed;
   return (
-    <div className="card inset" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div className="addform">
       <label className="fld">
         <div className="field-row">
-          <span className="fld-label">Paste your own post or reply</span>
+          <span className="af-title">Add your own writing</span>
           <button
             type="button"
             className="icon-btn"
@@ -40,6 +40,7 @@ export function AddForm({ bundles, onCreateBundle, onAdd, onCancel }: AddFormPro
           </button>
         </div>
         <textarea
+          className={type === 'thread' ? 'af-mono' : ''}
           rows={type === 'thread' ? 6 : 3}
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -99,7 +100,7 @@ export function AddForm({ bundles, onCreateBundle, onAdd, onCancel }: AddFormPro
       </label>
       <button
         type="button"
-        className="btn primary"
+        className="btn dark block"
         disabled={!ready}
         onClick={() => onAdd(text.trim(), type, bundleId)}
       >

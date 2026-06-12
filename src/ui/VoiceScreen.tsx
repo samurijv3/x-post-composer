@@ -65,7 +65,6 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   const [pickTarget, setPickTarget] = useState<string | null>(null);
   // The two screen sections collapse independently; both default open.
   const [bundlesOpen, setBundlesOpen] = useState<boolean>(true);
-  const [examplesOpen, setExamplesOpen] = useState<boolean>(true);
 
   // A locate promised to show THE row — if a type filter or a collapsed
   // section would hide it, the flash would be invisible and the link
@@ -75,7 +74,6 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
     if (flashRow?.kind === 'locate') {
       setFilter('all');
       setQuery('');
-      setExamplesOpen(true);
     }
   }, [flashRow]);
 
@@ -192,7 +190,6 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
     // Picking needs both sections: the create bar lives in Bundles,
     // the pick targets are the examples list.
     setBundlesOpen(true);
-    setExamplesOpen(true);
   }
 
   function stopPicking(): void {
@@ -355,16 +352,99 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   }
 
   return (
-    <div className="screen">
-      <div>
-        <h2 className="section-title">Voice</h2>
-        <p className="help" style={{ marginTop: 2 }}>
-          Examples of your own writing. Drafts borrow this voice — the more here, the closer the
-          match.
-        </p>
-      </div>
-
+    <div className="screen flush">
       <CaptureBanner handle={handle} bundles={bundles} onCreateBundle={createEmptyBundle} />
+
+      {adding && (
+        <AddForm
+          bundles={bundles}
+          onCreateBundle={createEmptyBundle}
+          onAdd={(text, type, bundleId) => void manualAdd(text, type, bundleId)}
+          onCancel={() => setAdding(false)}
+        />
+      )}
+
+      {items.length > 0 && (
+        <div className="lib-search">
+          <IcSearch className="ls-icon" />
+          <input
+            type="search"
+            placeholder="Search your examples"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setQuery('');
+            }}
+            aria-label="Search saved examples"
+          />
+        </div>
+      )}
+
+      <div className="filterrow">
+        <button
+          type="button"
+          className={`pill ${filter === 'all' ? 'active' : ''}`}
+          onClick={() => setFilter('all')}
+        >
+          All {searchFiltered.length}
+        </button>
+        <button
+          type="button"
+          className={`pill ${filter === 'post' ? 'active' : ''}`}
+          onClick={() => setFilter('post')}
+        >
+          Posts {posts}
+        </button>
+        <button
+          type="button"
+          className={`pill ${filter === 'reply' ? 'active' : ''}`}
+          onClick={() => setFilter('reply')}
+        >
+          Replies {replies}
+        </button>
+        {threadsTotal > 0 && (
+          <button
+            type="button"
+            className={`pill ${filter === 'thread' ? 'active' : ''}`}
+            onClick={() => setFilter('thread')}
+          >
+            Threads {threads}
+          </button>
+        )}
+        {starredTotal > 0 && (
+          <button
+            type="button"
+            className={`pill ${filter === 'starred' ? 'active' : ''}`}
+            title="Starred items are guaranteed in every prompt — keep the set small"
+            onClick={() => setFilter('starred')}
+          >
+            ★ {starred}
+          </button>
+        )}
+        <span className="head-spacer" />
+        {!adding && (
+          <button
+            type="button"
+            className="icon-btn"
+            title="Add manually"
+            aria-label="Add manually"
+            onClick={() => setAdding(true)}
+          >
+            <IcPlus />
+          </button>
+        )}
+        {visible.length > 0 && (
+          <button
+            type="button"
+            className="icon-btn"
+            title={allOpen ? 'Collapse all' : 'Expand all'}
+            aria-label={allOpen ? 'Collapse all' : 'Expand all'}
+            onClick={toggleAll}
+          >
+            {allOpen ? <IcChevDown /> : <IcChevR />}
+          </button>
+        )}
+      </div>
 
       <BundleSection
         bundles={bundles}
@@ -394,151 +474,43 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
         onDelete={(b) => void removeBundle(b)}
       />
 
-      <div className="sec-head">
-        <button
-          type="button"
-          className="sec-toggle"
-          aria-expanded={examplesOpen}
-          onClick={() => setExamplesOpen((v) => !v)}
-          title={examplesOpen ? 'Collapse saved examples' : 'Show saved examples'}
-        >
-          {examplesOpen ? <IcChevDown /> : <IcChevR />}
-          <span className="eyebrow">
-            Saved examples{items.length > 0 ? ` · ${items.length}` : ''}
-          </span>
-        </button>
-        <span className="head-spacer" />
-        {/* Only show + when the form is closed. While open, the
-            dismiss control lives inside the form's own header so it's
-            visually attached to the thing being dismissed. */}
-        {!adding && (
-          <button
-            type="button"
-            className="icon-btn"
-            title="Add manually"
-            aria-label="Add manually"
-            onClick={() => {
-              setExamplesOpen(true);
-              setAdding(true);
-            }}
-          >
-            <IcPlus />
-          </button>
-        )}
-      </div>
-
-      {examplesOpen && (
-        <>
-          <p className="help" style={{ margin: '-6px 0 0' }}>
-            The writing your drafts learn from. Edit or retype anytime.
-          </p>
-
-          {adding && (
-            <AddForm
-              bundles={bundles}
-              onCreateBundle={createEmptyBundle}
-              onAdd={(text, type, bundleId) => void manualAdd(text, type, bundleId)}
-              onCancel={() => setAdding(false)}
-            />
-          )}
-
-          {items.length > 0 && (
-            <div className="lib-search">
-              <IcSearch className="ls-icon" />
-              <input
-                type="search"
-                placeholder="Search your examples"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') setQuery('');
-                }}
-                aria-label="Search saved examples"
-              />
-            </div>
-          )}
-
-          <div className="field-row">
-            <div className="pillrow">
-              <button
-                type="button"
-                className={`pill ${filter === 'all' ? 'active' : ''}`}
-                onClick={() => setFilter('all')}
-              >
-                All {searchFiltered.length}
-              </button>
-              <button
-                type="button"
-                className={`pill ${filter === 'post' ? 'active' : ''}`}
-                onClick={() => setFilter('post')}
-              >
-                Posts {posts}
-              </button>
-              <button
-                type="button"
-                className={`pill ${filter === 'reply' ? 'active' : ''}`}
-                onClick={() => setFilter('reply')}
-              >
-                Replies {replies}
-              </button>
-              {threadsTotal > 0 && (
-                <button
-                  type="button"
-                  className={`pill ${filter === 'thread' ? 'active' : ''}`}
-                  onClick={() => setFilter('thread')}
-                >
-                  Threads {threads}
-                </button>
-              )}
-              {starredTotal > 0 && (
-                <button
-                  type="button"
-                  className={`pill ${filter === 'starred' ? 'active' : ''}`}
-                  title="Starred items are guaranteed in every prompt — keep the set small"
-                  onClick={() => setFilter('starred')}
-                >
-                  ★ {starred}
-                </button>
-              )}
-            </div>
-            {visible.length > 0 && (
-              <button type="button" className="btn ghost sm" onClick={toggleAll}>
-                {allOpen ? 'Collapse all' : 'Expand all'}
-              </button>
-            )}
-          </div>
-        </>
-      )}
-
-      {!examplesOpen ? null : visible.length === 0 ? (
+      {visible.length === 0 ? (
         items.length === 0 ? (
           <div className="empty">
             <IcVoice className="ei" />
-            Nothing saved yet. Turn on saving above and click your own posts on x.com — or paste one
-            in by hand.
+            <span className="empty-lede">Nothing saved yet.</span>
+            <span>
+              Turn on saving above and click your own posts on x.com — or paste one in by hand.
+            </span>
           </div>
         ) : query.trim() !== '' ? (
-          // The search came up dry — name the query (and the narrowing
-          // pill, when one is on) so the fix is obvious.
           <div className="empty">
             <IcSearch className="ei" />
-            No matches for “{query.trim()}”{filter !== 'all' ? ' under this filter' : ''}.{' '}
-            <button type="button" className="lib-more" onClick={() => setQuery('')}>
-              Clear search
-            </button>
+            <span className="empty-lede">No matches for “{query.trim()}”</span>
+            <span>
+              {filter !== 'all' ? 'under this filter. ' : ''}
+              <button type="button" className="lib-more" onClick={() => setQuery('')}>
+                Clear search
+              </button>
+            </span>
           </div>
         ) : (
           <div className="empty">
             <IcVoice className="ei" />
-            No{' '}
-            {filter === 'post'
-              ? 'posts'
-              : filter === 'reply'
-                ? 'replies'
-                : filter === 'thread'
-                  ? 'threads'
-                  : 'starred examples'}{' '}
-            saved yet — switch to <strong>All</strong> to see the rest.
+            <span className="empty-lede">
+              No{' '}
+              {filter === 'post'
+                ? 'posts'
+                : filter === 'reply'
+                  ? 'replies'
+                  : filter === 'thread'
+                    ? 'threads'
+                    : 'starred examples'}{' '}
+              saved yet
+            </span>
+            <span>
+              Switch to <strong>All</strong> to see the rest.
+            </span>
           </div>
         )
       ) : (

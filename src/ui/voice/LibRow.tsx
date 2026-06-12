@@ -120,7 +120,7 @@ export function LibRow({
             </button>
             <button
               type="button"
-              className="btn primary sm"
+              className="btn dark sm"
               disabled={text.trim() === ''}
               onClick={save}
             >
