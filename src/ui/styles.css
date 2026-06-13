@@ -3838,3 +3838,67 @@ code {
   margin-top: auto;
   padding-top: 16px;
 }
+
+/* ============================================================
+   Narrow-panel compaction. Chrome's side panel floor is ~320px and
+   no API can widen it — below 360px the layout spends less on
+   chrome (gutters, avatars, rail) so the TEXT column keeps room.
+   ============================================================ */
+@media (max-width: 359px) {
+  :root {
+    --pad: 12px;
+  }
+  .tweetblock,
+  .draftwrap,
+  .composer {
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 10px;
+  }
+  .tw-rail,
+  .tseg-rail {
+    width: 32px;
+  }
+  .avatar.av-40,
+  .composer .avatar,
+  .tw-rail .avatar {
+    width: 32px;
+    height: 32px;
+    font-size: var(--fs-sm);
+  }
+  .avatar.av-36,
+  .tseg-rail .avatar {
+    width: 30px;
+    height: 30px;
+    font-size: var(--fs-sm);
+  }
+  .composer + .seedwrap {
+    padding-left: 54px;
+  }
+  .composer + .seedwrap .seedmenu {
+    left: 54px;
+  }
+  .briefbar,
+  .threadbar,
+  .toolbar,
+  .modebar,
+  .draft-actions,
+  .copyline,
+  .refine,
+  .capt-row,
+  .filterrow,
+  .addform,
+  .editbrief {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .screen.flush .lib-row,
+  .librow {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .screen.flush .lib-search {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+}
