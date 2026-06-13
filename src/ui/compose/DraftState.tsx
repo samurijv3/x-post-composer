@@ -315,13 +315,14 @@ export function DraftState({
           <div className="eb-row">
             <CapToggle charCap={brief.charCap} setCharCap={brief.setCharCap} />
             {!brief.charCap && <span className="hint">soft cap {brief.softCapChars}</span>}
-            <span className="head-spacer" />
-            <button type="button" className="btn ghost" onClick={() => setExpanded(false)}>
-              Cancel
-            </button>
-            <button type="button" className="btn primary" onClick={onRegenerate}>
-              <IcRefresh /> Regenerate
-            </button>
+            <span className="row-actions">
+              <button type="button" className="btn ghost" onClick={() => setExpanded(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn primary" onClick={onRegenerate}>
+                <IcRefresh /> Regenerate
+              </button>
+            </span>
           </div>
         </div>
       )}

@@ -2999,7 +2999,8 @@ code {
 .editbrief .eb-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
+  flex-wrap: wrap;
 }
 .editbrief .seedwrap {
   padding: 0;
@@ -3446,7 +3447,8 @@ code {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
+  flex-wrap: wrap;
   padding: 10px 16px;
   border-top: 1px solid var(--line);
 }
@@ -3926,4 +3928,18 @@ code {
     padding-left: 12px;
     padding-right: 12px;
   }
+}
+
+/* Control rows wrap at narrow widths; the action group stays
+   right-aligned even when it drops to its own line. */
+.row-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.captoggle,
+.toolbar .hint,
+.eb-row .hint {
+  white-space: nowrap;
 }

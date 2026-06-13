@@ -90,17 +90,18 @@ export function PreDraftState({
       <div className="toolbar">
         <CapToggle charCap={brief.charCap} setCharCap={brief.setCharCap} />
         {!brief.charCap && <span className="hint">soft cap {brief.softCapChars}</span>}
-        <span className="head-spacer" />
-        <span className="hint">⌘↵</span>
-        <button
-          type="button"
-          className="btn primary"
-          disabled={!canGenerate}
-          onClick={onGenerate}
-          title="⌘↵ to generate"
-        >
-          {busy ? 'Drafting…' : draftLabel}
-        </button>
+        <span className="row-actions">
+          <span className="hint">⌘↵</span>
+          <button
+            type="button"
+            className="btn primary"
+            disabled={!canGenerate}
+            onClick={onGenerate}
+            title="⌘↵ to generate"
+          >
+            {busy ? 'Drafting…' : draftLabel}
+          </button>
+        </span>
       </div>
 
       {error ? (
