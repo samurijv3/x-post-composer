@@ -38,7 +38,7 @@ interface Props {
   onLocateItem: (id: string) => void;
 }
 
-type Filter = 'all' | 'post' | 'reply' | 'thread' | 'starred';
+type TypeFilter = 'all' | 'post' | 'reply' | 'thread';
 
 /**
  * Voice — the saved-examples library. Owns the list state and storage
@@ -47,7 +47,12 @@ type Filter = 'all' | 'post' | 'reply' | 'thread' | 'starred';
 export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [handle, setHandle] = useState<string>('');
-  const [filter, setFilter] = useState<Filter>('all');
+  // Two filter AXES, mirroring the data model (type is exclusive,
+  // the star is orthogonal). Plain click = exclusive select (resets
+  // the other axis); ⌘/Ctrl-click = combine (set only the clicked
+  // axis) — so ★ + one type shows e.g. starred threads.
+  const [filter, setFilter] = useState<TypeFilter>('all');
+  const [starredOnly, setStarredOnly] = useState<boolean>(false);
   // Live search over the examples — filters as you type, composed with
   // the pill filter (visible = pill ∩ query).
   const [query, setQuery] = useState<string>('');
@@ -74,6 +79,7 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   useEffect(() => {
     if (flashRow?.kind === 'locate') {
       setFilter('all');
+      setStarredOnly(false);
       setQuery('');
       setExamplesOpen(true);
     }
@@ -121,25 +127,45 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   const starredTotal = items.filter((i) => i.favorite).length;
   const threadsTotal = items.filter((i) => i.type === 'thread').length;
   const searchFiltered = items.filter((i) => matchesSearch(i.text, query));
-  const posts = searchFiltered.filter((i) => i.type === 'post').length;
-  const replies = searchFiltered.filter((i) => i.type === 'reply').length;
-  const threads = searchFiltered.filter((i) => i.type === 'thread').length;
+  // Each chip's count answers "what would I see with this chip ON,
+  // given the other axis" — the faceted-search semantics extended to
+  // the star combo.
+  const starBase = starredOnly ? searchFiltered.filter((i) => i.favorite) : searchFiltered;
+  const posts = starBase.filter((i) => i.type === 'post').length;
+  const replies = starBase.filter((i) => i.type === 'reply').length;
+  const threads = starBase.filter((i) => i.type === 'thread').length;
   // The visible starred count IS the control: it nudges toward a small
   // canon (Core Concept A) — deliberately no ranking or bulk tools.
-  const starred = searchFiltered.filter((i) => i.favorite).length;
-  const visible =
-    filter === 'all'
-      ? searchFiltered
-      : filter === 'starred'
-        ? searchFiltered.filter((i) => i.favorite)
-        : searchFiltered.filter((i) => i.type === filter);
+  const typeBase =
+    filter === 'all' ? searchFiltered : searchFiltered.filter((i) => i.type === filter);
+  const starred = typeBase.filter((i) => i.favorite).length;
+  const visible = starredOnly ? typeBase.filter((i) => i.favorite) : typeBase;
+
+  // Plain click selects exclusively; ⌘/Ctrl-click changes one axis and
+  // keeps the other (re-⌘-clicking the active value toggles it off).
+  function clickType(next: TypeFilter, combine: boolean): void {
+    if (combine) {
+      setFilter(filter === next ? 'all' : next);
+    } else {
+      setFilter(next);
+      setStarredOnly(false);
+    }
+  }
+  function clickStar(combine: boolean): void {
+    if (combine) {
+      setStarredOnly(!starredOnly);
+    } else {
+      setStarredOnly(!(starredOnly && filter === 'all'));
+      setFilter('all');
+    }
+  }
 
   // The starred pill disappears when the last star is removed — don't
   // leave the filter stuck on a state with no control to escape it.
   useEffect(() => {
-    if (filter === 'starred' && starredTotal === 0) setFilter('all');
+    if (starredOnly && starredTotal === 0) setStarredOnly(false);
     if (filter === 'thread' && threadsTotal === 0) setFilter('all');
-  }, [filter, starredTotal, threadsTotal]);
+  }, [filter, starredOnly, starredTotal, threadsTotal]);
 
   async function remove(item: LibraryItem): Promise<void> {
     await deleteItem(item.id);
@@ -386,22 +412,24 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
       <div className="filterrow">
         <button
           type="button"
-          className={`pill ${filter === 'all' ? 'active' : ''}`}
-          onClick={() => setFilter('all')}
+          className={`pill ${filter === 'all' && !starredOnly ? 'active' : ''}`}
+          onClick={(e) => clickType('all', e.metaKey || e.ctrlKey)}
         >
-          All {searchFiltered.length}
+          All {starBase.length}
         </button>
         <button
           type="button"
           className={`pill ${filter === 'post' ? 'active' : ''}`}
-          onClick={() => setFilter('post')}
+          title="⌘-click to combine with ★"
+          onClick={(e) => clickType('post', e.metaKey || e.ctrlKey)}
         >
           Posts {posts}
         </button>
         <button
           type="button"
           className={`pill ${filter === 'reply' ? 'active' : ''}`}
-          onClick={() => setFilter('reply')}
+          title="⌘-click to combine with ★"
+          onClick={(e) => clickType('reply', e.metaKey || e.ctrlKey)}
         >
           Replies {replies}
         </button>
@@ -409,7 +437,8 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
           <button
             type="button"
             className={`pill ${filter === 'thread' ? 'active' : ''}`}
-            onClick={() => setFilter('thread')}
+            title="⌘-click to combine with ★"
+            onClick={(e) => clickType('thread', e.metaKey || e.ctrlKey)}
           >
             Threads {threads}
           </button>
@@ -417,9 +446,9 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
         {starredTotal > 0 && (
           <button
             type="button"
-            className={`pill ${filter === 'starred' ? 'active' : ''}`}
-            title="Starred items are guaranteed in every prompt — keep the set small"
-            onClick={() => setFilter('starred')}
+            className={`pill ${starredOnly ? 'active' : ''}`}
+            title="Starred items are guaranteed in every prompt — ⌘-click to combine with a type"
+            onClick={(e) => clickStar(e.metaKey || e.ctrlKey)}
           >
             ★ {starred}
           </button>
@@ -519,14 +548,14 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
           <div className="empty">
             <IcVoice className="ei" />
             <span className="empty-lede">
-              No{' '}
+              No {starredOnly ? 'starred ' : ''}
               {filter === 'post'
                 ? 'posts'
                 : filter === 'reply'
                   ? 'replies'
                   : filter === 'thread'
                     ? 'threads'
-                    : 'starred examples'}{' '}
+                    : 'examples'}{' '}
               saved yet
             </span>
             <span>
