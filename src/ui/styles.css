@@ -3376,8 +3376,10 @@ code {
 }
 .composer textarea {
   font: inherit;
-  font-size: var(--fs-xl);
-  line-height: 1.4;
+  /* Matches the draft text (field-corrected with it from the spec's
+     18px — input and output reading at two sizes felt off). */
+  font-size: var(--fs-base);
+  line-height: 1.45;
   width: 100%;
   border: 0;
   outline: none;
