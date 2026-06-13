@@ -65,6 +65,7 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
   const [pickTarget, setPickTarget] = useState<string | null>(null);
   // The two screen sections collapse independently; both default open.
   const [bundlesOpen, setBundlesOpen] = useState<boolean>(true);
+  const [examplesOpen, setExamplesOpen] = useState<boolean>(true);
 
   // A locate promised to show THE row — if a type filter or a collapsed
   // section would hide it, the flash would be invisible and the link
@@ -74,6 +75,7 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
     if (flashRow?.kind === 'locate') {
       setFilter('all');
       setQuery('');
+      setExamplesOpen(true);
     }
   }, [flashRow]);
 
@@ -190,6 +192,7 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
     // Picking needs both sections: the create bar lives in Bundles,
     // the pick targets are the examples list.
     setBundlesOpen(true);
+    setExamplesOpen(true);
   }
 
   function stopPicking(): void {
@@ -421,29 +424,6 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
             ★ {starred}
           </button>
         )}
-        <span className="head-spacer" />
-        {!adding && (
-          <button
-            type="button"
-            className="icon-btn"
-            title="Add manually"
-            aria-label="Add manually"
-            onClick={() => setAdding(true)}
-          >
-            <IcPlus />
-          </button>
-        )}
-        {visible.length > 0 && (
-          <button
-            type="button"
-            className="icon-btn"
-            title={allOpen ? 'Collapse all' : 'Expand all'}
-            aria-label={allOpen ? 'Collapse all' : 'Expand all'}
-            onClick={toggleAll}
-          >
-            {allOpen ? <IcChevDown /> : <IcChevR />}
-          </button>
-        )}
       </div>
 
       <BundleSection
@@ -474,7 +454,48 @@ export function VoiceScreen({ onToast, flashRow, onLocateItem }: Props) {
         onDelete={(b) => void removeBundle(b)}
       />
 
-      {visible.length === 0 ? (
+      <div className="sec-head examples-head">
+        <button
+          type="button"
+          className="sec-toggle"
+          aria-expanded={examplesOpen}
+          onClick={() => setExamplesOpen((v) => !v)}
+          title={examplesOpen ? 'Collapse saved examples' : 'Show saved examples'}
+        >
+          {examplesOpen ? <IcChevDown /> : <IcChevR />}
+          <span className="eyebrow">
+            Saved examples{items.length > 0 ? ` · ${items.length}` : ''}
+          </span>
+        </button>
+        <span className="head-spacer" />
+        {!adding && (
+          <button
+            type="button"
+            className="icon-btn"
+            title="Add manually"
+            aria-label="Add manually"
+            onClick={() => {
+              setExamplesOpen(true);
+              setAdding(true);
+            }}
+          >
+            <IcPlus />
+          </button>
+        )}
+        {examplesOpen && visible.length > 0 && (
+          <button
+            type="button"
+            className="icon-btn"
+            title={allOpen ? 'Collapse all' : 'Expand all'}
+            aria-label={allOpen ? 'Collapse all' : 'Expand all'}
+            onClick={toggleAll}
+          >
+            {allOpen ? <IcChevDown /> : <IcChevR />}
+          </button>
+        )}
+      </div>
+
+      {!examplesOpen ? null : visible.length === 0 ? (
         items.length === 0 ? (
           <div className="empty">
             <IcVoice className="ei" />

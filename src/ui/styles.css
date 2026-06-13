@@ -1482,15 +1482,22 @@ code {
   margin: 0;
 }
 .bundle-row {
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: 7px 11px;
-  background: var(--surface);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 7px 16px 7px 28px;
+  background: transparent;
+}
+.bundle-row:last-child {
+  border-bottom: 0;
 }
 .bundle-head {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.bundle-head .bundle-name {
+  font-size: var(--fs-md);
 }
 .bundle-head .icon-btn {
   opacity: 0;
@@ -1549,7 +1556,8 @@ code {
 .bundle-member {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 9px;
+  padding-left: 22px;
 }
 .bundle-member .icon-btn {
   opacity: 0;
@@ -3698,10 +3706,14 @@ code {
 }
 
 /* Bundles: the collapsed section row + management rows. */
-.bundle-section .sec-head {
+.bundle-section .sec-head,
+.examples-head {
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
   padding: 11px 10px 11px 16px;
+}
+.examples-head {
+  border-top: 0;
 }
 .screen.flush .lib-list {
   margin: 0;
