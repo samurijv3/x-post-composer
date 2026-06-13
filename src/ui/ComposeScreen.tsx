@@ -864,7 +864,7 @@ export function ComposeScreen({ onToast, onOpenOptions, handle }: Props) {
   };
 
   return (
-    <div className="screen">
+    <div className="screen flush">
       {!hasDraft ? (
         <PreDraftState
           reply={reply}
