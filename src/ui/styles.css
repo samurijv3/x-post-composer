@@ -54,7 +54,7 @@
   --fs-sm: 13px; /* secondary, hints, counts */
   --fs-md: 14.5px; /* library text, chips, menu rows */
   --fs-base: 15px; /* body, buttons, tabs */
-  --fs-lg: 17px; /* draft text */
+  --fs-lg: 17px; /* reserved (X focal-tweet size) — field-corrected: the draft uses base 15 */
   --fs-xl: 18px; /* composer input */
   --fs-2xl: 19px; /* page titles (800 weight) */
   --fs-mono: 12.5px; /* mono prompt text */
@@ -2658,8 +2658,11 @@ code {
 }
 .draft-editor-layer {
   font: inherit;
-  font-size: var(--fs-lg);
-  line-height: 1.66;
+  /* X's timeline tweet metrics — the draft wears timeline anatomy, so
+     it wears timeline type (field-corrected from the spec's 17px
+     focal size, which read inflated beside x.com in a narrow panel). */
+  font-size: var(--fs-base);
+  line-height: 1.45;
   letter-spacing: -0.005em;
   white-space: pre-wrap;
   word-break: break-word;
@@ -3540,17 +3543,6 @@ code {
   padding: 2px 9px;
   border-radius: var(--r-pill);
   z-index: 1;
-}
-
-/* Editor metrics per surface: 17px tweet text for the single draft,
-   15px for thread segments (X's own sizes). */
-.draftwrap .draft-editor-layer {
-  font-size: var(--fs-lg);
-  line-height: 1.5;
-}
-.tseg .draft-editor-layer {
-  font-size: var(--fs-base);
-  line-height: 1.45;
 }
 
 /* ============================================================
