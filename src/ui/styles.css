@@ -1813,11 +1813,20 @@ code {
 /* Open = one attached container: the toggle becomes the header of the
    panel it reveals (dashed invitation -> solid accordion). */
 .inspect-section.open {
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: var(--r);
-  background: var(--surface);
+  background: var(--bg);
   overflow: hidden;
 }
+.inspect-section.open .inspect-toggle {
+  padding: 10px 14px;
+  font-weight: 600;
+}
+.inspect-toggle:hover {
+  color: var(--text);
+}
+/* Collapsed = the quiet inspectline (reskin): one 13px gray text row,
+   no box; the longer explanation lives in the tooltip. */
 .inspect-toggle {
   display: flex;
   align-items: center;
@@ -1825,10 +1834,10 @@ code {
   width: 100%;
   font: inherit;
   font-size: var(--fs-sm);
-  font-weight: 600;
-  padding: 8px 12px;
-  border: 1px dashed var(--line-2);
-  border-radius: var(--r);
+  font-weight: 400;
+  padding: 10px 0;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   cursor: pointer;
   color: var(--text-2);

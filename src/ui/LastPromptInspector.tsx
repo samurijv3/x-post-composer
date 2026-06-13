@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getLastPrompt, subscribeLastPrompt, type LastPromptRecord } from '../storage';
 import { weightedLength } from '../lib/counting';
-import { IcCheck, IcChevR, IcCopy, IcSearch } from './icons';
+import { IcCheck, IcChevR, IcCopy } from './icons';
 
 /**
  * Live view of the most recent pipeline invocation — every Anthropic
@@ -90,12 +90,11 @@ export function LastPromptInspector() {
         className="inspect-toggle"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
+        title="See exactly what was sent to the model and what came back"
       >
-        <IcSearch />
         <span style={{ flex: 1, textAlign: 'left' }}>
           {open ? 'Hide last prompt' : 'Inspect last prompt'}
         </span>
-        <span className="help">{open ? '' : 'see what was sent and what came back'}</span>
         <IcChevR className={`insp-chev ${open ? 'open' : ''}`} />
       </button>
       {open &&
